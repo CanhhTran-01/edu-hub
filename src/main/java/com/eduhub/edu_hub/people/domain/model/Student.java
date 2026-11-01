@@ -6,8 +6,12 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -19,14 +23,22 @@ public class Student extends BaseEntity {
     @Column(name = "user_id")
     private Long userId;
 
-    @Column(name = "class_id")
-    private Long classId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "class_id")
+    private AdministrativeClass administrativeClass;
 
     @Column(name = "student_code", nullable = false, unique = true)
     private String studentCode;
 
     @Column(name = "full_name", nullable = false)
     private String fullName;
+
+    @Column(name = "date_of_birth")
+    private LocalDate dateOfBirth;
+
+    private String email;
+
+    private String phone;
 
     @Column(name = "entrance_score")
     private BigDecimal entranceScore;

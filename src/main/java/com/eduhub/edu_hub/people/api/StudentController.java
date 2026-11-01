@@ -28,7 +28,15 @@ public class StudentController {
         if (page < 0 || size < 1) {
             throw new BaseException(ErrorCode.VALIDATION_ERROR);
         }
-        return ApiResponse.success(studentService.search(request, page, size));
+        PageResponse<StudentResponse> result = studentService.search(request, page, size);
+        if (result.getContent().isEmpty()) {
+            return ApiResponse.<PageResponse<StudentResponse>>builder()
+                    .success(true)
+                    .message("Không tìm thấy kết quả")
+                    .data(result)
+                    .build();
+        }
+        return ApiResponse.success(result);
     }
 
     @GetMapping("/{id}")
