@@ -22,7 +22,7 @@ public class StudentResponse {
     private String trainingType;
     private BigDecimal entranceScore;
     private BigDecimal targetGpa;
-    private ActivityStatus activityStatus; // STUDING, DEACTIVATED, DELETED
+    private ActivityStatus activityStatus; // STUDYING, DEACTIVATED, DELETED
     private String academicWarningStatus;
     private String statusReason;
     private LocalDateTime createdAt;
