@@ -2,14 +2,18 @@ package com.eduhub.edu_hub.people.api;
 
 import com.eduhub.edu_hub.people.api.dto.StudentResponse;
 import com.eduhub.edu_hub.people.api.dto.StudentSearchRequest;
+import com.eduhub.edu_hub.people.api.dto.UpdateStudentRequest;
 import com.eduhub.edu_hub.people.application.StudentApplicationService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -42,5 +46,11 @@ public class StudentController {
     @GetMapping("/{id}")
     public ApiResponse<StudentResponse> findById(@PathVariable Long id) {
         return ApiResponse.success(studentService.findById(id));
+    }
+
+    @PutMapping("/{id}")
+    public ApiResponse<StudentResponse> update(
+            @PathVariable Long id, @Valid @RequestBody UpdateStudentRequest request) {
+        return ApiResponse.success(studentService.update(id, request));
     }
 }

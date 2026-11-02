@@ -40,6 +40,9 @@ public class Student extends BaseEntity {
 
     private String phone;
 
+    @Column(name = "citizen_id")
+    private String citizenId;
+
     @Column(name = "entrance_score")
     private BigDecimal entranceScore;
 

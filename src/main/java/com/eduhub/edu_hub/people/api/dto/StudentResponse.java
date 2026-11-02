@@ -16,6 +16,7 @@ public class StudentResponse {
     private LocalDate dateOfBirth;
     private String email;
     private String phone;
+    private String citizenId;
     private String majorName;
     private String cohortCode;
     private String className;

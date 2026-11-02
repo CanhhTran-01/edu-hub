@@ -2,9 +2,11 @@ package com.eduhub.edu_hub.people.application;
 
 import com.eduhub.edu_hub.people.api.dto.StudentResponse;
 import com.eduhub.edu_hub.people.api.dto.StudentSearchRequest;
+import com.eduhub.edu_hub.people.api.dto.UpdateStudentRequest;
 import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
 import com.eduhub.edu_hub.people.domain.model.Cohort;
 import com.eduhub.edu_hub.people.domain.model.Student;
+import com.eduhub.edu_hub.people.domain.repository.AdministrativeClassRepository;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.enums.ActivityStatus;
@@ -17,6 +19,7 @@ import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -25,9 +28,44 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 @Transactional(readOnly = true)
 public class StudentApplicationService {
     private final StudentRepository studentRepository;
+    private final AdministrativeClassRepository administrativeClassRepository;
+
+    @Transactional
+    public StudentResponse update(Long id, UpdateStudentRequest request) {
+        if (request.getStudentCode() != null) {
+            throw new BaseException(ErrorCode.VALIDATION_ERROR);
+        }
+        Student student = studentRepository
+                .findByIdAndDeletedFalse(id)
+                .orElseThrow(() -> new BaseException(ErrorCode.STUDENT_NOT_FOUND));
+        if (request.getFullName() != null) {
+            if (request.getFullName().isBlank()) {
+                throw new BaseException(ErrorCode.VALIDATION_ERROR);
+            }
+            student.setFullName(request.getFullName().trim());
+        }
+        if (request.getDateOfBirth() != null) student.setDateOfBirth(request.getDateOfBirth());
+        if (request.getEmail() != null) student.setEmail(request.getEmail());
+        if (request.getPhone() != null) student.setPhone(request.getPhone());
+        if (request.getCitizenId() != null) student.setCitizenId(request.getCitizenId());
+        if (request.getTargetGpa() != null) student.setTargetGpa(request.getTargetGpa());
+        if (request.getAcademicWarningStatus() != null) {
+            student.setAcademicWarningStatus(request.getAcademicWarningStatus());
+        }
+        if (request.getAdministrativeClassId() != null) {
+            AdministrativeClass administrativeClass = administrativeClassRepository
+                    .findByIdAndDeletedFalse(request.getAdministrativeClassId())
+                    .orElseThrow(() -> new BaseException(ErrorCode.VALIDATION_ERROR));
+            student.setAdministrativeClass(administrativeClass);
+        }
+        StudentResponse response = toResponse(studentRepository.save(student));
+        log.info("Updated student profile: studentId={}, reason={}", id, request.getStatusReason());
+        return response;
+    }
 
     public PageResponse<StudentResponse> search(StudentSearchRequest request, int page, int size) {
         ActivityStatus status = null;
@@ -96,6 +134,7 @@ public class StudentApplicationService {
                 .dateOfBirth(student.getDateOfBirth())
                 .email(student.getEmail())
                 .phone(student.getPhone())
+                .citizenId(student.getCitizenId())
                 .className(administrativeClass == null ? null : administrativeClass.getClassName())
                 .majorName(administrativeClass == null ? null : administrativeClass.getMajorName())
                 .cohortCode(
