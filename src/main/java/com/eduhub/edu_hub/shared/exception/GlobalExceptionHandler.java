@@ -1,26 +1,35 @@
 package com.eduhub.edu_hub.shared.exception;
 
-import com.eduhub.edu_hub.curriculum.api.dto.SubjectSimpleResponse;
-import com.eduhub.edu_hub.curriculum.application.exception.PrerequisiteCycleException;
-import com.eduhub.edu_hub.curriculum.application.exception.SubjectHasDependentsException;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.util.List;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
+@Order(Ordered.LOWEST_PRECEDENCE)
 @Slf4j
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMethodNotAllowed(
+            HttpRequestMethodNotSupportedException exception, HttpServletRequest request) {
+        return ResponseEntity.status(ErrorCode.METHOD_NOT_ALLOWED.getHttpStatus())
+                .headers(exception.getHeaders())
+                .body(ApiResponse.error(ErrorCode.METHOD_NOT_ALLOWED, request.getRequestURI()));
+    }
 
     // Thiếu tham số cho URL
     @ExceptionHandler(MissingServletRequestParameterException.class)
@@ -82,39 +91,13 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.validationError(errors, request.getRequestURI()));
     }
 
-    @ExceptionHandler(PrerequisiteCycleException.class)
-    public ResponseEntity<ApiResponse<Void>> handlePrerequisiteCycle(
-            PrerequisiteCycleException exception, HttpServletRequest request) {
-
-        String cycle = exception.getCycle().stream()
-                .map(SubjectSimpleResponse::getSubjectCode)
-                .collect(Collectors.joining(" → "));
-
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.<Void>builder()
-                        .success(false)
-                        .code(ErrorCode.PREREQUISITE_CYCLE.getCode())
-                        .message("Phát hiện chu trình tiên quyết: " + cycle)
-                        .path(request.getRequestURI())
-                        .build());
-    }
-
-    @ExceptionHandler(SubjectHasDependentsException.class)
-    public ResponseEntity<ApiResponse<Void>> handleSubjectHasDependents(
-            SubjectHasDependentsException exception, HttpServletRequest request) {
-
-        var errors = exception.getDependentSubjects().stream()
-                .map(subject ->
-                        new FieldErrorDetail("requiredBy", subject.getSubjectCode() + " - " + subject.getSubjectName()))
-                .toList();
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiResponse.<Void>builder()
-                        .success(false)
-                        .code(ErrorCode.SUBJECT_IN_USE.getCode())
-                        .message("Học phần là tiên quyết của học phần đang sử dụng. Hãy gỡ ràng buộc tại UC-21 trước.")
-                        .errors(errors)
-                        .path(request.getRequestURI())
-                        .build());
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(
+            MethodArgumentTypeMismatchException exception, HttpServletRequest request) {
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.validationError(
+                        List.of(new FieldErrorDetail(exception.getName(), "Giá trị tham số không hợp lệ")),
+                        request.getRequestURI()));
     }
 
     // Fallback
