@@ -32,6 +32,13 @@ public enum ErrorCode {
     CURRICULUM_NOT_FOUND(4202, "Không tìm thấy chương trình đào tạo", HttpStatus.NOT_FOUND),
     PREREQUISITE_CYCLE(4203, "Phát hiện chu trình tiên quyết", HttpStatus.BAD_REQUEST),
     SUBJECT_IN_USE(4204, "Học phần đang được sử dụng", HttpStatus.CONFLICT),
+    DUPLICATE_SUBJECT_CODE(4205, "Mã học phần đã tồn tại", HttpStatus.CONFLICT),
+    DUPLICATE_SUBJECT_NAME(4206, "Tên học phần đã tồn tại", HttpStatus.CONFLICT),
+    SUBJECT_NOT_ACTIVE(4207, "Chỉ được cập nhật học phần đang sử dụng", HttpStatus.CONFLICT),
+    SUBJECT_CODE_IMMUTABLE(4208, "Không được thay đổi mã học phần", HttpStatus.CONFLICT),
+    SUBJECT_ACTION_NOT_CONFIRMED(4209, "Cần xác nhận thao tác trước khi thực hiện", HttpStatus.BAD_REQUEST),
+    PREREQUISITE_SELF_REFERENCE(4210, "Học phần không thể là tiên quyết của chính nó", HttpStatus.BAD_REQUEST),
+    PREREQUISITE_NOT_ACTIVE(4211, "Môn tiên quyết phải ở trạng thái đang sử dụng", HttpStatus.BAD_REQUEST),
 
     // Scheduling
     MODULE_CLASS_NOT_FOUND(4301, "Không tìm thấy lớp học phần", HttpStatus.NOT_FOUND),
