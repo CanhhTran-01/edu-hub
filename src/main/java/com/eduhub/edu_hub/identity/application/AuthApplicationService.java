@@ -1,6 +1,7 @@
 package com.eduhub.edu_hub.identity.application;
 
 import com.eduhub.edu_hub.identity.api.dto.LoginRequest;
+import com.eduhub.edu_hub.identity.api.dto.ChangePasswordRequest;
 import com.eduhub.edu_hub.identity.api.dto.LoginResponse;
 import com.eduhub.edu_hub.identity.api.dto.UserInfoResponse;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
@@ -30,6 +31,7 @@ public class AuthApplicationService {
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final TokenService tokenService;
+    private final PasswordPolicyValidator passwordPolicyValidator;
     private final PlatformTransactionManager transactionManager;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
@@ -111,6 +113,47 @@ public class AuthApplicationService {
             token.setRevoked(true);
             refreshTokenRepository.save(token);
         });
+    }
+
+    public void changePassword(String accessToken, ChangePasswordRequest request) {
+        TokenService.TokenClaims claims = tokenService.validateAccessToken(accessToken);
+        if (claims == null) throw new BaseException(ErrorCode.UNAUTHENTICATED);
+        ErrorCode error = new TransactionTemplate(transactionManager).execute(status -> {
+            User user = userRepository.findByUsernameAndDeletedFalse(claims.username())
+                    .orElseThrow(() -> new BaseException(ErrorCode.UNAUTHENTICATED));
+            if (!user.getId().equals(claims.userId()) || user.getStatus() != UserStatus.ACTIVE
+                    || refreshTokenRepository.findByIdAndRevokedFalse(claims.sessionId()).stream()
+                            .noneMatch(session -> session.getUser().getId().equals(user.getId()))) {
+                return ErrorCode.UNAUTHENTICATED;
+            }
+            LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+            if (user.getLockedUntil() != null && now.isBefore(user.getLockedUntil())) {
+                return ErrorCode.ACCOUNT_LOCKED;
+            }
+            if (user.getLockedUntil() != null) {
+                user.setLockedUntil(null);
+                user.setFailedLoginCount(0);
+            }
+            if (!user.isFirstLogin() && (request.getCurrentPassword() == null
+                    || !passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash()))) {
+                int failures = user.getFailedLoginCount() + 1;
+                user.setFailedLoginCount(failures);
+                if (failures >= MAX_FAILED_LOGINS) user.setLockedUntil(now.plus(TEMPORARY_LOCK));
+                userRepository.save(user);
+                return ErrorCode.INVALID_CREDENTIALS;
+            }
+            passwordPolicyValidator.validate(request.getNewPassword(), request.getConfirmPassword(),
+                    passwordEncoder.matches(request.getNewPassword(), user.getPasswordHash()));
+            user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+            user.setPasswordChangedAt(now);
+            user.setFirstLogin(false);
+            user.setFailedLoginCount(0);
+            user.setLockedUntil(null);
+            userRepository.save(user);
+            refreshTokenRepository.findByUser_IdAndRevokedFalse(user.getId()).forEach(session -> session.setRevoked(true));
+            return null;
+        });
+        if (error != null) throw new BaseException(error);
     }
 
     private record LoginAttempt(LoginResponse response, ErrorCode error) {}
