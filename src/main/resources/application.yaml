@@ -2,8 +2,25 @@ server:
   port: 8080
 
 spring:
+  config:
+    import: "optional:file:.env[.properties]"
   application:
     name: edu-hub
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${GMAIL_ADDRESS:}
+    password: ${GMAIL_APP_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.connectiontimeout: 10000
+      mail.smtp.timeout: 10000
+      mail.smtp.writetimeout: 10000
+  datasource:
+    url: ${DBMS_CONNECTION}
+    username: ${DBMS_USERNAME}
+    password: ${DBMS_PASSWORD}
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}  # mặc định dev, prod override bằng env var
   jpa:
