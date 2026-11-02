@@ -27,6 +27,7 @@ public class DevAdminBootstrap {
     @Bean
     ApplicationRunner createDevAdmin(
             @Value("${DEV_ADMIN_USERNAME:}") String username,
+            @Value("${DEV_ADMIN_EMAIL:}") String email,
             @Value("${DEV_ADMIN_PASSWORD:}") String password) {
         return args -> {
             if (username.isBlank() || password.isBlank()) return;
@@ -37,6 +38,7 @@ public class DevAdminBootstrap {
                         .orElseThrow(() -> new IllegalStateException("SYSTEM_ADMIN role is missing"));
                 User user = new User();
                 user.setUsername(username);
+                user.setEmail(email.isBlank() ? null : email);
                 user.setPasswordHash(new BCryptPasswordEncoder().encode(password));
                 user.setRole(role);
                 user.setStatus(UserStatus.ACTIVE);

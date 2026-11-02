@@ -19,6 +19,8 @@ public enum ErrorCode {
     ACCOUNT_LOCKED(4004, "Tài khoản đã bị khóa", HttpStatus.FORBIDDEN),
     PASSWORD_POLICY_VIOLATION(4005, "Mật khẩu không đạt chính sách bảo mật", HttpStatus.BAD_REQUEST),
     FIRST_LOGIN_REQUIRED(4006, "Bắt buộc đổi mật khẩu lần đầu", HttpStatus.FORBIDDEN),
+    ACCOUNT_EMAIL_MISSING(4007, "Tài khoản chưa có email nhận thông báo", HttpStatus.BAD_REQUEST),
+    PASSWORD_EMAIL_FAILED(4008, "Không gửi được email mật khẩu tạm", HttpStatus.BAD_GATEWAY),
 
     // People
     STUDENT_NOT_FOUND(4101, "Không tìm thấy sinh viên", HttpStatus.NOT_FOUND),

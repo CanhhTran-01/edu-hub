@@ -44,7 +44,7 @@ public class AuthApplicationService {
 
     private LoginAttempt authenticate(LoginRequest request) {
         User user = userRepository
-                .findByUsernameAndDeletedFalse(request.getUsername())
+                .findByUsernameForUpdate(request.getUsername())
                 .orElse(null);
         if (user == null) {
             return new LoginAttempt(null, ErrorCode.INVALID_CREDENTIALS);
@@ -119,7 +119,7 @@ public class AuthApplicationService {
         TokenService.TokenClaims claims = tokenService.validateAccessToken(accessToken);
         if (claims == null) throw new BaseException(ErrorCode.UNAUTHENTICATED);
         ErrorCode error = new TransactionTemplate(transactionManager).execute(status -> {
-            User user = userRepository.findByUsernameAndDeletedFalse(claims.username())
+            User user = userRepository.findByUsernameForUpdate(claims.username())
                     .orElseThrow(() -> new BaseException(ErrorCode.UNAUTHENTICATED));
             if (!user.getId().equals(claims.userId()) || user.getStatus() != UserStatus.ACTIVE
                     || refreshTokenRepository.findByIdAndRevokedFalse(claims.sessionId()).stream()
