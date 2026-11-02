@@ -12,6 +12,7 @@ public class SubjectResponse {
     private String subjectCode;
     private String subjectName;
     private int credits;
+    private String description;
     private SubjectStatus status;
     private List<SubjectSimpleResponse> prerequisites;
     private List<SubjectSimpleResponse> requiredBy; // học phần lấy cái này làm tiên quyết
