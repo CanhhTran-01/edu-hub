@@ -1,5 +1,6 @@
 package com.eduhub.edu_hub.people.api.dto;
 
+import com.eduhub.edu_hub.people.domain.enums.LecturerStatus;
 import lombok.Builder;
 import lombok.Data;
 
@@ -12,5 +13,5 @@ public class LecturerResponse {
     private String email;
     private String phone;
     private String facultyName;
-    private String status;
+    private LecturerStatus status;
 }
