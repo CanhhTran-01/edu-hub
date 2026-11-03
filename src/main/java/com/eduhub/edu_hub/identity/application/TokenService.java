@@ -22,7 +22,7 @@ public class TokenService {
     private final byte[] signingKey;
     private final ObjectMapper objectMapper;
 
-    public TokenService(@Value("${JWT_SECRET}") String encodedSigningKey, ObjectMapper objectMapper) {
+    public TokenService(@Value("${jwt.secret}") String encodedSigningKey, ObjectMapper objectMapper) {
         this.signingKey = Base64.getDecoder().decode(encodedSigningKey);
         if (signingKey.length < 32) {
             throw new IllegalArgumentException("JWT_SECRET must contain at least 32 random bytes (Base64)");

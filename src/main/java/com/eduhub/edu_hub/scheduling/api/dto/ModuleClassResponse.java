@@ -9,6 +9,11 @@ import lombok.Data;
 @Builder
 public class ModuleClassResponse {
     private Long id;
+    private Long semesterId;
+    private Long subjectId;
+    private Long lecturerId;
+    private int classSequence;
+    private String dataSource;
     private String moduleClassCode;
     private String subjectCode;
     private String subjectName;
