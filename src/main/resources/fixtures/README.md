@@ -59,8 +59,9 @@ không đồng nghĩa kỳ bị khóa. Qua ngày kết thúc kỳ mới bị ch�
 TODO: nguồn dữ liệu thật qua Facade, danh tính người thao tác/audit database, cấu hình sức chứa,
 xếp lịch và công bố lớp, xác nhận học cải thiện trong enrollment.
 
-Migration mới `V20261103100000__allow_unassigned_module_class_lecturer.sql` cho phép lecturer_id=NULL,
-giữ nguyên giảng viên của lớp đã tồn tại. Khởi động lại app để Flyway áp dụng trước khi test luồng mới.
+Bộ migration đã đánh lại version V20261103130001–V20261103130007 theo thứ tự phụ thuộc,
+giữ nguyên nội dung SQL. Nhóm thống nhất dùng DB dev có thể tạo lại: cần tạo lại DB trước khi khởi động app.
+Migration cuối `V20261103130007__allow_unassigned_module_class_lecturer.sql` cho phép lecturer_id=NULL.
 
 ## Cập nhật và hủy lớp bằng Postman
 
