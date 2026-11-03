@@ -4,6 +4,7 @@ import com.eduhub.edu_hub.identity.api.dto.UserInfoResponse;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.model.Role;
 import com.eduhub.edu_hub.identity.domain.model.User;
+import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.RoleRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
 import com.eduhub.edu_hub.shared.enums.RoleName;
@@ -23,6 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class IdentityFacadeImpl implements IdentityFacade {
     private final UserRepository users;
     private final RoleRepository roles;
+    private final RefreshTokenRepository sessions;
+    private final TokenService tokens;
     private final TemporaryPasswordMailService mailService;
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
@@ -37,20 +40,65 @@ public class IdentityFacadeImpl implements IdentityFacade {
     @Override
     @Transactional
     public CreateStudentAccountResult createStudentAccount(CreateStudentAccountCommand command) {
+        Long userId = createStudentAccountRecord(command);
+        return sendStudentAccountNotification(userId, command.initialPassword());
+    }
+
+    @Override
+    @Transactional
+    public Long createStudentAccountWithoutNotification(CreateStudentAccountCommand command) {
+        return createStudentAccountRecord(command);
+    }
+
+    @Override
+    public CreateStudentAccountResult sendStudentAccountNotification(Long userId, String initialPassword) {
+        User user = user(userId);
+        if (!user.isFirstLogin()) {
+            return new CreateStudentAccountResult(userId, false, "ACCOUNT_ALREADY_ACTIVATED");
+        }
+        if (user.getEmail() == null || user.getEmail().isBlank()) {
+            return new CreateStudentAccountResult(userId, false, "ACCOUNT_EMAIL_MISSING");
+        }
+        try {
+            mailService.send(user.getEmail(), initialPassword);
+            return new CreateStudentAccountResult(userId, true, null);
+        } catch (MailException exception) {
+            log.error("Initial account email failed for user {}", userId);
+            return new CreateStudentAccountResult(userId, false, "EMAIL_SEND_FAILED");
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public String requireAcademicAdmin(String accessToken) {
+        TokenService.TokenClaims claims = tokens.validateAccessToken(accessToken);
+        if (claims == null) {
+            throw new BaseException(ErrorCode.UNAUTHENTICATED);
+        }
+        User actor = users.findByUsernameAndDeletedFalse(claims.username())
+                .orElseThrow(() -> new BaseException(ErrorCode.UNAUTHENTICATED));
+        if (!actor.getId().equals(claims.userId())
+                || actor.getStatus() != UserStatus.ACTIVE
+                || sessions.findByIdAndRevokedFalse(claims.sessionId()).stream()
+                        .noneMatch(session -> session.getUser().getId().equals(actor.getId()))) {
+            throw new BaseException(ErrorCode.UNAUTHENTICATED);
+        }
+        String role = actor.getRole().getRoleName();
+        if (!RoleName.ACADEMIC_ADMIN.name().equals(role)
+                && !RoleName.SYSTEM_ADMIN.name().equals(role)) {
+            throw new BaseException(ErrorCode.UNAUTHORIZED);
+        }
+        return actor.getUsername();
+    }
+
+    private Long createStudentAccountRecord(CreateStudentAccountCommand command) {
         if (users.existsByUsername(command.username())) {
             throw new BaseException(ErrorCode.DUPLICATE_STUDENT_CODE);
         }
         Role role = roles.findByRoleNameAndDeletedFalse(RoleName.STUDENT.name())
                 .orElseThrow(() -> new BaseException(ErrorCode.VALIDATION_ERROR));
-        User user = save(command.username(), command.email(), command.initialPassword(), role,
-                command.requirePasswordChange());
-        try {
-            mailService.send(command.email(), command.initialPassword());
-            return new CreateStudentAccountResult(user.getId(), true, null);
-        } catch (MailException exception) {
-            log.error("Initial account email failed for user {}", user.getId());
-            return new CreateStudentAccountResult(user.getId(), false, "EMAIL_SEND_FAILED");
-        }
+        return save(command.username(), command.email(), command.initialPassword(), role,
+                command.requirePasswordChange()).getId();
     }
 
     private User save(String username, String email, String rawPassword, Role role, boolean firstLogin) {

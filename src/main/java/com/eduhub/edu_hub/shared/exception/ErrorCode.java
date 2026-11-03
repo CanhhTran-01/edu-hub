@@ -35,6 +35,9 @@ public enum ErrorCode {
     INVALID_STUDENT_CODE_COHORT(4110, "Mã khóa không đúng định dạng sinh MSSV", HttpStatus.BAD_REQUEST),
     INVALID_STUDENT_CODE_CLASS(4111, "Mã lớp hành chính không đúng định dạng L01", HttpStatus.BAD_REQUEST),
     STUDENT_CODE_SEQUENCE_EXCEEDED(4112, "Số thứ tự MSSV trong lớp đã vượt 99", HttpStatus.CONFLICT),
+    DUPLICATE_STUDENT_EMAIL(4113, "Email sinh viên đã tồn tại", HttpStatus.CONFLICT),
+    DUPLICATE_STUDENT_CITIZEN_ID(4114, "CCCD sinh viên đã tồn tại", HttpStatus.CONFLICT),
+    STUDENT_CLASS_MISMATCH(4115, "Ngành, hệ đào tạo hoặc khóa không khớp với lớp", HttpStatus.BAD_REQUEST),
 
     // Curriculum
     SUBJECT_NOT_FOUND(4201, "Không tìm thấy học phần", HttpStatus.NOT_FOUND),

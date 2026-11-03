@@ -17,9 +17,16 @@ public interface StudentRepository extends JpaRepository<Student, Long>, JpaSpec
 
     boolean existsByEmailIgnoreCaseAndDeletedFalse(String email);
 
+    boolean existsByCitizenIdAndDeletedFalse(String citizenId);
+
+    boolean existsByFullNameIgnoreCaseAndDateOfBirthAndDeletedFalse(
+            String fullName, java.time.LocalDate dateOfBirth);
+
     boolean existsByStudentCode(String studentCode);
 
     List<Student> findAllByAdministrativeClass_IdAndDeletedFalse(Long classId);
+
+    long countByAdministrativeClass_IdAndDeletedFalse(Long classId);
 
     @Query("select student.studentCode from Student student where student.administrativeClass.id = :classId")
     List<String> findStudentCodesByAdministrativeClassId(@Param("classId") Long classId);

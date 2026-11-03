@@ -9,6 +9,12 @@ public interface IdentityFacade {
 
     CreateStudentAccountResult createStudentAccount(CreateStudentAccountCommand command);
 
+    Long createStudentAccountWithoutNotification(CreateStudentAccountCommand command);
+
+    CreateStudentAccountResult sendStudentAccountNotification(Long userId, String initialPassword);
+
+    String requireAcademicAdmin(String accessToken);
+
     /** Khóa / mở khóa tài khoản */
     void lockUser(Long userId, String reason);
 
