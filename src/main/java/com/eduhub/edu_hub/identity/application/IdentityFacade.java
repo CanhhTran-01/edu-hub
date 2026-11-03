@@ -7,6 +7,8 @@ public interface IdentityFacade {
     /** Tạo tài khoản mới (dùng khi tạo SV/GV) */
     Long createUser(String username, String rawPassword, String roleName, boolean isFirstLogin);
 
+    CreateStudentAccountResult createStudentAccount(CreateStudentAccountCommand command);
+
     /** Khóa / mở khóa tài khoản */
     void lockUser(Long userId, String reason);
 

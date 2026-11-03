@@ -27,6 +27,9 @@ public class AdministrativeClass extends BaseEntity {
     @Column(name = "major_name", nullable = false)
     private String majorName;
 
+    @Column(name = "major_code", nullable = false)
+    private String majorCode;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cohort_id", nullable = false)
     private Cohort cohort;
@@ -34,4 +37,10 @@ public class AdministrativeClass extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "training_type", nullable = false)
     private TrainingType trainingType;
+
+    @Column(name = "min_capacity", nullable = false)
+    private int minCapacity;
+
+    @Column(name = "max_capacity", nullable = false)
+    private int maxCapacity;
 }

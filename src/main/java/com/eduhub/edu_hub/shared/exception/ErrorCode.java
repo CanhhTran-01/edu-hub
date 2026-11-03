@@ -28,6 +28,13 @@ public enum ErrorCode {
     DUPLICATE_STUDENT_CODE(4103, "MSSV đã tồn tại", HttpStatus.CONFLICT),
     DUPLICATE_LECTURER_CODE(4104, "Mã giảng viên đã tồn tại", HttpStatus.CONFLICT),
     CLASS_CAPACITY_EXCEEDED(4105, "Lớp đã đầy sức chứa", HttpStatus.BAD_REQUEST),
+    ADMISSION_BATCH_NOT_FOUND(4106, "Không tìm thấy batch nhập học", HttpStatus.NOT_FOUND),
+    ADMISSION_BATCH_ALREADY_CONFIRMED(4107, "Batch nhập học đã được xác nhận", HttpStatus.CONFLICT),
+    ADMISSION_CAPACITY_CONFIRMATION_REQUIRED(4108, "Cần xử lý hoặc chấp nhận cảnh báo sức chứa", HttpStatus.CONFLICT),
+    INVALID_STUDENT_CODE_MAJOR(4109, "Mã ngành phải gồm đúng 2 ký tự chữ", HttpStatus.BAD_REQUEST),
+    INVALID_STUDENT_CODE_COHORT(4110, "Mã khóa không đúng định dạng sinh MSSV", HttpStatus.BAD_REQUEST),
+    INVALID_STUDENT_CODE_CLASS(4111, "Mã lớp hành chính không đúng định dạng L01", HttpStatus.BAD_REQUEST),
+    STUDENT_CODE_SEQUENCE_EXCEEDED(4112, "Số thứ tự MSSV trong lớp đã vượt 99", HttpStatus.CONFLICT),
 
     // Curriculum
     SUBJECT_NOT_FOUND(4201, "Không tìm thấy học phần", HttpStatus.NOT_FOUND),

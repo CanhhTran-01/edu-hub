@@ -4,6 +4,11 @@ import com.eduhub.edu_hub.people.api.dto.StudentResponse;
 import com.eduhub.edu_hub.people.api.dto.StudentSearchRequest;
 import com.eduhub.edu_hub.people.api.dto.UpdateStudentRequest;
 import com.eduhub.edu_hub.people.application.StudentApplicationService;
+import com.eduhub.edu_hub.people.application.StudentAdmissionService;
+import com.eduhub.edu_hub.people.api.dto.AdmissionClassAdjustmentRequest;
+import com.eduhub.edu_hub.people.api.dto.AdmissionConfirmRequest;
+import com.eduhub.edu_hub.people.api.dto.AdmissionConfirmResponse;
+import com.eduhub.edu_hub.people.api.dto.AdmissionPreviewResponse;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.exception.BaseException;
@@ -17,12 +22,33 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.multipart.MultipartFile;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/students")
 @RequiredArgsConstructor
 public class StudentController {
     private final StudentApplicationService studentService;
+    private final StudentAdmissionService admissionService;
+
+    @PostMapping(value = "/admission/preview", consumes = "multipart/form-data")
+    public ApiResponse<AdmissionPreviewResponse> preview(@RequestParam("file") MultipartFile file) {
+        return ApiResponse.success(admissionService.preview(file));
+    }
+
+    @PutMapping("/admission/{batchId}/assignment")
+    public ApiResponse<AdmissionPreviewResponse> adjustAssignment(
+            @PathVariable UUID batchId, @Valid @RequestBody AdmissionClassAdjustmentRequest request) {
+        return ApiResponse.success(admissionService.adjust(batchId, request));
+    }
+
+    @PostMapping("/admission/{batchId}/confirm")
+    public ApiResponse<AdmissionConfirmResponse> confirm(
+            @PathVariable UUID batchId, @RequestBody AdmissionConfirmRequest request) {
+        return ApiResponse.success(admissionService.confirm(batchId, request));
+    }
 
     @GetMapping
     public ApiResponse<PageResponse<StudentResponse>> search(
