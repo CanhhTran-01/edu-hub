@@ -61,7 +61,9 @@ xếp lịch và công bố lớp, xác nhận học cải thiện trong enrollm
 
 Bộ migration đã đánh lại version V20261103130001–V20261103130007 theo thứ tự phụ thuộc,
 giữ nguyên nội dung SQL. Nhóm thống nhất dùng DB dev có thể tạo lại: cần tạo lại DB trước khi khởi động app.
-Migration cuối `V20261103130007__allow_unassigned_module_class_lecturer.sql` cho phép lecturer_id=NULL.
+Migration `V20261103130007__allow_unassigned_module_class_lecturer.sql` cho phép lecturer_id=NULL.
+Migration People mới merge được đặt version `V20261103130008__create_people_tables.sql`
+để chạy tiếp sau bộ hiện có, tránh thêm version cũ hơn các migration đã áp dụng.
 
 ## Cập nhật và hủy lớp bằng Postman
 
