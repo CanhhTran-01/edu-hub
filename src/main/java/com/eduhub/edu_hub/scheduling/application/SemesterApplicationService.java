@@ -7,7 +7,9 @@ import com.eduhub.edu_hub.scheduling.api.dto.UpdateSemesterRequest;
 import com.eduhub.edu_hub.scheduling.application.exception.SemesterConflictException;
 import com.eduhub.edu_hub.scheduling.application.specification.SemesterSpecification;
 import com.eduhub.edu_hub.scheduling.domain.entity.Semester;
+import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
 import com.eduhub.edu_hub.scheduling.domain.enums.SemesterStatus;
+import com.eduhub.edu_hub.scheduling.domain.repository.ModuleClassRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.SemesterRepository;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
 import com.eduhub.edu_hub.shared.common.PageResponse;
@@ -37,15 +39,19 @@ public class SemesterApplicationService {
             Pattern.compile("^Học kì ([1-9][0-9]*) năm học ([0-9]{4})-([0-9]{4})$");
 
     private final SemesterRepository semesterRepository;
+    private final ModuleClassRepository moduleClassRepository;
     private final Clock clock;
 
     @Autowired
-    public SemesterApplicationService(SemesterRepository semesterRepository) {
-        this(semesterRepository, Clock.system(BUSINESS_ZONE));
+    public SemesterApplicationService(
+            SemesterRepository semesterRepository, ModuleClassRepository moduleClassRepository) {
+        this(semesterRepository, moduleClassRepository, Clock.system(BUSINESS_ZONE));
     }
 
-    SemesterApplicationService(SemesterRepository semesterRepository, Clock clock) {
+    SemesterApplicationService(
+            SemesterRepository semesterRepository, ModuleClassRepository moduleClassRepository, Clock clock) {
         this.semesterRepository = semesterRepository;
+        this.moduleClassRepository = moduleClassRepository;
         this.clock = clock.withZone(BUSINESS_ZONE);
     }
 
@@ -111,6 +117,16 @@ public class SemesterApplicationService {
                 request.getRegistrationStart(),
                 request.getRegistrationEnd(),
                 id);
+
+        boolean datesChanged = !semester.getStartDate().equals(request.getStartDate())
+                || !semester.getEndDate().equals(request.getEndDate());
+        if (datesChanged
+                && !request.isConfirmDateChange()
+                && moduleClassRepository.existsBySemester_IdAndStatusNot(id, ModuleClassStatus.CANCELLED)) {
+            throw new BaseException(ErrorCode.SEMESTER_DATE_CHANGE_CONFIRMATION_REQUIRED);
+        }
+
+        // TODO(CLASS_SCHEDULE_INTEGRATION): kiểm tra lịch đã xếp vẫn nằm trong khoảng ngày mới.
 
         semester.setSemesterName(name);
         semester.setSemesterCode(toCode(name));

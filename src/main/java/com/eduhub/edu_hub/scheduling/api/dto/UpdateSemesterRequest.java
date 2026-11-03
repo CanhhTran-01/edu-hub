@@ -21,4 +21,6 @@ public class UpdateSemesterRequest {
 
     @NotNull(message = "Ngày đóng đăng ký không được để trống")
     private LocalDate registrationEnd;
+
+    private boolean confirmDateChange;
 }

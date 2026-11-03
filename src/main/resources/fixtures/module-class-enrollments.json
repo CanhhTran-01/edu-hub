@@ -1,0 +1,24 @@
+{
+  "historyComplete": true,
+  "classes": [
+    {
+      "moduleClassCode": "MC_9_CS101_002",
+      "enrollments": [
+        {"studentId": 2001, "status": "DROPPED", "deleted": false}
+      ]
+    },
+    {
+      "moduleClassCode": "MC_9_CS101_003",
+      "enrollments": [
+        {"studentId": 2002, "status": "DROPPED", "deleted": true}
+      ]
+    },
+    {
+      "moduleClassCode": "MC_9_CS102_001",
+      "enrollments": [
+        {"studentId": 2001, "status": "COMPLETED", "deleted": false},
+        {"studentId": 2003, "status": "FAILED", "deleted": false}
+      ]
+    }
+  ]
+}

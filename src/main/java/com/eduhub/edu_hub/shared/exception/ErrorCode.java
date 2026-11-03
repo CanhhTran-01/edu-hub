@@ -60,6 +60,24 @@ public enum ErrorCode {
     SEMESTER_DATE_OVERLAP(4310, "Thời gian học chồng lấn với kỳ học khác", HttpStatus.CONFLICT),
     SEMESTER_REGISTRATION_OVERLAP(4311, "Thời gian đăng ký chồng lấn với kỳ học khác", HttpStatus.CONFLICT),
     SEMESTER_ENDED(4312, "Kỳ học đã kết thúc, chỉ được xem thông tin", HttpStatus.CONFLICT),
+    MODULE_CLASS_CONFIRMATION_REQUIRED(4313, "Học phần đã có lớp trong kỳ, cần xác nhận mở thêm", HttpStatus.CONFLICT),
+    SUBJECT_NOT_OPENABLE(4314, "Chỉ được mở lớp cho học phần đang sử dụng", HttpStatus.CONFLICT),
+    DUPLICATE_BATCH_SUBJECT(4316, "Một học phần chỉ được xuất hiện một lần trong lô", HttpStatus.BAD_REQUEST),
+    PLANNING_DATA_UNAVAILABLE(
+            4317,
+            "Nguồn dữ liệu sinh viên, giảng viên hoặc lịch sử học chưa sẵn sàng/đầy đủ",
+            HttpStatus.SERVICE_UNAVAILABLE),
+    MODULE_CLASS_CODE_CONFLICT(
+            4318, "Mã hoặc STT lớp học phần đã được sử dụng, hãy tải lại dữ liệu", HttpStatus.CONFLICT),
+    PLANNING_SEMESTER_UNSUPPORTED(
+            4319, "Thống kê hiện hỗ trợ năm học có hai kỳ với mã HK_1/HK_2", HttpStatus.BAD_REQUEST),
+    SEMESTER_DATE_CHANGE_CONFIRMATION_REQUIRED(
+            4320, "Kỳ có lớp chưa hủy, cần xác nhận thay đổi ngày học", HttpStatus.CONFLICT),
+    MODULE_CLASS_CANCELLED(4321, "Lớp học phần đã hủy, chỉ được xem thông tin", HttpStatus.CONFLICT),
+    MODULE_CLASS_CAPACITY_BELOW_SIZE(4322, "Sức chứa mới không được nhỏ hơn sĩ số hiện có", HttpStatus.CONFLICT),
+    MODULE_CLASS_HAS_ENROLLMENTS(4323, "Lớp đã phát sinh đăng ký, không được hủy", HttpStatus.CONFLICT),
+    MODULE_CLASS_ENROLLMENT_DATA_UNAVAILABLE(
+            4325, "Chưa có nguồn lịch sử đăng ký đầy đủ để kiểm tra hủy lớp", HttpStatus.SERVICE_UNAVAILABLE),
 
     // Enrollment
     ENROLLMENT_NOT_FOUND(4401, "Không tìm thấy đăng ký", HttpStatus.NOT_FOUND),

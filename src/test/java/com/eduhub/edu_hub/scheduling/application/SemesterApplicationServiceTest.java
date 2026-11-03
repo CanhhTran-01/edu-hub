@@ -14,7 +14,9 @@ import com.eduhub.edu_hub.scheduling.api.dto.SemesterSearchRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.UpdateSemesterRequest;
 import com.eduhub.edu_hub.scheduling.application.exception.SemesterConflictException;
 import com.eduhub.edu_hub.scheduling.domain.entity.Semester;
+import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
 import com.eduhub.edu_hub.scheduling.domain.enums.SemesterStatus;
+import com.eduhub.edu_hub.scheduling.domain.repository.ModuleClassRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.SemesterRepository;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
@@ -48,11 +50,14 @@ class SemesterApplicationServiceTest {
     @Mock
     private SemesterRepository repository;
 
+    @Mock
+    private ModuleClassRepository moduleClassRepository;
+
     private SemesterApplicationService service;
 
     @BeforeEach
     void setUp() {
-        service = new SemesterApplicationService(repository, CLOCK);
+        service = new SemesterApplicationService(repository, moduleClassRepository, CLOCK);
     }
 
     @Test
@@ -244,6 +249,25 @@ class SemesterApplicationServiceTest {
         assertThat(result.isLast()).isFalse();
         assertThat(result.getContent()).singleElement().satisfies(item -> assertThat(item.getStatus())
                 .isEqualTo(SemesterStatus.ONGOING));
+    }
+
+    @Test
+    void changingStudyDatesWithNonCancelledClassesRequiresConfirmationBeforeMutation() {
+        var semester = semester(LocalDate.parse("2026-09-01"), LocalDate.parse("2026-12-31"));
+        when(repository.findForUpdateByIdAndDeletedFalse(1L)).thenReturn(Optional.of(semester));
+        when(moduleClassRepository.existsBySemester_IdAndStatusNot(1L, ModuleClassStatus.CANCELLED))
+                .thenReturn(true);
+        var request = validUpdate();
+        request.setEndDate(LocalDate.parse("2027-01-05"));
+
+        assertBusinessError(
+                () -> service.updateSemester(1L, request), ErrorCode.SEMESTER_DATE_CHANGE_CONFIRMATION_REQUIRED);
+        assertThat(semester.getEndDate()).isEqualTo(LocalDate.parse("2026-12-31"));
+        verify(repository, never()).saveAndFlush(any());
+
+        request.setConfirmDateChange(true);
+        when(repository.saveAndFlush(semester)).thenReturn(semester);
+        assertThat(service.updateSemester(1L, request).getEndDate()).isEqualTo(LocalDate.parse("2027-01-05"));
     }
 
     private void assertBusinessError(org.assertj.core.api.ThrowableAssert.ThrowingCallable action, ErrorCode error) {
