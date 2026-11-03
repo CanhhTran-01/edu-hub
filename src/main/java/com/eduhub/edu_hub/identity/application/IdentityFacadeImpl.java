@@ -31,6 +31,31 @@ public class IdentityFacadeImpl implements IdentityFacade {
 
     @Override
     @Transactional
+    public Long createLecturerAccountWithoutNotification(CreateLecturerAccountCommand command) {
+        if (users.existsByUsername(command.username())) {
+            throw new BaseException(ErrorCode.DUPLICATE_LECTURER_CODE);
+        }
+        Role role = roles.findByRoleNameAndDeletedFalse(RoleName.LECTURER.name())
+                .orElseThrow(() -> new BaseException(ErrorCode.VALIDATION_ERROR));
+        return save(command.username(), command.email(), command.initialPassword(), role, true).getId();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CreateStudentAccountResult sendLecturerAccountNotification(Long userId, String initialPassword) {
+        User account = user(userId);
+        if (account.isDeleted() || !RoleName.LECTURER.name().equals(account.getRole().getRoleName())
+                || account.getStatus() != UserStatus.ACTIVE) {
+            return new CreateStudentAccountResult(userId, false, "ACCOUNT_NOT_AVAILABLE");
+        }
+        if (!encoder.matches(initialPassword, account.getPasswordHash())) {
+            return new CreateStudentAccountResult(userId, false, "INITIAL_PASSWORD_NO_LONGER_VALID");
+        }
+        return sendStudentAccountNotification(userId, initialPassword);
+    }
+
+    @Override
+    @Transactional
     public Long createUser(String username, String rawPassword, String roleName, boolean isFirstLogin) {
         Role role = roles.findByRoleNameAndDeletedFalse(roleName)
                 .orElseThrow(() -> new BaseException(ErrorCode.VALIDATION_ERROR));
@@ -60,7 +85,7 @@ public class IdentityFacadeImpl implements IdentityFacade {
             return new CreateStudentAccountResult(userId, false, "ACCOUNT_EMAIL_MISSING");
         }
         try {
-            mailService.send(user.getEmail(), initialPassword);
+            mailService.sendAccount(user.getEmail(), user.getUsername(), initialPassword);
             return new CreateStudentAccountResult(userId, true, null);
         } catch (MailException exception) {
             log.error("Initial account email failed for user {}", userId);

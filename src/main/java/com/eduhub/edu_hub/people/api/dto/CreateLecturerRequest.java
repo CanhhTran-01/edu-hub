@@ -8,15 +8,25 @@ import lombok.Data;
 @Data
 public class CreateLecturerRequest {
     @NotBlank
+    @jakarta.validation.constraints.Size(max = 255)
     private String fullName;
 
+    @NotNull
+    @jakarta.validation.constraints.Past
     private LocalDate dateOfBirth;
+    @NotBlank
+    @jakarta.validation.constraints.Email
+    @jakarta.validation.constraints.Size(max = 255)
     private String email;
+    @jakarta.validation.constraints.Size(max = 255)
     private String phone;
+    @jakarta.validation.constraints.Size(max = 255)
     private String citizenId;
 
     @NotNull
     private Long facultyId;
 
+    @NotBlank
+    @jakarta.validation.constraints.Size(max = 500)
     private String reason;
 }

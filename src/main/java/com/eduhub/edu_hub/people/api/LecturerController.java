@@ -19,6 +19,28 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class LecturerController {
     private final LecturerApplicationService lecturerService;
+    private final com.eduhub.edu_hub.people.application.LecturerCreationService creationService;
+
+    @org.springframework.web.bind.annotation.PostMapping
+    public ApiResponse<com.eduhub.edu_hub.people.api.dto.CreateLecturerResponse> create(
+            @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody
+            com.eduhub.edu_hub.people.api.dto.CreateLecturerRequest request,
+            @org.springframework.web.bind.annotation.RequestHeader("Authorization") String authorization) {
+        return ApiResponse.success(creationService.create(request, token(authorization)));
+    }
+
+    @org.springframework.web.bind.annotation.PostMapping("/{id}/account-notification/resend")
+    public ApiResponse<com.eduhub.edu_hub.people.api.dto.LecturerNotificationResponse> resend(
+            @PathVariable Long id,
+            @org.springframework.web.bind.annotation.RequestHeader("Authorization") String authorization) {
+        return ApiResponse.success(creationService.resend(id, token(authorization)));
+    }
+
+    private String token(String authorization) {
+        if (authorization == null || !authorization.startsWith("Bearer ") || authorization.length() <= 7)
+            throw new BaseException(ErrorCode.UNAUTHENTICATED);
+        return authorization.substring(7);
+    }
 
     @GetMapping
     public ApiResponse<PageResponse<LecturerResponse>> search(

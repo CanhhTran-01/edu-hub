@@ -41,6 +41,10 @@ public enum ErrorCode {
     STUDENT_CLASS_MISMATCH(4115, "Ngành, hệ đào tạo hoặc khóa không khớp với lớp", HttpStatus.BAD_REQUEST),
 
     // Curriculum
+    FACULTY_NOT_ACTIVE(4116, "Khoa không tồn tại hoặc đã ngừng hoạt động", HttpStatus.BAD_REQUEST),
+    DUPLICATE_LECTURER_EMAIL(4117, "Email giảng viên đã tồn tại", HttpStatus.CONFLICT),
+    DUPLICATE_LECTURER_CITIZEN_ID(4118, "CCCD giảng viên đã tồn tại", HttpStatus.CONFLICT),
+    LECTURER_CODE_EXHAUSTED(4119, "Đã hết dải mã giảng viên GV 6 chữ số", HttpStatus.CONFLICT),
     SUBJECT_NOT_FOUND(4201, "Không tìm thấy học phần", HttpStatus.NOT_FOUND),
     CURRICULUM_NOT_FOUND(4202, "Không tìm thấy chương trình đào tạo", HttpStatus.NOT_FOUND),
     PREREQUISITE_CYCLE(4203, "Phát hiện chu trình tiên quyết", HttpStatus.BAD_REQUEST),
