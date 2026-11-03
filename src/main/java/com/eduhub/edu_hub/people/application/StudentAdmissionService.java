@@ -57,6 +57,7 @@ public class StudentAdmissionService {
     private final AdministrativeClassRepository classes;
     private final StudentCodeGenerator codeGenerator;
     private final IdentityFacade identityFacade;
+    private final com.eduhub.edu_hub.curriculum.application.CurriculumFacade.Majors majors;
     private final AuditLogRepository auditLogs;
 
     public AdmissionPreviewResponse preview(MultipartFile file) {
@@ -193,9 +194,15 @@ public class StudentAdmissionService {
         if (valid.isEmpty()) return List.of();
         AdmissionCandidate first = valid.get(0);
         TrainingType type = TrainingType.valueOf(first.getTrainingType().toUpperCase(Locale.ROOT));
+        var major = majors.findMajorByCode(first.getMajorCode());
+        if (major.isEmpty()) {
+            valid.forEach(value -> add(errors, value, "ma_nganh", "Major code does not exist in Curriculum"));
+            valid.clear();
+            return List.of();
+        }
         List<AdministrativeClass> result = classes
-                .findByMajorCodeIgnoreCaseAndCohort_CohortCodeIgnoreCaseAndTrainingTypeAndDeletedFalse(
-                        first.getMajorCode(), first.getCohortCode(), type);
+                .findByMajorIdAndCohort_CohortCodeIgnoreCaseAndTrainingTypeAndDeletedFalse(
+                        major.get().id(), first.getCohortCode(), type);
         if (result.isEmpty()) {
             valid.forEach(value -> add(errors, value, "ma_nganh", "Không có lớp phù hợp với ngành, khóa và hệ đào tạo"));
             valid.clear();

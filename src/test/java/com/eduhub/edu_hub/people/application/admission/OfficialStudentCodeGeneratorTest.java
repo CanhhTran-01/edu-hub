@@ -18,11 +18,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class OfficialStudentCodeGeneratorTest {
     @Mock StudentRepository students;
+    @Mock com.eduhub.edu_hub.curriculum.application.CurriculumFacade.Majors majors;
     private OfficialStudentCodeGenerator generator;
 
     @BeforeEach
     void setUp() {
-        generator = new OfficialStudentCodeGenerator(students);
+        generator = new OfficialStudentCodeGenerator(students, majors);
     }
 
     @Test
@@ -39,6 +40,13 @@ class OfficialStudentCodeGeneratorTest {
     void padsCohortAndSequenceWithZero() {
         assertThat(generator.generate(administrativeClass(1L, "dt", "DT7", "L01"), 1))
                 .isEqualTo("DT070101");
+    }
+
+    @Test
+    void usesCurriculumArtificialIntelligencePrefixInsteadOfLocalCode() {
+        AdministrativeClass value = administrativeClass(4L, "AI", "AI8", "L01");
+        value.setMajorCode("UNTRUSTED-LOCAL-CODE");
+        assertThat(generator.generate(value, 1)).isEqualTo("AI080101");
     }
 
     @Test
@@ -79,6 +87,11 @@ class OfficialStudentCodeGeneratorTest {
         cohort.setCohortCode(cohortCode);
         AdministrativeClass value = new AdministrativeClass();
         value.setId(id);
+        value.setMajorId(id);
+        String canonical = java.util.Map.of("CT", "CNTT", "AT", "ATTT", "DT", "DTVT", "AI", "TTNT")
+                .get(majorCode.toUpperCase(java.util.Locale.ROOT));
+        org.mockito.Mockito.lenient().when(majors.requireMajor(id)).thenReturn(
+                new com.eduhub.edu_hub.curriculum.api.dto.MajorResponse(id, canonical, "Major"));
         value.setMajorCode(majorCode);
         value.setCohort(cohort);
         value.setClassName(className);

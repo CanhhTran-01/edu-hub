@@ -13,6 +13,9 @@ import jakarta.persistence.LockModeType;
 
 public interface AdministrativeClassRepository extends JpaRepository<AdministrativeClass, Long> {
     @EntityGraph(attributePaths = "cohort")
+    List<AdministrativeClass> findByMajorIdAndCohort_CohortCodeIgnoreCaseAndTrainingTypeAndDeletedFalse(
+            Long majorId, String cohortCode, TrainingType trainingType);
+    @EntityGraph(attributePaths = "cohort")
     Optional<AdministrativeClass> findByIdAndDeletedFalse(Long id);
 
     @EntityGraph(attributePaths = "cohort")

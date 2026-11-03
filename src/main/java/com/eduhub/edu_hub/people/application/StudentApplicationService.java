@@ -47,6 +47,7 @@ public class StudentApplicationService {
     private static final String INITIAL_PASSWORD = "12345";
 
     private final StudentRepository studentRepository;
+    private final com.eduhub.edu_hub.curriculum.application.CurriculumFacade.Majors majors;
     private final AdministrativeClassRepository administrativeClassRepository;
     private final StudentCodeGenerator studentCodeGenerator;
     private final IdentityFacade identityFacade;
@@ -160,6 +161,7 @@ public class StudentApplicationService {
     }
 
     private void validateClassScope(CreateStudentRequest request, AdministrativeClass administrativeClass) {
+        majors.requireMajor(request.getMajorId());
         if (!administrativeClass.getMajorId().equals(request.getMajorId())
                 || administrativeClass.getCohort() == null
                 || !administrativeClass.getCohort().getId().equals(request.getCohortId())
@@ -305,7 +307,7 @@ public class StudentApplicationService {
                 .phone(student.getPhone())
                 .citizenId(student.getCitizenId())
                 .className(administrativeClass == null ? null : administrativeClass.getClassName())
-                .majorName(administrativeClass == null ? null : administrativeClass.getMajorName())
+                .majorName(administrativeClass == null ? null : majors.requireMajor(administrativeClass.getMajorId()).majorName())
                 .cohortCode(
                         administrativeClass == null
                                 ? null

@@ -50,7 +50,10 @@ class StudentCreationServiceTest {
     void setUp() {
         PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
         when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
-        service = new StudentApplicationService(students, classes, generator, identity, audit,
+        var majors = mock(com.eduhub.edu_hub.curriculum.application.CurriculumFacade.Majors.class);
+        org.mockito.Mockito.lenient().when(majors.requireMajor(any())).thenReturn(
+                new com.eduhub.edu_hub.curriculum.api.dto.MajorResponse(1L, "CNTT", "CNTT"));
+        service = new StudentApplicationService(students, majors, classes, generator, identity, audit,
                 new TransactionTemplate(transactionManager));
         when(identity.requireAcademicAdmin(any())).thenReturn("admin_test");
 

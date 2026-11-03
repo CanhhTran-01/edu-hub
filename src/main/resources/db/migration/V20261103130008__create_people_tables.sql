@@ -76,52 +76,6 @@ CREATE INDEX idx_students_user_id ON students (user_id);
 CREATE INDEX idx_lecturers_faculty_id ON lecturers (faculty_id);
 CREATE INDEX idx_lecturers_user_id ON lecturers (user_id);
 
--- Dữ liệu mẫu cho môi trường phát triển. Mã sinh viên/lớp theo dạng trong danh sách
--- học phần; các hồ sơ bên dưới là dữ liệu giả, không sao chép sinh viên thật.
--- major_id chỉ là mã tạm cho đến khi curriculum triển khai bảng majors.
-INSERT INTO cohorts (cohort_code, created_at, updated_at, created_by, updated_by)
-VALUES
-    ('AT16', CURRENT_TIMESTAMP AT TIME ZONE 'UTC', CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'seed', 'seed'),
-    ('AT15', CURRENT_TIMESTAMP AT TIME ZONE 'UTC', CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'seed', 'seed');
-
-INSERT INTO administrative_classes (
-    class_name, major_id, major_name, cohort_id, training_type,
-    created_at, updated_at, created_by, updated_by
-)
-SELECT seed.class_name, seed.major_id, seed.major_name, cohorts.id, seed.training_type,
-       CURRENT_TIMESTAMP AT TIME ZONE 'UTC', CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'seed', 'seed'
-FROM (VALUES
-    ('AT16AK', 2, 'An toàn thông tin', 'AT16', 'CHINH_QUY'),
-    ('AT16BK', 2, 'An toàn thông tin', 'AT16', 'CHINH_QUY'),
-    ('AT16CK', 2, 'An toàn thông tin', 'AT16', 'CHINH_QUY'),
-    ('AT16DT', 2, 'An toàn thông tin', 'AT16', 'CHINH_QUY'),
-    ('AT15C', 2, 'An toàn thông tin', 'AT15', 'CHINH_QUY')
-) AS seed(class_name, major_id, major_name, cohort_code, training_type)
-JOIN cohorts ON cohorts.cohort_code = seed.cohort_code;
-
-INSERT INTO students (
-    class_id, student_code, full_name, citizen_id, date_of_birth, email, phone,
-    entrance_score, target_gpa, activity_status, academic_warning_status,
-    created_at, updated_at, created_by, updated_by
-)
-SELECT classes.id, seed.student_code, seed.full_name, seed.citizen_id, seed.date_of_birth::date,
-       seed.email, seed.phone, seed.entrance_score::numeric, seed.target_gpa, seed.activity_status,
-       seed.academic_warning_status,
-       CURRENT_TIMESTAMP AT TIME ZONE 'UTC', CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'seed', 'seed'
-FROM (VALUES
-    ('AT16AK', 'AT169901', 'Nguyễn Minh An', NULL, NULL,
-     'sv001@example.test', NULL, NULL, 3.20, 'STUDYING', NULL),
-    ('AT16BK', 'AT169902', 'Trần Thu Hà', NULL, NULL,
-     'sv002@example.test', NULL, NULL, 3.00, 'DEACTIVATED', NULL),
-    ('AT16CK', 'AT169903', 'Lê Quốc Bảo', NULL, NULL,
-     'sv003@example.test', NULL, NULL, 3.50, 'STUDYING', NULL),
-    ('AT16DT', 'AT169904', 'Phạm Ngọc Mai', NULL, NULL,
-     'sv004@example.test', NULL, NULL, 2.80, 'STUDYING', NULL),
-    ('AT15C', 'AT159901', 'Vũ Hoàng Nam', NULL, NULL,
-     'sv005@example.test', NULL, NULL, 2.90, 'STUDYING', NULL)
-) AS seed(class_name, student_code, full_name, citizen_id, date_of_birth,
-          email, phone, entrance_score, target_gpa, activity_status, academic_warning_status)
-JOIN administrative_classes AS classes ON classes.class_name = seed.class_name;
 
 INSERT INTO faculties (faculty_name, created_at, updated_at, created_by, updated_by)
 VALUES

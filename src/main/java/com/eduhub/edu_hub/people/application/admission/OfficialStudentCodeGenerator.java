@@ -18,6 +18,7 @@ public class OfficialStudentCodeGenerator implements StudentCodeGenerator {
     private static final Pattern CLASS_CODE = Pattern.compile("^[Ll](\\d{1,2})$");
 
     private final StudentRepository students;
+    private final com.eduhub.edu_hub.curriculum.application.CurriculumFacade.Majors majors;
 
     @Override
     public String generate(AdministrativeClass administrativeClass, int sequenceNumber) {
@@ -42,7 +43,9 @@ public class OfficialStudentCodeGenerator implements StudentCodeGenerator {
     }
 
     private String prefix(AdministrativeClass administrativeClass) {
-        String majorCode = administrativeClass.getMajorCode();
+        String canonicalCode = majors.requireMajor(administrativeClass.getMajorId()).majorCode();
+        String majorCode = java.util.Map.of("CNTT", "CT", "ATTT", "AT", "DTVT", "DT", "TTNT", "AI")
+                .get(canonicalCode.toUpperCase(Locale.ROOT));
         if (majorCode == null || !MAJOR_CODE.matcher(majorCode).matches()) {
             throw new BaseException(ErrorCode.INVALID_STUDENT_CODE_MAJOR);
         }

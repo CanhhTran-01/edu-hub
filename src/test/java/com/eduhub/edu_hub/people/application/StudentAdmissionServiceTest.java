@@ -46,13 +46,15 @@ class StudentAdmissionServiceTest {
     @Mock StudentCodeGenerator generator;
     @Mock IdentityFacade identity;
     @Mock AuditLogRepository audit;
+    @Mock com.eduhub.edu_hub.curriculum.application.CurriculumFacade.Majors majors;
     private AdmissionPreviewStore store;
     private StudentAdmissionService service;
 
     @BeforeEach
     void setUp() {
         store = new AdmissionPreviewStore();
-        service = new StudentAdmissionService(parser, strategy, store, students, classes, generator, identity, audit);
+        service = new StudentAdmissionService(parser, strategy, store, students, classes, generator, identity,
+                majors, audit);
     }
 
     @Test
@@ -103,7 +105,9 @@ class StudentAdmissionServiceTest {
         target.setMajorCode("ATTT");
         var cohort = new com.eduhub.edu_hub.people.domain.model.Cohort(); cohort.setCohortCode("K20"); target.setCohort(cohort);
         target.setTrainingType(com.eduhub.edu_hub.shared.enums.TrainingType.CHINH_QUY);
-        when(classes.findByMajorCodeIgnoreCaseAndCohort_CohortCodeIgnoreCaseAndTrainingTypeAndDeletedFalse(
+        when(majors.findMajorByCode(any())).thenReturn(Optional.of(
+                new com.eduhub.edu_hub.curriculum.api.dto.MajorResponse(42L, "ATTT", "An toan thong tin")));
+        when(classes.findByMajorIdAndCohort_CohortCodeIgnoreCaseAndTrainingTypeAndDeletedFalse(
                 any(), any(), any())).thenReturn(List.of(target));
         when(students.findAllByAdministrativeClass_IdAndDeletedFalse(1L)).thenReturn(List.of());
         doAnswer(invocation -> {
