@@ -4,7 +4,7 @@ import lombok.Data;
 
 @Data
 public class StudentSearchRequest {
-    private String keyword; // MSSV / họ tên
+    private String keyword; // MSSV hoặc họ tên
     private Long majorId;
     private Long cohortId;
     private Long classId;
