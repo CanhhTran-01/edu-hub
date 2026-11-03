@@ -27,5 +27,4 @@ public class SubjectPrerequisite extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "prerequisite_subject_id", nullable = false)
     private Subject prerequisiteSubject;
-
 }
