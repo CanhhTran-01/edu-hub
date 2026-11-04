@@ -1,9 +1,17 @@
 package com.eduhub.edu_hub.people.api;
 
+import com.eduhub.edu_hub.people.api.dto.AccountNotificationResponse;
+import com.eduhub.edu_hub.people.api.dto.CreateStudentRequest;
+import com.eduhub.edu_hub.people.api.dto.CreateStudentResponse;
 import com.eduhub.edu_hub.people.api.dto.StudentResponse;
 import com.eduhub.edu_hub.people.api.dto.StudentSearchRequest;
 import com.eduhub.edu_hub.people.api.dto.UpdateStudentRequest;
 import com.eduhub.edu_hub.people.application.StudentApplicationService;
+import com.eduhub.edu_hub.people.application.StudentAdmissionService;
+import com.eduhub.edu_hub.people.api.dto.AdmissionClassAdjustmentRequest;
+import com.eduhub.edu_hub.people.api.dto.AdmissionConfirmRequest;
+import com.eduhub.edu_hub.people.api.dto.AdmissionConfirmResponse;
+import com.eduhub.edu_hub.people.api.dto.AdmissionPreviewResponse;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.exception.BaseException;
@@ -15,14 +23,57 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.multipart.MultipartFile;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/students")
 @RequiredArgsConstructor
 public class StudentController {
     private final StudentApplicationService studentService;
+    private final StudentAdmissionService admissionService;
+
+    @PostMapping(value = "/admission/preview", consumes = "multipart/form-data")
+    public ApiResponse<AdmissionPreviewResponse> preview(@RequestParam("file") MultipartFile file) {
+        return ApiResponse.success(admissionService.preview(file));
+    }
+
+    @PutMapping("/admission/{batchId}/assignment")
+    public ApiResponse<AdmissionPreviewResponse> adjustAssignment(
+            @PathVariable UUID batchId, @Valid @RequestBody AdmissionClassAdjustmentRequest request) {
+        return ApiResponse.success(admissionService.adjust(batchId, request));
+    }
+
+    @PostMapping("/admission/{batchId}/confirm")
+    public ApiResponse<AdmissionConfirmResponse> confirm(
+            @PathVariable UUID batchId, @RequestBody AdmissionConfirmRequest request) {
+        return ApiResponse.success(admissionService.confirm(batchId, request));
+    }
+
+    @PostMapping
+    public ApiResponse<CreateStudentResponse> create(
+            @Valid @RequestBody CreateStudentRequest request,
+            @RequestHeader("Authorization") String authorization) {
+        return ApiResponse.success(studentService.create(request, token(authorization)));
+    }
+
+    @PostMapping("/{id}/account-notification/resend")
+    public ApiResponse<AccountNotificationResponse> resendAccountNotification(
+            @PathVariable Long id, @RequestHeader("Authorization") String authorization) {
+        return ApiResponse.success(studentService.resendAccountNotification(id, token(authorization)));
+    }
+
+    private String token(String authorization) {
+        if (authorization == null || !authorization.startsWith("Bearer ")
+                || authorization.length() <= 7) {
+            throw new BaseException(ErrorCode.UNAUTHENTICATED);
+        }
+        return authorization.substring(7);
+    }
 
     @GetMapping
     public ApiResponse<PageResponse<StudentResponse>> search(

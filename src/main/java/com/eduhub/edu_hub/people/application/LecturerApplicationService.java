@@ -90,6 +90,11 @@ public class LecturerApplicationService {
                 .fullName(lecturer.getFullName())
                 .email(lecturer.getEmail())
                 .phone(lecturer.getPhone())
+                .dateOfBirth(lecturer.getDateOfBirth())
+                .citizenId(lecturer.getCitizenId())
+                .facultyId(faculty == null ? null : faculty.getId())
+                .accountNotificationStatus(lecturer.getAccountNotificationStatus())
+                .accountNotificationError(lecturer.getAccountNotificationError())
                 .facultyName(faculty == null || faculty.isDeleted() ? null : faculty.getFacultyName())
                 .status(lecturer.getStatus())
                 .build();

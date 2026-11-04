@@ -4,8 +4,21 @@ import com.eduhub.edu_hub.identity.api.dto.UserInfoResponse;
 import java.util.Optional;
 
 public interface IdentityFacade {
+    Long createLecturerAccountWithoutNotification(CreateLecturerAccountCommand command);
+
+    CreateStudentAccountResult sendLecturerAccountNotification(Long userId, String initialPassword);
     /** Tạo tài khoản mới (dùng khi tạo SV/GV) */
     Long createUser(String username, String rawPassword, String roleName, boolean isFirstLogin);
+
+    CreateStudentAccountResult createStudentAccount(CreateStudentAccountCommand command);
+
+    Long createStudentAccountWithoutNotification(CreateStudentAccountCommand command);
+
+    CreateStudentAccountResult sendStudentAccountNotification(Long userId, String initialPassword);
+
+    String requireAcademicAdmin(String accessToken);
+
+    UserInfoResponse requireCurrentStudent(String accessToken);
 
     /** Khóa / mở khóa tài khoản */
     void lockUser(Long userId, String reason);

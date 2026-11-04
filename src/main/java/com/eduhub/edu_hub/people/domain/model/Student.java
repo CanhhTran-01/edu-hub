@@ -1,5 +1,6 @@
 package com.eduhub.edu_hub.people.domain.model;
 
+import com.eduhub.edu_hub.people.domain.enums.AccountNotificationStatus;
 import com.eduhub.edu_hub.shared.common.BaseEntity;
 import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import jakarta.persistence.Column;
@@ -30,11 +31,16 @@ public class Student extends BaseEntity {
     @Column(name = "student_code", nullable = false, unique = true)
     private String studentCode;
 
+    @Column(name = "admission_application_code", unique = true)
+    private String admissionApplicationCode;
+
     @Column(name = "full_name", nullable = false)
     private String fullName;
 
     @Column(name = "date_of_birth")
     private LocalDate dateOfBirth;
+
+    private String gender;
 
     private String email;
 
@@ -55,4 +61,11 @@ public class Student extends BaseEntity {
 
     @Column(name = "academic_warning_status")
     private String academicWarningStatus;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_notification_status")
+    private AccountNotificationStatus accountNotificationStatus;
+
+    @Column(name = "account_notification_error")
+    private String accountNotificationError;
 }
