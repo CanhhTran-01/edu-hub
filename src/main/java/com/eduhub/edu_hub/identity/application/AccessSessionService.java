@@ -18,7 +18,8 @@ public class AccessSessionService {
     public boolean isActive(String accessToken) {
         TokenService.TokenClaims claims = tokenService.validateAccessToken(accessToken);
         if (claims == null) return false;
-        return refreshTokenRepository.findByIdAndRevokedFalse(claims.sessionId())
+        return refreshTokenRepository
+                .findByIdAndRevokedFalse(claims.sessionId())
                 .filter(session -> session.getUser().getId().equals(claims.userId()))
                 .filter(session -> session.getUser().getUsername().equals(claims.username()))
                 .filter(session -> session.getUser().getStatus() == UserStatus.ACTIVE)

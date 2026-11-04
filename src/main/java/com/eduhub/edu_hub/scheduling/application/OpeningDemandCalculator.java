@@ -6,6 +6,7 @@ import com.eduhub.edu_hub.scheduling.application.port.PlanningSnapshot;
 import com.eduhub.edu_hub.scheduling.application.port.PlanningSnapshot.Attempt;
 import com.eduhub.edu_hub.scheduling.application.port.PlanningSnapshot.Outcome;
 import com.eduhub.edu_hub.scheduling.domain.policy.ModuleClassPolicy;
+import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.util.*;
@@ -20,47 +21,62 @@ public class OpeningDemandCalculator {
     public List<OpeningSubjectResponse> calculate(
             String semesterCode, List<CurriculumOpeningSubjectResponse> plan, PlanningSnapshot data) {
 
+        // Valide mã kỳ
         var matcher = SEMESTER_CODE.matcher(semesterCode);
         if (!matcher.matches()) throw new BaseException(ErrorCode.PLANNING_SEMESTER_UNSUPPORTED);
 
+        // kiểm tra: academicYear >= 1, Năm kết thúc = năm bắt đầu + 1, historyComplete = true.
         int semesterNumber = Integer.parseInt(matcher.group(1));
         int academicYear = Integer.parseInt(matcher.group(2));
         if (academicYear < 1 || Integer.parseInt(matcher.group(3)) != academicYear + 1)
             throw new BaseException(ErrorCode.PLANNING_SEMESTER_UNSUPPORTED);
-
         if (!data.historyComplete()) throw new BaseException(ErrorCode.PLANNING_DATA_UNAVAILABLE);
 
+        // Quy kỳ cần mở thành một số duy nhất
         int targetTerm = academicYear * 2 + semesterNumber;
-        var users = data.usersById();
+
+        // gom dữ liệu thành Map<mã CTĐT, List<môn trong CTĐT>> làm programs
         var programs =
                 plan.stream().collect(Collectors.groupingBy(CurriculumOpeningSubjectResponse::getCurriculumCode));
 
+        // Lịch sử học gom thành Map<studentId, Map<subjectCode, List<Attempt>>> làm history
+        // chỉ lấy các lần học không sau kỳ đang tính (<= targetTerm), để tra nhanh “SV X đã học môn Y thế nào”
         var history = data.attempts().stream()
                 .filter(attempt -> attempt.termIndex() <= targetTerm)
                 .collect(Collectors.groupingBy(Attempt::studentId, Collectors.groupingBy(Attempt::subjectCode)));
 
+        // bắt đầu tính toán
         Map<Long, Demand> demands = new HashMap<>();
         for (var student : data.students()) {
-            var user = users.get(student.userId());
+
+            // Tính SV đang ở học kỳ thứ mấy của chương trình
+            // Ví dụ nhập học 2023, mở kỳ 1 năm 2026: 2*(2026-2024)+1 = 7 (kỳ thứ 7)
             int currentSemester = 2 * (academicYear - student.admissionYear()) + semesterNumber;
 
-            if (!student.active() || user == null || !user.active() || currentSemester < 1) continue;
+            // Bỏ qua SV không STUDYING hoặc currentSemester < 1 (chưa nhập học)
+            if (student.activityStatus() != ActivityStatus.STUDYING || currentSemester < 1) continue;
 
+            // Không tìm thấy chương trình của SV thì lỗi
             var subjects = programs.get(student.curriculumCode());
             if (subjects == null) throw new BaseException(ErrorCode.PLANNING_DATA_UNAVAILABLE);
 
+            // với mỗi sinh viên, ta lấy ra lịch sử học gồm subject + list attempts
+            // "COMPLETED, REGISTER" thì bỏ qua, "ON_TIME, MISSED, RETAKE" cần xử lý
             var studentHistory = history.getOrDefault(student.id(), Map.of());
-
             for (var subject : subjects) {
 
+                // Lấy attempts tương ứng
                 List<Attempt> attempts = studentHistory.getOrDefault(subject.getSubjectCode(), List.of());
 
-                // Đã đạt thì không thuộc nhu cầu bắt buộc; học cải thiện do enrollment xử lý sau.
+                // Đã đạt thì không thuộc nhu cầu bắt buộc
                 if (attempts.stream()
                         .anyMatch(attempt ->
                                 attempt.status() == Outcome.COMPLETED || attempt.status() == Outcome.REGISTERED))
                     continue;
 
+                // TODO: học cải thiện (với status COMPLETED) do enrollment xử lý sau.
+
+                // phân nhóm cho nhu cầu bắt buộc
                 Group group = null;
                 if (subject.getRecommendSemester() == currentSemester) group = Group.ON_TIME;
                 else if (attempts.stream().anyMatch(attempt -> attempt.status() == Outcome.FAILED))
@@ -74,6 +90,7 @@ public class OpeningDemandCalculator {
             }
         }
 
+        // trả lại dữ liệu đã xử lý
         return demands.values().stream()
                 .map(demand -> demand.toResponse(data))
                 .sorted(Comparator.comparing(OpeningSubjectResponse::getSubjectCode))
@@ -94,6 +111,7 @@ public class OpeningDemandCalculator {
             this.subject = subject;
         }
 
+        // xử lý dữ liệu nhu cầu cho subject
         private OpeningSubjectResponse toResponse(PlanningSnapshot data) {
             return OpeningSubjectResponse.builder()
                     .subjectId(subject.getSubjectId())

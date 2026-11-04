@@ -1,0 +1,827 @@
+{
+  "source": "TEST_DATA",
+  "historyComplete": true,
+  "students": [
+    {
+      "id": 1001,
+      "studentCode": "CNTT26001",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1002,
+      "studentCode": "CNTT26002",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1003,
+      "studentCode": "CNTT26003",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1004,
+      "studentCode": "CNTT26004",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1005,
+      "studentCode": "CNTT26005",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1006,
+      "studentCode": "CNTT26006",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1007,
+      "studentCode": "CNTT26007",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1008,
+      "studentCode": "CNTT26008",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1009,
+      "studentCode": "CNTT26009",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1010,
+      "studentCode": "CNTT26010",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1011,
+      "studentCode": "CNTT26011",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1012,
+      "studentCode": "CNTT26012",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1013,
+      "studentCode": "CNTT26013",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1014,
+      "studentCode": "CNTT26014",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1015,
+      "studentCode": "CNTT26015",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1016,
+      "studentCode": "CNTT26016",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1017,
+      "studentCode": "CNTT26017",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1018,
+      "studentCode": "CNTT26018",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1019,
+      "studentCode": "CNTT26019",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1020,
+      "studentCode": "CNTT26020",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1021,
+      "studentCode": "CNTT26021",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1022,
+      "studentCode": "CNTT26022",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1023,
+      "studentCode": "CNTT26023",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1024,
+      "studentCode": "CNTT26024",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1025,
+      "studentCode": "ATTT26001",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1026,
+      "studentCode": "ATTT26002",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1027,
+      "studentCode": "ATTT26003",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1028,
+      "studentCode": "ATTT26004",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1029,
+      "studentCode": "ATTT26005",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1030,
+      "studentCode": "ATTT26006",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1031,
+      "studentCode": "ATTT26007",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1032,
+      "studentCode": "ATTT26008",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1033,
+      "studentCode": "ATTT26009",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1034,
+      "studentCode": "ATTT26010",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1035,
+      "studentCode": "ATTT26011",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1036,
+      "studentCode": "ATTT26012",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1037,
+      "studentCode": "ATTT26013",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1038,
+      "studentCode": "ATTT26014",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1039,
+      "studentCode": "ATTT26015",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1040,
+      "studentCode": "ATTT26016",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1041,
+      "studentCode": "ATTT26017",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1042,
+      "studentCode": "ATTT26018",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1043,
+      "studentCode": "ATTT26019",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1044,
+      "studentCode": "ATTT26020",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1045,
+      "studentCode": "ATTT26021",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1046,
+      "studentCode": "ATTT26022",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1047,
+      "studentCode": "ATTT26023",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1048,
+      "studentCode": "ATTT26024",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1049,
+      "studentCode": "DTVT26001",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1050,
+      "studentCode": "DTVT26002",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1051,
+      "studentCode": "DTVT26003",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1052,
+      "studentCode": "DTVT26004",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1053,
+      "studentCode": "DTVT26005",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1054,
+      "studentCode": "DTVT26006",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1055,
+      "studentCode": "DTVT26007",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1056,
+      "studentCode": "DTVT26008",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1057,
+      "studentCode": "DTVT26009",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1058,
+      "studentCode": "DTVT26010",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1059,
+      "studentCode": "DTVT26011",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1060,
+      "studentCode": "DTVT26012",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1061,
+      "studentCode": "DTVT26013",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1062,
+      "studentCode": "DTVT26014",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1063,
+      "studentCode": "DTVT26015",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1064,
+      "studentCode": "DTVT26016",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1065,
+      "studentCode": "DTVT26017",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1066,
+      "studentCode": "DTVT26018",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1067,
+      "studentCode": "DTVT26019",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1068,
+      "studentCode": "DTVT26020",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1069,
+      "studentCode": "DTVT26021",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1070,
+      "studentCode": "DTVT26022",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1071,
+      "studentCode": "DTVT26023",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1072,
+      "studentCode": "DTVT26024",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1073,
+      "studentCode": "TTNT26001",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1074,
+      "studentCode": "TTNT26002",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1075,
+      "studentCode": "TTNT26003",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1076,
+      "studentCode": "TTNT26004",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1077,
+      "studentCode": "TTNT26005",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1078,
+      "studentCode": "TTNT26006",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1079,
+      "studentCode": "TTNT26007",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1080,
+      "studentCode": "TTNT26008",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1081,
+      "studentCode": "TTNT26009",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1082,
+      "studentCode": "TTNT26010",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1083,
+      "studentCode": "TTNT26011",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1084,
+      "studentCode": "TTNT26012",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1085,
+      "studentCode": "TTNT26013",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1086,
+      "studentCode": "TTNT26014",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1087,
+      "studentCode": "TTNT26015",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1088,
+      "studentCode": "TTNT26016",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1089,
+      "studentCode": "TTNT26017",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1090,
+      "studentCode": "TTNT26018",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1091,
+      "studentCode": "TTNT26019",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1092,
+      "studentCode": "TTNT26020",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1093,
+      "studentCode": "TTNT26021",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1094,
+      "studentCode": "TTNT26022",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1095,
+      "studentCode": "TTNT26023",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 1096,
+      "studentCode": "TTNT26024",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 2001,
+      "studentCode": "TEST2001",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2023,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 2002,
+      "studentCode": "TEST2002",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2023,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 2003,
+      "studentCode": "TEST2003",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2023,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 2004,
+      "studentCode": "TEST2004",
+      "curriculumCode": "ATTT_4Y_V1",
+      "admissionYear": 2023,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 2005,
+      "studentCode": "TEST2005",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2023,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 2006,
+      "studentCode": "TEST2006",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2023,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 2007,
+      "studentCode": "TEST2007",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2022,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 2008,
+      "studentCode": "TEST2008",
+      "curriculumCode": "CNTT_4Y_V1",
+      "admissionYear": 2022,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 2009,
+      "studentCode": "TEST2009",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "DEACTIVATED"
+    },
+    {
+      "id": 2010,
+      "studentCode": "TEST2010",
+      "curriculumCode": "TTNT_4Y_V1",
+      "admissionYear": 2026,
+      "activityStatus": "STUDYING"
+    },
+    {
+      "id": 2011,
+      "studentCode": "TEST2011",
+      "curriculumCode": "DTVT_4Y_V1",
+      "admissionYear": 2027,
+      "activityStatus": "STUDYING"
+    }
+  ],
+  "attempts": [
+    {
+      "studentId": 2001,
+      "subjectCode": "CS101",
+      "academicYearStart": 2023,
+      "semesterNumber": 1,
+      "status": "FAILED"
+    },
+    {
+      "studentId": 2002,
+      "subjectCode": "CS101",
+      "academicYearStart": 2023,
+      "semesterNumber": 1,
+      "status": "FAILED"
+    },
+    {
+      "studentId": 2002,
+      "subjectCode": "CS101",
+      "academicYearStart": 2023,
+      "semesterNumber": 2,
+      "status": "COMPLETED"
+    },
+    {
+      "studentId": 2004,
+      "subjectCode": "CS101",
+      "academicYearStart": 2023,
+      "semesterNumber": 1,
+      "status": "FAILED"
+    },
+    {
+      "studentId": 2004,
+      "subjectCode": "CS101",
+      "academicYearStart": 2026,
+      "semesterNumber": 1,
+      "status": "REGISTERED"
+    },
+    {
+      "studentId": 2005,
+      "subjectCode": "CS101",
+      "academicYearStart": 2023,
+      "semesterNumber": 1,
+      "status": "DROPPED"
+    },
+    {
+      "studentId": 2006,
+      "subjectCode": "CS101",
+      "academicYearStart": 2023,
+      "semesterNumber": 1,
+      "status": "COMPLETED"
+    },
+    {
+      "studentId": 2006,
+      "subjectCode": "CS101",
+      "academicYearStart": 2024,
+      "semesterNumber": 1,
+      "status": "FAILED"
+    },
+    {
+      "studentId": 2008,
+      "subjectCode": "CS101",
+      "academicYearStart": 2022,
+      "semesterNumber": 1,
+      "status": "FAILED"
+    },
+    {
+      "studentId": 2008,
+      "subjectCode": "CS101",
+      "academicYearStart": 2027,
+      "semesterNumber": 1,
+      "status": "COMPLETED"
+    }
+  ]
+}

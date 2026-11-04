@@ -11,7 +11,8 @@ class PasswordPolicyValidatorTest {
 
     @Test
     void acceptsValidNewPassword() {
-        assertThatCode(() -> validator.validate("NewPass1!", "NewPass1!", false)).doesNotThrowAnyException();
+        assertThatCode(() -> validator.validate("NewPass1!", "NewPass1!", false))
+                .doesNotThrowAnyException();
     }
 
     @Test
@@ -19,8 +20,7 @@ class PasswordPolicyValidatorTest {
         assertThatThrownBy(() -> validator.validate("abc ", "different", true))
                 .isInstanceOfSatisfying(PasswordValidationException.class, exception -> {
                     assertThat(exception.getErrors()).hasSize(7);
-                    assertThat(exception.getErrors()).extracting("field")
-                            .contains("newPassword", "confirmPassword");
+                    assertThat(exception.getErrors()).extracting("field").contains("newPassword", "confirmPassword");
                 });
     }
 }

@@ -1,6 +1,6 @@
 package com.eduhub.edu_hub.curriculum.domain.repository;
 
-import com.eduhub.edu_hub.curriculum.domain.entity.SubjectPrerequisite;
+import com.eduhub.edu_hub.curriculum.domain.model.SubjectPrerequisite;
 import java.util.Collection;
 import java.util.List;
 import org.springframework.data.jpa.repository.EntityGraph;

@@ -5,7 +5,8 @@ import static org.assertj.core.api.Assertions.*;
 import com.eduhub.edu_hub.curriculum.api.dto.CurriculumOpeningSubjectResponse;
 import com.eduhub.edu_hub.scheduling.application.port.PlanningSnapshot;
 import com.eduhub.edu_hub.scheduling.application.port.PlanningSnapshot.*;
-import com.eduhub.edu_hub.scheduling.infrastructure.DevAcademicPlanningDataSource;
+import com.eduhub.edu_hub.scheduling.infrastructure.PlanningTestData;
+import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.util.List;
@@ -18,27 +19,41 @@ class OpeningDemandCalculatorTest {
 
     @Test
     void fixtureCountsSharedSubjectOncePerStudentAndSeparatesDebtFromRecommendedStudy() {
-        var data = new DevAcademicPlanningDataSource().snapshot();
+        var data = PlanningTestData.load();
         var plan = List.of(
                 subject("CNTT_4Y_V1", 1), subject("ATTT_4Y_V1", 1), subject("DTVT_4Y_V1", 1), subject("TTNT_4Y_V1", 1));
 
         var result = calculator.calculate("HK_1_2026_2027", plan, data);
 
         assertThat(result).singleElement().satisfies(demand -> {
-            assertThat(demand.getOnTimeStudentCount()).isEqualTo(96);
+            assertThat(demand.getOnTimeStudentCount()).isEqualTo(97);
             assertThat(demand.getRetakeStudentCount()).isEqualTo(2);
             assertThat(demand.getMissedStudentCount()).isEqualTo(2);
-            assertThat(demand.getExpectedStudentCount()).isEqualTo(100);
+            assertThat(demand.getExpectedStudentCount()).isEqualTo(101);
             assertThat(demand.getRecommendedClassCount()).isEqualTo(2);
-            assertThat(demand.getDataSource()).isEqualTo("DEV_FIXTURE");
+            assertThat(demand.getDataSource()).isEqualTo("TEST_DATA");
             assertThat(demand.isHistoryComplete()).isTrue();
         });
         // Fixture gồm: đạt rồi rớt khi cải thiện, rớt rồi đạt, đang học, đã hủy,
-        // SV quá 8 kỳ, kết quả ở kỳ tương lai, SV/User ngừng hoạt động và khóa chưa nhập học.
+        // SV quá 8 kỳ, kết quả ở kỳ tương lai, SV ngừng học và khóa chưa nhập học.
         assertThat(data.students()).hasSize(107);
-        assertThat(data.lecturers()).hasSize(9);
-        assertThat(data.students()).allMatch(student -> student.id() != student.userId());
-        assertThat(data.lecturers()).allMatch(lecturer -> lecturer.id() != lecturer.userId());
+    }
+
+    @Test
+    void onlyStudyingStudentsContributeRegardlessOfTheirAccountOrExpectedGraduationYear() {
+        var data = new PlanningSnapshot(
+                "TEST",
+                true,
+                List.of(
+                        new Student(1, "SV01", "CNTT_4Y_V1", 2020, ActivityStatus.STUDYING),
+                        new Student(2, "SV02", "CNTT_4Y_V1", 2020, ActivityStatus.DEACTIVATED),
+                        new Student(3, "SV03", "CNTT_4Y_V1", 2020, ActivityStatus.DELETED)),
+                List.of());
+        var result = calculator.calculate("HK_1_2026_2027", List.of(subject("CNTT_4Y_V1", 1)), data);
+        assertThat(result).singleElement().satisfies(demand -> {
+            assertThat(demand.getMissedStudentCount()).isEqualTo(1);
+            assertThat(demand.getExpectedStudentCount()).isEqualTo(1);
+        });
     }
 
     @Test
@@ -99,9 +114,7 @@ class OpeningDemandCalculatorTest {
         return new PlanningSnapshot(
                 "TEST",
                 historyComplete,
-                List.of(new User(100, "Sinh viên", Role.STUDENT, true)),
-                List.of(new Student(1, 100, "SV01", "CNTT_4Y_V1", 2026, true)),
-                List.of(),
+                List.of(new Student(1, "SV01", "CNTT_4Y_V1", 2026, ActivityStatus.STUDYING)),
                 attempts);
     }
 

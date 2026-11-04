@@ -18,7 +18,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class Lecturer extends BaseEntity {
-    @Column(name = "user_id")
+    @Column(name = "user_id", unique = true)
     private Long userId;
 
     @ManyToOne(fetch = FetchType.LAZY)

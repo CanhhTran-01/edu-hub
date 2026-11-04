@@ -1,8 +1,9 @@
-package com.eduhub.edu_hub.curriculum.application;
+package com.eduhub.edu_hub.curriculum.application.facade.impl;
 
 import com.eduhub.edu_hub.curriculum.api.dto.*;
-import com.eduhub.edu_hub.curriculum.domain.entity.*;
+import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.curriculum.domain.enums.*;
+import com.eduhub.edu_hub.curriculum.domain.model.*;
 import com.eduhub.edu_hub.curriculum.domain.repository.*;
 import com.eduhub.edu_hub.shared.exception.*;
 import java.util.*;
@@ -12,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-public class CurriculumClassOpeningFacade implements CurriculumFacade.ClassOpening {
+public class CurriculumClassOpeningFacadeImpl implements CurriculumFacade.ClassOpening {
     private final CurriculumSubjectRepository curriculumSubjectRepository;
     private final SubjectRepository subjectRepository;
 
@@ -20,13 +21,13 @@ public class CurriculumClassOpeningFacade implements CurriculumFacade.ClassOpeni
     @Transactional(readOnly = true)
     public List<CurriculumOpeningSubjectResponse> findPlanningSubjects() {
         return curriculumSubjectRepository.findAllByDeletedFalse().stream()
-                .filter(link -> link.getSubjectType() == SubjectType.REQUIRED
-                        && !link.getSubject().isDeleted()
-                        && link.getSubject().getStatus() == SubjectStatus.ACTIVE
-                        && !link.getCurriculum().isDeleted()
-                        && link.getCurriculum().getStatus() == CatalogStatus.ACTIVE
-                        && !link.getCurriculum().getMajor().isDeleted()
-                        && link.getCurriculum().getMajor().getStatus() == CatalogStatus.ACTIVE)
+                .filter(link -> link.getSubjectType() == SubjectType.REQUIRED // môn bắt buộc
+                        && !link.getSubject().isDeleted() // môn chưa bị xóa
+                        && link.getSubject().getStatus() == SubjectStatus.ACTIVE // môn phải active
+                        && !link.getCurriculum().isDeleted() // CTĐT chưa bị xóa
+                        && link.getCurriculum().getStatus() == CatalogStatus.ACTIVE // CTĐT phải active
+                        && !link.getCurriculum().getMajor().isDeleted() // ngành chưa bị xóa
+                        && link.getCurriculum().getMajor().getStatus() == CatalogStatus.ACTIVE) // ngành phải active
                 .map(link -> CurriculumOpeningSubjectResponse.builder()
                         .curriculumCode(link.getCurriculum().getCurriculumCode())
                         .subjectId(link.getSubject().getId())

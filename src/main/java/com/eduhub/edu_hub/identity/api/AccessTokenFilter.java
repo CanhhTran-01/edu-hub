@@ -32,13 +32,15 @@ public class AccessTokenFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String authorization = request.getHeader("Authorization");
-        if (authorization == null || !authorization.startsWith("Bearer ")
+        if (authorization == null
+                || !authorization.startsWith("Bearer ")
                 || !sessionService.isActive(authorization.substring(7))) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.setCharacterEncoding("UTF-8");
-            response.getWriter().write(objectMapper.writeValueAsString(
-                    ApiResponse.error(ErrorCode.UNAUTHENTICATED, request.getRequestURI())));
+            response.getWriter()
+                    .write(objectMapper.writeValueAsString(
+                            ApiResponse.error(ErrorCode.UNAUTHENTICATED, request.getRequestURI())));
             return;
         }
         chain.doFilter(request, response);

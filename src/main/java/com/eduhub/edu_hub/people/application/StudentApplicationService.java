@@ -1,5 +1,7 @@
 package com.eduhub.edu_hub.people.application;
 
+import com.eduhub.edu_hub.curriculum.api.dto.MajorSimpleResponse;
+import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.people.api.dto.StudentResponse;
 import com.eduhub.edu_hub.people.api.dto.StudentSearchRequest;
 import com.eduhub.edu_hub.people.api.dto.UpdateStudentRequest;
@@ -18,6 +20,9 @@ import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -33,6 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class StudentApplicationService {
     private final StudentRepository studentRepository;
     private final AdministrativeClassRepository administrativeClassRepository;
+    private final CurriculumFacade.ReferenceData curriculum;
 
     @Transactional
     public StudentResponse update(Long id, UpdateStudentRequest request) {
@@ -53,9 +59,7 @@ public class StudentApplicationService {
         if (request.getPhone() != null) student.setPhone(request.getPhone());
         if (request.getCitizenId() != null) student.setCitizenId(request.getCitizenId());
         if (request.getTargetGpa() != null) student.setTargetGpa(request.getTargetGpa());
-        if (request.getAcademicWarningStatus() != null) {
-            student.setAcademicWarningStatus(request.getAcademicWarningStatus());
-        }
+        updateAcademicWarning(student, request);
         if (request.getAdministrativeClassId() != null) {
             AdministrativeClass administrativeClass = administrativeClassRepository
                     .findByIdAndDeletedFalse(request.getAdministrativeClassId())
@@ -113,9 +117,10 @@ public class StudentApplicationService {
             }
             return builder.and(predicates.toArray(new Predicate[0]));
         };
-        return PageMapper.toPageResponse(studentRepository
-                .findAll(filters, PageRequest.of(page, size, Sort.by("id").ascending()))
-                .map(this::toResponse));
+        var students = studentRepository.findAll(
+                filters, PageRequest.of(page, size, Sort.by("id").ascending()));
+        var majorNames = majorNames(students.getContent());
+        return PageMapper.toPageResponse(students.map(student -> toResponse(student, majorNames)));
     }
 
     public StudentResponse findById(Long id) {
@@ -126,6 +131,47 @@ public class StudentApplicationService {
     }
 
     private StudentResponse toResponse(Student student) {
+        return toResponse(student, majorNames(List.of(student)));
+    }
+
+    private Map<Long, String> majorNames(List<Student> students) {
+        var ids = students.stream()
+                .map(Student::getAdministrativeClass)
+                .filter(Objects::nonNull)
+                .map(AdministrativeClass::getMajorId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (ids.isEmpty()) return Map.of();
+        return curriculum.findMajorsByIds(ids).stream()
+                .collect(Collectors.toMap(MajorSimpleResponse::id, MajorSimpleResponse::majorName));
+    }
+
+    private void updateAcademicWarning(Student student, UpdateStudentRequest request) {
+        if (request.getAcademicWarningStatus() != null) {
+            String status = normalizeOptionalText(request.getAcademicWarningStatus());
+            if (!Objects.equals(status, student.getAcademicWarningStatus())) {
+                student.setAcademicWarningReason(null);
+            }
+            student.setAcademicWarningStatus(status);
+            if (status == null) {
+                student.setAcademicWarningReason(null);
+                return;
+            }
+        }
+        if (request.getAcademicWarningReason() != null) {
+            String reason = normalizeOptionalText(request.getAcademicWarningReason());
+            if (reason != null && normalizeOptionalText(student.getAcademicWarningStatus()) == null) {
+                throw new BaseException(ErrorCode.VALIDATION_ERROR);
+            }
+            student.setAcademicWarningReason(reason);
+        }
+    }
+
+    private String normalizeOptionalText(String value) {
+        return value == null || value.isBlank() ? null : value.strip();
+    }
+
+    private StudentResponse toResponse(Student student, Map<Long, String> majorNames) {
         AdministrativeClass administrativeClass = student.getAdministrativeClass();
         return StudentResponse.builder()
                 .id(student.getId())
@@ -136,7 +182,7 @@ public class StudentApplicationService {
                 .phone(student.getPhone())
                 .citizenId(student.getCitizenId())
                 .className(administrativeClass == null ? null : administrativeClass.getClassName())
-                .majorName(administrativeClass == null ? null : administrativeClass.getMajorName())
+                .majorName(administrativeClass == null ? null : majorNames.get(administrativeClass.getMajorId()))
                 .cohortCode(
                         administrativeClass == null
                                 ? null
@@ -149,6 +195,7 @@ public class StudentApplicationService {
                 .targetGpa(student.getTargetGpa())
                 .activityStatus(student.getActivityStatus())
                 .academicWarningStatus(student.getAcademicWarningStatus())
+                .academicWarningReason(student.getAcademicWarningReason())
                 .createdAt(student.getCreatedAt())
                 .build();
     }

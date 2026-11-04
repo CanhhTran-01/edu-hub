@@ -25,6 +25,7 @@ public class StudentResponse {
     private BigDecimal targetGpa;
     private ActivityStatus activityStatus; // STUDYING, DEACTIVATED, DELETED
     private String academicWarningStatus;
+    private String academicWarningReason;
     private String statusReason;
     private LocalDateTime createdAt;
 }

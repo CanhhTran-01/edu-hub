@@ -15,9 +15,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.mail.MailException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.mail.MailException;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -34,18 +34,25 @@ public class AdminUserService {
     public PageResponse<UserInfoResponse> search(String bearer, String keyword, int page, int size) {
         actor(bearer);
         Page<UserInfoResponse> result = users.findByDeletedFalseAndUsernameContainingIgnoreCase(
-                keyword == null ? "" : keyword, PageRequest.of(page, size)).map(this::response);
-        return PageResponse.<UserInfoResponse>builder().content(result.getContent()).pageNumber(result.getNumber())
-                .pageSize(result.getSize()).totalElements(result.getTotalElements())
-                .totalPages(result.getTotalPages()).isLast(result.isLast()).build();
+                        keyword == null ? "" : keyword, PageRequest.of(page, size))
+                .map(this::response);
+        return PageResponse.<UserInfoResponse>builder()
+                .content(result.getContent())
+                .pageNumber(result.getNumber())
+                .pageSize(result.getSize())
+                .totalElements(result.getTotalElements())
+                .totalPages(result.getTotalPages())
+                .isLast(result.isLast())
+                .build();
     }
 
     @Transactional
     public void lock(String bearer, Long id, String reason) {
         User admin = actor(bearer);
         User target = target(id);
-        if (admin.getId().equals(id) && users.countByDeletedFalseAndStatusAndRole_RoleName(
-                UserStatus.ACTIVE, RoleName.SYSTEM_ADMIN.name()) <= 1) {
+        if (admin.getId().equals(id)
+                && users.countByDeletedFalseAndStatusAndRole_RoleName(UserStatus.ACTIVE, RoleName.SYSTEM_ADMIN.name())
+                        <= 1) {
             throw new BaseException(ErrorCode.UNAUTHORIZED);
         }
         target.setStatus(UserStatus.LOCKED);
@@ -89,8 +96,9 @@ public class AdminUserService {
         if (claims == null) throw new BaseException(ErrorCode.UNAUTHENTICATED);
         User actor = users.findByUsernameAndDeletedFalse(claims.username())
                 .orElseThrow(() -> new BaseException(ErrorCode.UNAUTHENTICATED));
-        if (!actor.getId().equals(claims.userId()) || actor.getStatus() != UserStatus.ACTIVE ||
-                sessions.findByIdAndRevokedFalse(claims.sessionId()).stream()
+        if (!actor.getId().equals(claims.userId())
+                || actor.getStatus() != UserStatus.ACTIVE
+                || sessions.findByIdAndRevokedFalse(claims.sessionId()).stream()
                         .noneMatch(session -> session.getUser().getId().equals(actor.getId()))) {
             throw new BaseException(ErrorCode.UNAUTHENTICATED);
         }
@@ -111,9 +119,13 @@ public class AdminUserService {
     }
 
     private UserInfoResponse response(User user) {
-        return UserInfoResponse.builder().id(user.getId()).username(user.getUsername())
+        return UserInfoResponse.builder()
+                .id(user.getId())
+                .username(user.getUsername())
                 .email(user.getEmail())
-                .role(user.getRole().getRoleName()).status(user.getStatus().name())
-                .isFirstLogin(user.isFirstLogin()).build();
+                .role(user.getRole().getRoleName())
+                .status(user.getStatus().name())
+                .isFirstLogin(user.isFirstLogin())
+                .build();
     }
 }

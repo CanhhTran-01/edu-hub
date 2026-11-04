@@ -18,10 +18,17 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class AdminUserServiceTest {
-    @Mock UserRepository users;
-    @Mock RefreshTokenRepository sessions;
-    @Mock TokenService tokens;
-    @InjectMocks AdminUserService service;
+    @Mock
+    UserRepository users;
+
+    @Mock
+    RefreshTokenRepository sessions;
+
+    @Mock
+    TokenService tokens;
+
+    @InjectMocks
+    AdminUserService service;
 
     @Test
     void rejectsSelfLockOfOnlyActiveSystemAdmin() {
@@ -39,8 +46,7 @@ class AdminUserServiceTest {
         when(users.countByDeletedFalseAndStatusAndRole_RoleName(UserStatus.ACTIVE, "SYSTEM_ADMIN"))
                 .thenReturn(1L);
 
-        assertThatThrownBy(() -> service.lock("token", 1L, "test"))
-                .isInstanceOf(BaseException.class);
+        assertThatThrownBy(() -> service.lock("token", 1L, "test")).isInstanceOf(BaseException.class);
     }
 
     private com.eduhub.edu_hub.identity.domain.model.RefreshToken session(User user) {

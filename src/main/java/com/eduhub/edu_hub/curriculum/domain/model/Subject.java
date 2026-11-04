@@ -1,4 +1,4 @@
-package com.eduhub.edu_hub.curriculum.domain.entity;
+package com.eduhub.edu_hub.curriculum.domain.model;
 
 import com.eduhub.edu_hub.curriculum.domain.enums.SubjectStatus;
 import com.eduhub.edu_hub.shared.common.BaseEntity;

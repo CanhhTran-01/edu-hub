@@ -5,19 +5,21 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import com.eduhub.edu_hub.curriculum.api.dto.SubjectSimpleResponse;
-import com.eduhub.edu_hub.curriculum.application.CurriculumFacade;
+import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
+import com.eduhub.edu_hub.people.api.dto.LecturerResponse;
+import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
+import com.eduhub.edu_hub.people.domain.enums.LecturerStatus;
 import com.eduhub.edu_hub.scheduling.api.dto.CancelModuleClassRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.UpdateModuleClassRequest;
 import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassConflictException;
 import com.eduhub.edu_hub.scheduling.application.port.AcademicPlanningDataSource;
 import com.eduhub.edu_hub.scheduling.application.port.ModuleClassEnrollmentQuery;
 import com.eduhub.edu_hub.scheduling.application.port.ModuleClassEnrollmentQuery.Usage;
-import com.eduhub.edu_hub.scheduling.domain.entity.ModuleClass;
-import com.eduhub.edu_hub.scheduling.domain.entity.Semester;
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
+import com.eduhub.edu_hub.scheduling.domain.model.ModuleClass;
+import com.eduhub.edu_hub.scheduling.domain.model.Semester;
 import com.eduhub.edu_hub.scheduling.domain.repository.ModuleClassRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.SemesterRepository;
-import com.eduhub.edu_hub.scheduling.infrastructure.DevAcademicPlanningDataSource;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.time.*;
@@ -44,7 +46,10 @@ class ModuleClassManagementServiceTest {
     private CurriculumFacade.ClassOpening curriculum;
 
     @Mock
-    private AcademicPlanningDataSource people;
+    private PeopleFacade.Scheduling people;
+
+    @Mock
+    private AcademicPlanningDataSource planningData;
 
     @Mock
     private ModuleClassEnrollmentQuery enrollments;
@@ -55,7 +60,14 @@ class ModuleClassManagementServiceTest {
     @BeforeEach
     void setUp() {
         service = new ModuleClassApplicationService(
-                semesters, classes, curriculum, people, enrollments, new OpeningDemandCalculator(), CLOCK);
+                semesters,
+                classes,
+                curriculum,
+                people,
+                planningData,
+                enrollments,
+                new OpeningDemandCalculator(),
+                CLOCK);
         semester = Semester.builder()
                 .semesterCode("HK_1_2026_2027")
                 .startDate(LocalDate.parse("2026-08-11"))
@@ -73,6 +85,8 @@ class ModuleClassManagementServiceTest {
         var result = service.update(101L, request);
 
         assertThat(result.getLecturerId()).isEqualTo(5001L);
+        assertThat(result.getLecturerName()).isEqualTo("Giảng viên từ People");
+        verifyNoInteractions(planningData);
         assertThat(result.getMaxCapacity()).isEqualTo(40);
         assertThat(result.getCurrentSize()).isEqualTo(20);
         assertThat(result.getStatus()).isEqualTo(ModuleClassStatus.UNSCHEDULED);
@@ -128,6 +142,7 @@ class ModuleClassManagementServiceTest {
 
         assertThat(result.getMaxCapacity()).isEqualTo(40);
         assertThat(result.getLecturerId()).isEqualTo(5009L);
+        assertThat(result.getLecturerName()).isEqualTo("Giảng viên từ People");
         assertThat(result.getStatus()).isEqualTo(ModuleClassStatus.OPEN);
     }
 
@@ -259,7 +274,15 @@ class ModuleClassManagementServiceTest {
 
     private void prepareResponse(ModuleClass item) {
         if (item.getLecturerId() != null)
-            when(people.snapshot()).thenReturn(new DevAcademicPlanningDataSource().snapshot());
+            when(people.findLecturersByIds(Set.of(item.getLecturerId())))
+                    .thenReturn(List.of(LecturerResponse.builder()
+                            .id(item.getLecturerId())
+                            .fullName("Giảng viên từ People")
+                            .status(
+                                    item.getLecturerId().equals(5009L)
+                                            ? LecturerStatus.INACTIVE
+                                            : LecturerStatus.ACTIVE)
+                            .build()));
         when(curriculum.findSubjectsByIds(Set.of(1L)))
                 .thenReturn(List.of(SubjectSimpleResponse.builder()
                         .id(1L)

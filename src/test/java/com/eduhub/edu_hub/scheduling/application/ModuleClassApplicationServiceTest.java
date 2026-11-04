@@ -5,14 +5,15 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import com.eduhub.edu_hub.curriculum.api.dto.SubjectSimpleResponse;
-import com.eduhub.edu_hub.curriculum.application.CurriculumFacade;
+import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
+import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.scheduling.api.dto.*;
 import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassOpeningException;
 import com.eduhub.edu_hub.scheduling.application.port.AcademicPlanningDataSource;
 import com.eduhub.edu_hub.scheduling.application.port.ModuleClassEnrollmentQuery;
-import com.eduhub.edu_hub.scheduling.domain.entity.ModuleClass;
-import com.eduhub.edu_hub.scheduling.domain.entity.Semester;
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
+import com.eduhub.edu_hub.scheduling.domain.model.ModuleClass;
+import com.eduhub.edu_hub.scheduling.domain.model.Semester;
 import com.eduhub.edu_hub.scheduling.domain.repository.ModuleClassRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.SemesterRepository;
 import com.eduhub.edu_hub.shared.exception.BaseException;
@@ -42,6 +43,9 @@ class ModuleClassApplicationServiceTest {
     private CurriculumFacade.ClassOpening curriculum;
 
     @Mock
+    private PeopleFacade.Scheduling people;
+
+    @Mock
     private AcademicPlanningDataSource dataSource;
 
     @Mock
@@ -52,7 +56,14 @@ class ModuleClassApplicationServiceTest {
     @BeforeEach
     void setUp() {
         service = new ModuleClassApplicationService(
-                semesters, classes, curriculum, dataSource, enrollmentQuery, new OpeningDemandCalculator(), CLOCK);
+                semesters,
+                classes,
+                curriculum,
+                people,
+                dataSource,
+                enrollmentQuery,
+                new OpeningDemandCalculator(),
+                CLOCK);
     }
 
     @Test
@@ -79,7 +90,7 @@ class ModuleClassApplicationServiceTest {
             assertThat(item.getDataSource()).isEqualTo("DATABASE");
         });
         assertThat(result).extracting(ModuleClassResponse::getMaxCapacity).containsExactly(80, 50, 30);
-        verifyNoInteractions(dataSource, enrollmentQuery);
+        verifyNoInteractions(people, dataSource, enrollmentQuery);
         verify(semesters).findForUpdateByIdAndDeletedFalse(7L);
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<ModuleClass>> saved = ArgumentCaptor.forClass(List.class);

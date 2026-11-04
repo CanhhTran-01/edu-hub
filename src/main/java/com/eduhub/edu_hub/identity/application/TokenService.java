@@ -12,8 +12,8 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 @Service
 public class TokenService {
@@ -56,10 +56,12 @@ public class TokenService {
             String signedPart = parts[0] + "." + parts[1];
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(signingKey, "HmacSHA256"));
-            if (!MessageDigest.isEqual(mac.doFinal(signedPart.getBytes(StandardCharsets.US_ASCII)),
+            if (!MessageDigest.isEqual(
+                    mac.doFinal(signedPart.getBytes(StandardCharsets.US_ASCII)),
                     Base64.getUrlDecoder().decode(parts[2]))) return null;
             JsonNode header = objectMapper.readTree(Base64.getUrlDecoder().decode(parts[0]));
-            if (!"HS256".equals(header.path("alg").asText()) || !"JWT".equals(header.path("typ").asText())) {
+            if (!"HS256".equals(header.path("alg").asText())
+                    || !"JWT".equals(header.path("typ").asText())) {
                 return null;
             }
             JsonNode claims = objectMapper.readTree(Base64.getUrlDecoder().decode(parts[1]));

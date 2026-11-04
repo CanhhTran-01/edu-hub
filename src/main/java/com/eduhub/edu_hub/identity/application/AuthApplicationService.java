@@ -1,7 +1,7 @@
 package com.eduhub.edu_hub.identity.application;
 
-import com.eduhub.edu_hub.identity.api.dto.LoginRequest;
 import com.eduhub.edu_hub.identity.api.dto.ChangePasswordRequest;
+import com.eduhub.edu_hub.identity.api.dto.LoginRequest;
 import com.eduhub.edu_hub.identity.api.dto.LoginResponse;
 import com.eduhub.edu_hub.identity.api.dto.UserInfoResponse;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
@@ -43,9 +43,8 @@ public class AuthApplicationService {
     }
 
     private LoginAttempt authenticate(LoginRequest request) {
-        User user = userRepository
-                .findByUsernameForUpdate(request.getUsername())
-                .orElse(null);
+        User user =
+                userRepository.findByUsernameForUpdate(request.getUsername()).orElse(null);
         if (user == null) {
             return new LoginAttempt(null, ErrorCode.INVALID_CREDENTIALS);
         }
@@ -107,7 +106,8 @@ public class AuthApplicationService {
             if (!LocalDateTime.now(ZoneOffset.UTC).isBefore(token.getExpiresAt())) {
                 throw new BaseException(ErrorCode.UNAUTHENTICATED);
             }
-            if (!token.getId().equals(claims.sessionId()) || !token.getUser().getId().equals(claims.userId())) {
+            if (!token.getId().equals(claims.sessionId())
+                    || !token.getUser().getId().equals(claims.userId())) {
                 throw new BaseException(ErrorCode.UNAUTHENTICATED);
             }
             token.setRevoked(true);
@@ -119,9 +119,11 @@ public class AuthApplicationService {
         TokenService.TokenClaims claims = tokenService.validateAccessToken(accessToken);
         if (claims == null) throw new BaseException(ErrorCode.UNAUTHENTICATED);
         ErrorCode error = new TransactionTemplate(transactionManager).execute(status -> {
-            User user = userRepository.findByUsernameForUpdate(claims.username())
+            User user = userRepository
+                    .findByUsernameForUpdate(claims.username())
                     .orElseThrow(() -> new BaseException(ErrorCode.UNAUTHENTICATED));
-            if (!user.getId().equals(claims.userId()) || user.getStatus() != UserStatus.ACTIVE
+            if (!user.getId().equals(claims.userId())
+                    || user.getStatus() != UserStatus.ACTIVE
                     || refreshTokenRepository.findByIdAndRevokedFalse(claims.sessionId()).stream()
                             .noneMatch(session -> session.getUser().getId().equals(user.getId()))) {
                 return ErrorCode.UNAUTHENTICATED;
@@ -134,15 +136,18 @@ public class AuthApplicationService {
                 user.setLockedUntil(null);
                 user.setFailedLoginCount(0);
             }
-            if (!user.isFirstLogin() && (request.getCurrentPassword() == null
-                    || !passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash()))) {
+            if (!user.isFirstLogin()
+                    && (request.getCurrentPassword() == null
+                            || !passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash()))) {
                 int failures = user.getFailedLoginCount() + 1;
                 user.setFailedLoginCount(failures);
                 if (failures >= MAX_FAILED_LOGINS) user.setLockedUntil(now.plus(TEMPORARY_LOCK));
                 userRepository.save(user);
                 return ErrorCode.INVALID_CREDENTIALS;
             }
-            passwordPolicyValidator.validate(request.getNewPassword(), request.getConfirmPassword(),
+            passwordPolicyValidator.validate(
+                    request.getNewPassword(),
+                    request.getConfirmPassword(),
                     passwordEncoder.matches(request.getNewPassword(), user.getPasswordHash()));
             user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
             user.setPasswordChangedAt(now);
@@ -150,7 +155,9 @@ public class AuthApplicationService {
             user.setFailedLoginCount(0);
             user.setLockedUntil(null);
             userRepository.save(user);
-            refreshTokenRepository.findByUser_IdAndRevokedFalse(user.getId()).forEach(session -> session.setRevoked(true));
+            refreshTokenRepository
+                    .findByUser_IdAndRevokedFalse(user.getId())
+                    .forEach(session -> session.setRevoked(true));
             return null;
         });
         if (error != null) throw new BaseException(error);

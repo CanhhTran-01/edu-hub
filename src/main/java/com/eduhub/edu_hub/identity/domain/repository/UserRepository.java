@@ -25,5 +25,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @EntityGraph(attributePaths = "role")
     Page<User> findByDeletedFalseAndUsernameContainingIgnoreCase(String username, Pageable pageable);
 
-    long countByDeletedFalseAndStatusAndRole_RoleName(com.eduhub.edu_hub.identity.domain.enums.UserStatus status, String roleName);
+    long countByDeletedFalseAndStatusAndRole_RoleName(
+            com.eduhub.edu_hub.identity.domain.enums.UserStatus status, String roleName);
 }

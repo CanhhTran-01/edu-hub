@@ -20,7 +20,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class Student extends BaseEntity {
-    @Column(name = "user_id")
+    @Column(name = "user_id", unique = true)
     private Long userId;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -55,4 +55,7 @@ public class Student extends BaseEntity {
 
     @Column(name = "academic_warning_status")
     private String academicWarningStatus;
+
+    @Column(name = "academic_warning_reason", columnDefinition = "text")
+    private String academicWarningReason;
 }

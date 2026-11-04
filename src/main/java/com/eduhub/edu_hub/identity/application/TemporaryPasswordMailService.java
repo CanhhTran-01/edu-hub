@@ -22,8 +22,8 @@ public class TemporaryPasswordMailService {
         message.setFrom(from);
         message.setTo(recipient);
         message.setSubject("Smart Edu - Mat khau tam thoi");
-        message.setText("Mat khau tam thoi cua ban: " + temporaryPassword
-                + "\nVui long dang nhap va doi mat khau ngay.");
+        message.setText(
+                "Mat khau tam thoi cua ban: " + temporaryPassword + "\nVui long dang nhap va doi mat khau ngay.");
         sender.send(message);
     }
 }

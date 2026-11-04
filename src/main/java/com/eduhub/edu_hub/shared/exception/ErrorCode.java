@@ -67,7 +67,7 @@ public enum ErrorCode {
     DUPLICATE_BATCH_SUBJECT(4316, "Một học phần chỉ được xuất hiện một lần trong lô", HttpStatus.BAD_REQUEST),
     PLANNING_DATA_UNAVAILABLE(
             4317,
-            "Nguồn dữ liệu sinh viên, giảng viên hoặc lịch sử học chưa sẵn sàng/đầy đủ",
+            "Nguồn dữ liệu sinh viên, chương trình đào tạo hoặc lịch sử học chưa sẵn sàng/đầy đủ",
             HttpStatus.SERVICE_UNAVAILABLE),
     MODULE_CLASS_CODE_CONFLICT(
             4318, "Mã hoặc STT lớp học phần đã được sử dụng, hãy tải lại dữ liệu", HttpStatus.CONFLICT),

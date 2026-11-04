@@ -16,6 +16,7 @@ import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -76,6 +77,14 @@ public class LecturerApplicationService {
                 .findByIdAndDeletedFalse(id)
                 .map(this::toResponse)
                 .orElseThrow(() -> new BaseException(ErrorCode.LECTURER_NOT_FOUND));
+    }
+
+    public List<LecturerResponse> findByIds(Set<Long> ids) {
+        if (ids.isEmpty()) return List.of();
+        // Không lọc INACTIVE: lớp cũ vẫn cần hiển thị giảng viên từng được phân công.
+        return lecturerRepository.findAllByIdInAndDeletedFalse(ids).stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     private String pattern(String value) {

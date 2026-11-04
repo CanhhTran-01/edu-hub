@@ -29,6 +29,7 @@ public class UpdateStudentRequest {
     private BigDecimal targetGpa;
 
     private String academicWarningStatus;
+    private String academicWarningReason;
 
     private String statusReason;
 }

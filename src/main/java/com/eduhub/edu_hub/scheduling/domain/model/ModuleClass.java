@@ -1,4 +1,4 @@
-package com.eduhub.edu_hub.scheduling.domain.entity;
+package com.eduhub.edu_hub.scheduling.domain.model;
 
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
 import com.eduhub.edu_hub.shared.common.BaseEntity;

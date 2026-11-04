@@ -1,11 +1,10 @@
 package com.eduhub.edu_hub.scheduling.domain.repository;
 
-import com.eduhub.edu_hub.scheduling.domain.entity.ModuleClass;
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
+import com.eduhub.edu_hub.scheduling.domain.model.ModuleClass;
 import jakarta.persistence.LockModeType;
 import java.util.*;
 import org.springframework.data.domain.*;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
@@ -24,8 +23,4 @@ public interface ModuleClassRepository extends JpaRepository<ModuleClass, Long>,
     List<ModuleClass> findAllBySemester_IdOrderByIdAsc(Long semesterId);
 
     boolean existsBySemester_IdAndStatusNot(Long semesterId, ModuleClassStatus status);
-
-    @Override
-    @EntityGraph(attributePaths = "semester")
-    Page<ModuleClass> findAll(Specification<ModuleClass> specification, Pageable pageable);
 }

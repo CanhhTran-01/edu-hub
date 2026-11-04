@@ -1,19 +1,19 @@
 package com.eduhub.edu_hub.identity.api;
 
+import com.eduhub.edu_hub.identity.api.dto.ChangePasswordRequest;
 import com.eduhub.edu_hub.identity.api.dto.LoginRequest;
 import com.eduhub.edu_hub.identity.api.dto.LoginResponse;
 import com.eduhub.edu_hub.identity.api.dto.LogoutRequest;
-import com.eduhub.edu_hub.identity.api.dto.ChangePasswordRequest;
 import com.eduhub.edu_hub.identity.application.AuthApplicationService;
 import com.eduhub.edu_hub.identity.application.PasswordValidationException;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -39,8 +39,7 @@ public class AuthController {
 
     @PostMapping("/change-password")
     public ApiResponse<Void> changePassword(
-            @RequestHeader("Authorization") String authorization,
-            @Valid @RequestBody ChangePasswordRequest request) {
+            @RequestHeader("Authorization") String authorization, @Valid @RequestBody ChangePasswordRequest request) {
         authService.changePassword(authorization.substring(7), request);
         return ApiResponse.successWithMessage("Đổi mật khẩu thành công. Vui lòng đăng nhập lại.");
     }

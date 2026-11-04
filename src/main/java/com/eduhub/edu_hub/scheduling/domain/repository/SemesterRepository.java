@@ -1,6 +1,6 @@
 package com.eduhub.edu_hub.scheduling.domain.repository;
 
-import com.eduhub.edu_hub.scheduling.domain.entity.Semester;
+import com.eduhub.edu_hub.scheduling.domain.model.Semester;
 import jakarta.persistence.LockModeType;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;

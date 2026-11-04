@@ -14,4 +14,10 @@ import lombok.Setter;
 public class Cohort extends BaseEntity {
     @Column(name = "cohort_code", nullable = false)
     private String cohortCode;
+
+    @Column(name = "start_year")
+    private Integer startYear;
+
+    @Column(name = "end_year")
+    private Integer endYear;
 }

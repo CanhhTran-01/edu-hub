@@ -1,8 +1,8 @@
 package com.eduhub.edu_hub.curriculum.application.specification;
 
 import com.eduhub.edu_hub.curriculum.api.dto.SubjectSearchRequest;
-import com.eduhub.edu_hub.curriculum.domain.entity.Subject;
-import com.eduhub.edu_hub.curriculum.domain.entity.SubjectPrerequisite;
+import com.eduhub.edu_hub.curriculum.domain.model.Subject;
+import com.eduhub.edu_hub.curriculum.domain.model.SubjectPrerequisite;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.List;

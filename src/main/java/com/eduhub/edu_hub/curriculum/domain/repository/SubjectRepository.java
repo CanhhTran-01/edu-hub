@@ -1,6 +1,6 @@
 package com.eduhub.edu_hub.curriculum.domain.repository;
 
-import com.eduhub.edu_hub.curriculum.domain.entity.Subject;
+import com.eduhub.edu_hub.curriculum.domain.model.Subject;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;

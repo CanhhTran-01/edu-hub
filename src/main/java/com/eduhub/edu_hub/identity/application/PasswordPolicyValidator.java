@@ -19,8 +19,9 @@ public class PasswordPolicyValidator {
         if (password.chars().noneMatch(Character::isDigit)) {
             errors.add(new FieldErrorDetail("newPassword", "Mật khẩu phải có ít nhất 1 chữ số"));
         }
-        if (password.chars().noneMatch(c -> !Character.isLetterOrDigit(c)
-                && !Character.isWhitespace(c) && !Character.isSpaceChar(c))) {
+        if (password.chars()
+                .noneMatch(c ->
+                        !Character.isLetterOrDigit(c) && !Character.isWhitespace(c) && !Character.isSpaceChar(c))) {
             errors.add(new FieldErrorDetail("newPassword", "Mật khẩu phải có ít nhất 1 ký tự đặc biệt"));
         }
         if (password.chars().anyMatch(c -> Character.isWhitespace(c) || Character.isSpaceChar(c))) {
