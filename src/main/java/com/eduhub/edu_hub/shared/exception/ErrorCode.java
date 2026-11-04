@@ -41,6 +41,7 @@ public enum ErrorCode {
     STUDENT_CLASS_MISMATCH(4115, "Ngành, hệ đào tạo hoặc khóa không khớp với lớp", HttpStatus.BAD_REQUEST),
 
     // Curriculum
+    INVALID_TARGET_GPA(4120, "GPA mục tiêu phải từ 0 đến 4", HttpStatus.BAD_REQUEST),
     FACULTY_NOT_ACTIVE(4116, "Khoa không tồn tại hoặc đã ngừng hoạt động", HttpStatus.BAD_REQUEST),
     DUPLICATE_LECTURER_EMAIL(4117, "Email giảng viên đã tồn tại", HttpStatus.CONFLICT),
     DUPLICATE_LECTURER_CITIZEN_ID(4118, "CCCD giảng viên đã tồn tại", HttpStatus.CONFLICT),

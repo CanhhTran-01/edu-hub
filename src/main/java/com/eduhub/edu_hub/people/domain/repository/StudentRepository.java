@@ -11,6 +11,12 @@ import org.springframework.data.repository.query.Param;
 
 public interface StudentRepository extends JpaRepository<Student, Long>, JpaSpecificationExecutor<Student> {
     @EntityGraph(attributePaths = {"administrativeClass", "administrativeClass.cohort"})
+    Optional<Student> findByUserIdAndDeletedFalse(Long userId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select s from Student s where s.userId = :userId and s.deleted = false")
+    Optional<Student> findMyProfileForUpdate(@Param("userId") Long userId);
+    @EntityGraph(attributePaths = {"administrativeClass", "administrativeClass.cohort"})
     Optional<Student> findByIdAndDeletedFalse(Long id);
 
     boolean existsByAdmissionApplicationCodeAndDeletedFalse(String admissionApplicationCode);

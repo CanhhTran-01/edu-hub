@@ -116,6 +116,26 @@ public class IdentityFacadeImpl implements IdentityFacade {
         return actor.getUsername();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public UserInfoResponse requireCurrentStudent(String accessToken) {
+        TokenService.TokenClaims claims = tokens.validateAccessToken(accessToken);
+        if (claims == null) throw new BaseException(ErrorCode.UNAUTHENTICATED);
+        User current = users.findByUsernameAndDeletedFalse(claims.username())
+                .orElseThrow(() -> new BaseException(ErrorCode.UNAUTHENTICATED));
+        java.time.LocalDateTime now = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC);
+        boolean validSession = sessions.findByIdAndRevokedFalse(claims.sessionId())
+                .filter(session -> session.getUser().getId().equals(current.getId()))
+                .filter(session -> now.isBefore(session.getExpiresAt())).isPresent();
+        if (!current.getId().equals(claims.userId()) || current.getStatus() != UserStatus.ACTIVE
+                || (current.getLockedUntil() != null && now.isBefore(current.getLockedUntil())) || !validSession) {
+            throw new BaseException(ErrorCode.UNAUTHENTICATED);
+        }
+        if (!RoleName.STUDENT.name().equals(current.getRole().getRoleName()))
+            throw new BaseException(ErrorCode.UNAUTHORIZED);
+        return response(current);
+    }
+
     private Long createStudentAccountRecord(CreateStudentAccountCommand command) {
         if (users.existsByUsername(command.username())) {
             throw new BaseException(ErrorCode.DUPLICATE_STUDENT_CODE);

@@ -18,6 +18,8 @@ public interface IdentityFacade {
 
     String requireAcademicAdmin(String accessToken);
 
+    UserInfoResponse requireCurrentStudent(String accessToken);
+
     /** Khóa / mở khóa tài khoản */
     void lockUser(Long userId, String reason);
 
