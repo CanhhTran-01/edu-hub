@@ -1,10 +1,9 @@
 package com.eduhub.edu_hub;
 
+import com.eduhub.edu_hub.support.PostgresIntegrationTest;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
-class EduHubApplicationTests {
+class EduHubApplicationTests extends PostgresIntegrationTest {
 
     @Test
     void contextLoads() {}

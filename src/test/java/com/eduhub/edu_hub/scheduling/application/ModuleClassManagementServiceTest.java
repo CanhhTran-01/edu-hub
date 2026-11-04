@@ -6,9 +6,11 @@ import static org.mockito.Mockito.*;
 
 import com.eduhub.edu_hub.curriculum.api.dto.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
+import com.eduhub.edu_hub.curriculum.domain.model.Subject;
 import com.eduhub.edu_hub.people.api.dto.LecturerResponse;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.domain.enums.LecturerStatus;
+import com.eduhub.edu_hub.people.domain.model.Lecturer;
 import com.eduhub.edu_hub.scheduling.api.dto.CancelModuleClassRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.UpdateModuleClassRequest;
 import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassConflictException;
@@ -22,6 +24,7 @@ import com.eduhub.edu_hub.scheduling.domain.repository.ModuleClassRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.SemesterRepository;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import jakarta.persistence.EntityManager;
 import java.time.*;
 import java.util.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,6 +57,9 @@ class ModuleClassManagementServiceTest {
     @Mock
     private ModuleClassEnrollmentQuery enrollments;
 
+    @Mock
+    private EntityManager entityManager;
+
     private ModuleClassApplicationService service;
     private Semester semester;
 
@@ -67,6 +73,7 @@ class ModuleClassManagementServiceTest {
                 planningData,
                 enrollments,
                 new OpeningDemandCalculator(),
+                entityManager,
                 CLOCK);
         semester = Semester.builder()
                 .semesterCode("HK_1_2026_2027")
@@ -112,7 +119,7 @@ class ModuleClassManagementServiceTest {
                         assertThat(detail.getMessage()).contains("30");
                     });
                 });
-        assertThat(item.getLecturerId()).isEqualTo(5001L);
+        assertThat(item.getLecturer().getId()).isEqualTo(5001L);
         assertThat(item.getMaxCapacity()).isEqualTo(80);
         verify(classes, never()).saveAndFlush(any());
         verifyNoInteractions(people, curriculum, enrollments);
@@ -254,10 +261,17 @@ class ModuleClassManagementServiceTest {
     }
 
     private ModuleClass prepare(ModuleClassStatus status, int size, Long lecturerId) {
+        var subject = Subject.builder().build();
+        subject.setId(1L);
+        Lecturer lecturer = null;
+        if (lecturerId != null) {
+            lecturer = new Lecturer();
+            lecturer.setId(lecturerId);
+        }
         var item = ModuleClass.builder()
                 .semester(semester)
-                .subjectId(1L)
-                .lecturerId(lecturerId)
+                .subject(subject)
+                .lecturer(lecturer)
                 .moduleClassCode("MC_9_CS101_001")
                 .classSequence(1)
                 .maxCapacity(80)
@@ -273,13 +287,13 @@ class ModuleClassManagementServiceTest {
     }
 
     private void prepareResponse(ModuleClass item) {
-        if (item.getLecturerId() != null)
-            when(people.findLecturersByIds(Set.of(item.getLecturerId())))
+        if (item.getLecturer() != null)
+            when(people.findLecturersByIds(Set.of(item.getLecturer().getId())))
                     .thenReturn(List.of(LecturerResponse.builder()
-                            .id(item.getLecturerId())
+                            .id(item.getLecturer().getId())
                             .fullName("Giảng viên từ People")
                             .status(
-                                    item.getLecturerId().equals(5009L)
+                                    item.getLecturer().getId().equals(5009L)
                                             ? LecturerStatus.INACTIVE
                                             : LecturerStatus.ACTIVE)
                             .build()));

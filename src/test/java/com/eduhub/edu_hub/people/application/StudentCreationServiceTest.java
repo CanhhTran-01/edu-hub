@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.eduhub.edu_hub.curriculum.api.dto.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
+import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.identity.application.CreateStudentAccountResult;
 import com.eduhub.edu_hub.identity.application.IdentityFacade;
 import com.eduhub.edu_hub.people.api.dto.CreateStudentRequest;
@@ -88,8 +89,9 @@ class StudentCreationServiceTest {
         administrativeClass = new AdministrativeClass();
         administrativeClass.setId(1L);
         administrativeClass.setClassName("L01");
-        administrativeClass.setMajorId(10L);
-        administrativeClass.setMajorCode("CT");
+        Major major = Major.builder().majorCode("CNTT").build();
+        major.setId(10L);
+        administrativeClass.setMajor(major);
         administrativeClass.setCohort(cohort);
         administrativeClass.setTrainingType(TrainingType.CHINH_QUY);
         administrativeClass.setMaxCapacity(50);

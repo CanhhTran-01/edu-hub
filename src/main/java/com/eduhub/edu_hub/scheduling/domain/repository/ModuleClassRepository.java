@@ -9,6 +9,11 @@ import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
 public interface ModuleClassRepository extends JpaRepository<ModuleClass, Long>, JpaSpecificationExecutor<ModuleClass> {
+    @Override
+    @EntityGraph(attributePaths = "semester")
+    Page<ModuleClass> findAll(
+            org.springframework.data.jpa.domain.Specification<ModuleClass> specification, Pageable pageable);
+
     @EntityGraph(attributePaths = "semester")
     Optional<ModuleClass> findByIdAndDeletedFalse(Long id);
 

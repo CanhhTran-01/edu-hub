@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doAnswer;
 
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
+import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.identity.application.CreateStudentAccountResult;
 import com.eduhub.edu_hub.identity.application.IdentityFacade;
 import com.eduhub.edu_hub.people.api.dto.AdmissionConfirmRequest;
@@ -103,12 +104,14 @@ class StudentAdmissionServiceTest {
         when(students.existsByAdmissionApplicationCodeAndDeletedFalse(any())).thenReturn(false);
         when(students.existsByEmailIgnoreCaseAndDeletedFalse(any())).thenReturn(false);
         AdministrativeClass target = batch().getClasses().get(0);
-        target.setMajorCode("ATTT");
+        var major = Major.builder().majorCode("ATTT").build();
+        major.setId(42L);
+        target.setMajor(major);
         var cohort = new com.eduhub.edu_hub.people.domain.model.Cohort(); cohort.setCohortCode("K20"); target.setCohort(cohort);
         target.setTrainingType(com.eduhub.edu_hub.shared.enums.TrainingType.CHINH_QUY);
         when(majors.findMajorByCode(any())).thenReturn(Optional.of(
                 new com.eduhub.edu_hub.curriculum.api.dto.MajorResponse(42L, "ATTT", "An toan thong tin")));
-        when(classes.findByMajorIdAndCohort_CohortCodeIgnoreCaseAndTrainingTypeAndDeletedFalse(
+        when(classes.findByMajor_IdAndCohort_CohortCodeIgnoreCaseAndTrainingTypeAndDeletedFalse(
                 any(), any(), any())).thenReturn(List.of(target));
         when(students.findAllByAdministrativeClass_IdAndDeletedFalse(1L)).thenReturn(List.of());
         doAnswer(invocation -> {
@@ -129,7 +132,10 @@ class StudentAdmissionServiceTest {
 
     private AdmissionBatchState batch() {
         AdministrativeClass administrativeClass = new AdministrativeClass(); administrativeClass.setId(1L);
-        administrativeClass.setClassName("L01"); administrativeClass.setMajorCode("CT");
+        administrativeClass.setClassName("L01");
+        var major = Major.builder().majorCode("CNTT").build();
+        major.setId(1L);
+        administrativeClass.setMajor(major);
         var cohort = new com.eduhub.edu_hub.people.domain.model.Cohort(); cohort.setCohortCode("CT8");
         administrativeClass.setCohort(cohort); administrativeClass.setMinCapacity(0); administrativeClass.setMaxCapacity(50);
         AdmissionCandidate candidate = new AdmissionCandidate(); candidate.setApplicationCode("HS01");

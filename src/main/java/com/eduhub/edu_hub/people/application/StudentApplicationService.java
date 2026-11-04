@@ -2,6 +2,7 @@ package com.eduhub.edu_hub.people.application;
 
 import com.eduhub.edu_hub.curriculum.api.dto.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
+import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.identity.application.CreateStudentAccountCommand;
 import com.eduhub.edu_hub.identity.application.CreateStudentAccountResult;
 import com.eduhub.edu_hub.identity.application.IdentityFacade;
@@ -178,7 +179,8 @@ public class StudentApplicationService {
 
     private void validateClassScope(CreateStudentRequest request, AdministrativeClass administrativeClass) {
         majors.requireMajor(request.getMajorId());
-        if (!administrativeClass.getMajorId().equals(request.getMajorId())
+        if (administrativeClass.getMajor() == null
+                || !administrativeClass.getMajor().getId().equals(request.getMajorId())
                 || administrativeClass.getCohort() == null
                 || !administrativeClass.getCohort().getId().equals(request.getCohortId())
                 || administrativeClass.getTrainingType() != request.getTrainingType()) {
@@ -288,7 +290,8 @@ public class StudentApplicationService {
                     predicates.add(builder.equal(administrativeClass.get("id"), request.getClassId()));
                 }
                 if (request.getMajorId() != null) {
-                    predicates.add(builder.equal(administrativeClass.get("majorId"), request.getMajorId()));
+                    predicates.add(
+                            builder.equal(administrativeClass.get("major").get("id"), request.getMajorId()));
                 }
                 if (request.getCohortId() != null) {
                     Join<AdministrativeClass, Cohort> cohort = administrativeClass.join("cohort", JoinType.LEFT);
@@ -326,7 +329,9 @@ public class StudentApplicationService {
         var ids = students.stream()
                 .map(Student::getAdministrativeClass)
                 .filter(Objects::nonNull)
-                .map(AdministrativeClass::getMajorId)
+                .map(AdministrativeClass::getMajor)
+                .filter(Objects::nonNull)
+                .map(Major::getId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         if (ids.isEmpty()) return Map.of();
@@ -370,7 +375,10 @@ public class StudentApplicationService {
                 .phone(student.getPhone())
                 .citizenId(student.getCitizenId())
                 .className(administrativeClass == null ? null : administrativeClass.getClassName())
-                .majorName(administrativeClass == null ? null : majorNames.get(administrativeClass.getMajorId()))
+                .majorName(
+                        administrativeClass == null || administrativeClass.getMajor() == null
+                                ? null
+                                : majorNames.get(administrativeClass.getMajor().getId()))
                 .cohortCode(
                         administrativeClass == null
                                 ? null

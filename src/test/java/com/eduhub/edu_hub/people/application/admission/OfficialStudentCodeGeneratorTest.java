@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
+import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
 import com.eduhub.edu_hub.people.domain.model.Cohort;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
@@ -18,8 +19,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class OfficialStudentCodeGeneratorTest {
-    @Mock StudentRepository students;
-    @Mock CurriculumFacade.Majors majors;
+    @Mock
+    StudentRepository students;
+
+    @Mock
+    CurriculumFacade.Majors majors;
+
     private OfficialStudentCodeGenerator generator;
 
     @BeforeEach
@@ -46,15 +51,13 @@ class OfficialStudentCodeGeneratorTest {
     @Test
     void usesCurriculumArtificialIntelligencePrefixInsteadOfLocalCode() {
         AdministrativeClass value = administrativeClass(4L, "AI", "AI8", "L01");
-        value.setMajorCode("UNTRUSTED-LOCAL-CODE");
         assertThat(generator.generate(value, 1)).isEqualTo("AI080101");
     }
 
     @Test
     void continuesAfterHighestExistingCode() {
         AdministrativeClass value = administrativeClass(1L, "CT", "CT8", "L01");
-        when(students.findStudentCodesByAdministrativeClassId(1L))
-                .thenReturn(List.of("CT080101", "CT080128"));
+        when(students.findStudentCodesByAdministrativeClassId(1L)).thenReturn(List.of("CT080101", "CT080128"));
         assertThat(generator.nextSequence(value)).isEqualTo(29);
     }
 
@@ -82,18 +85,19 @@ class OfficialStudentCodeGeneratorTest {
         assertThatThrownBy(() -> generator.nextSequence(value)).isInstanceOf(BaseException.class);
     }
 
-    private AdministrativeClass administrativeClass(
-            Long id, String majorCode, String cohortCode, String className) {
+    private AdministrativeClass administrativeClass(Long id, String majorCode, String cohortCode, String className) {
         Cohort cohort = new Cohort();
         cohort.setCohortCode(cohortCode);
         AdministrativeClass value = new AdministrativeClass();
         value.setId(id);
-        value.setMajorId(id);
         String canonical = java.util.Map.of("CT", "CNTT", "AT", "ATTT", "DT", "DTVT", "AI", "TTNT")
                 .get(majorCode.toUpperCase(java.util.Locale.ROOT));
-        org.mockito.Mockito.lenient().when(majors.requireMajor(id)).thenReturn(
-                new com.eduhub.edu_hub.curriculum.api.dto.MajorResponse(id, canonical, "Major"));
-        value.setMajorCode(majorCode);
+        Major major = Major.builder().majorCode(canonical).build();
+        major.setId(id);
+        value.setMajor(major);
+        org.mockito.Mockito.lenient()
+                .when(majors.requireMajor(id))
+                .thenReturn(new com.eduhub.edu_hub.curriculum.api.dto.MajorResponse(id, canonical, "Major"));
         value.setCohort(cohort);
         value.setClassName(className);
         return value;

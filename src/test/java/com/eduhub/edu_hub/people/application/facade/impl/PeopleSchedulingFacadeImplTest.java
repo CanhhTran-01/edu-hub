@@ -3,6 +3,7 @@ package com.eduhub.edu_hub.people.application.facade.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
+import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.people.application.LecturerApplicationService;
 import com.eduhub.edu_hub.people.domain.model.*;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
@@ -33,7 +34,9 @@ class PeopleSchedulingFacadeImplTest {
         cohort.setStartYear(2026);
         cohort.setEndYear(2030);
         var administrativeClass = new AdministrativeClass();
-        administrativeClass.setMajorId(3L);
+        var major = Major.builder().build();
+        major.setId(3L);
+        administrativeClass.setMajor(major);
         administrativeClass.setCohort(cohort);
         administrativeClass.setTrainingType(TrainingType.CHINH_QUY);
         var student = new Student();

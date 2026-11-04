@@ -6,7 +6,9 @@ import static org.mockito.Mockito.*;
 
 import com.eduhub.edu_hub.curriculum.api.dto.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
+import com.eduhub.edu_hub.curriculum.domain.model.Subject;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
+import com.eduhub.edu_hub.people.domain.model.Lecturer;
 import com.eduhub.edu_hub.scheduling.api.dto.*;
 import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassOpeningException;
 import com.eduhub.edu_hub.scheduling.application.port.AcademicPlanningDataSource;
@@ -18,6 +20,7 @@ import com.eduhub.edu_hub.scheduling.domain.repository.ModuleClassRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.SemesterRepository;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import jakarta.persistence.EntityManager;
 import java.time.*;
 import java.util.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,6 +54,9 @@ class ModuleClassApplicationServiceTest {
     @Mock
     private ModuleClassEnrollmentQuery enrollmentQuery;
 
+    @Mock
+    private EntityManager entityManager;
+
     private ModuleClassApplicationService service;
 
     @BeforeEach
@@ -63,6 +69,7 @@ class ModuleClassApplicationServiceTest {
                 dataSource,
                 enrollmentQuery,
                 new OpeningDemandCalculator(),
+                entityManager,
                 CLOCK);
     }
 
@@ -191,6 +198,11 @@ class ModuleClassApplicationServiceTest {
     }
 
     private void prepare(Semester semester) {
+        lenient().when(entityManager.getReference(eq(Subject.class), anyLong())).thenAnswer(invocation -> {
+            var subject = Subject.builder().build();
+            subject.setId(invocation.getArgument(1));
+            return subject;
+        });
         when(semesters.findForUpdateByIdAndDeletedFalse(7L)).thenReturn(Optional.of(semester));
         when(curriculum.requireOpenableSubjects(anySet())).thenAnswer(invocation -> {
             Set<Long> ids = invocation.getArgument(0);
@@ -220,10 +232,14 @@ class ModuleClassApplicationServiceTest {
 
     private ModuleClass historical(
             Semester semester, long subjectId, int sequence, ModuleClassStatus status, boolean deleted) {
+        var subject = Subject.builder().build();
+        subject.setId(subjectId);
+        var lecturer = new Lecturer();
+        lecturer.setId(5001L);
         var item = ModuleClass.builder()
                 .semester(semester)
-                .subjectId(subjectId)
-                .lecturerId(5001L)
+                .subject(subject)
+                .lecturer(lecturer)
                 .classSequence(sequence)
                 .moduleClassCode("HISTORY_" + sequence)
                 .maxCapacity(80)

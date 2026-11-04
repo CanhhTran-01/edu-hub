@@ -30,6 +30,7 @@ public class PeopleSchedulingFacadeImpl implements PeopleFacade.Scheduling {
                     var cohort = administrativeClass == null ? null : administrativeClass.getCohort();
                     boolean validClass = administrativeClass != null && !administrativeClass.isDeleted();
                     boolean validCohort = cohort != null && !cohort.isDeleted();
+                    var major = administrativeClass == null ? null : administrativeClass.getMajor();
 
                     // TODO: không join/lọc theo bảng user account, SV chưa có tài khoản vẫn được tính,
                     //  cân nhắc JOIN, ví dụ status nào thì mới không tính, status nào thì vẫn tính
@@ -40,7 +41,7 @@ public class PeopleSchedulingFacadeImpl implements PeopleFacade.Scheduling {
                     return new StudentPlanningResponse(
                             student.getId(),
                             student.getStudentCode(),
-                            validClass ? administrativeClass.getMajorId() : null,
+                            validClass && major != null ? major.getId() : null,
                             validClass && validCohort ? cohort.getId() : null,
                             validClass ? administrativeClass.getTrainingType() : null,
                             validClass && validCohort ? cohort.getStartYear() : null,

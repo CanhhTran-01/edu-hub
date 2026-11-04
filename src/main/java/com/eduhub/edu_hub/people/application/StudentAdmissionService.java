@@ -202,7 +202,7 @@ public class StudentAdmissionService {
             return List.of();
         }
         List<AdministrativeClass> result = classes
-                .findByMajorIdAndCohort_CohortCodeIgnoreCaseAndTrainingTypeAndDeletedFalse(
+                .findByMajor_IdAndCohort_CohortCodeIgnoreCaseAndTrainingTypeAndDeletedFalse(
                         major.get().id(), first.getCohortCode(), type);
         if (result.isEmpty()) {
             valid.forEach(value -> add(errors, value, "ma_nganh", "Không có lớp phù hợp với ngành, khóa và hệ đào tạo"));

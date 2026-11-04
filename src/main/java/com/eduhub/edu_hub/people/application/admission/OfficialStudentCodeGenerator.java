@@ -44,7 +44,12 @@ public class OfficialStudentCodeGenerator implements StudentCodeGenerator {
     }
 
     private String prefix(AdministrativeClass administrativeClass) {
-        String canonicalCode = majors.requireMajor(administrativeClass.getMajorId()).majorCode();
+        if (administrativeClass.getMajor() == null
+                || administrativeClass.getMajor().getId() == null) {
+            throw new BaseException(ErrorCode.INVALID_STUDENT_CODE_MAJOR);
+        }
+        String canonicalCode =
+                majors.requireMajor(administrativeClass.getMajor().getId()).majorCode();
         String majorCode = java.util.Map.of("CNTT", "CT", "ATTT", "AT", "DTVT", "DT", "TTNT", "AI")
                 .get(canonicalCode.toUpperCase(Locale.ROOT));
         if (majorCode == null || !MAJOR_CODE.matcher(majorCode).matches()) {
@@ -63,7 +68,6 @@ public class OfficialStudentCodeGenerator implements StudentCodeGenerator {
         }
         int cohortNumber = Integer.parseInt(cohort.group(1));
         int classNumber = Integer.parseInt(classCode.group(1));
-        return majorCode.toUpperCase(Locale.ROOT)
-                + String.format(Locale.ROOT, "%02d%02d", cohortNumber, classNumber);
+        return majorCode.toUpperCase(Locale.ROOT) + String.format(Locale.ROOT, "%02d%02d", cohortNumber, classNumber);
     }
 }

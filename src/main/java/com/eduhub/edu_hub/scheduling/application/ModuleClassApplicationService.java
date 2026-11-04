@@ -2,8 +2,10 @@ package com.eduhub.edu_hub.scheduling.application;
 
 import com.eduhub.edu_hub.curriculum.api.dto.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
+import com.eduhub.edu_hub.curriculum.domain.model.Subject;
 import com.eduhub.edu_hub.people.api.dto.LecturerResponse;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
+import com.eduhub.edu_hub.people.domain.model.Lecturer;
 import com.eduhub.edu_hub.scheduling.api.dto.*;
 import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassConflictException;
 import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassOpeningException;
@@ -21,6 +23,7 @@ import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.mapper.PageMapper;
+import jakarta.persistence.EntityManager;
 import java.time.*;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -41,6 +44,7 @@ public class ModuleClassApplicationService {
     private final AcademicPlanningDataSource planningDataSource;
     private final ModuleClassEnrollmentQuery enrollmentQuery;
     private final OpeningDemandCalculator demandCalculator;
+    private final EntityManager entityManager;
     private final Clock clock;
 
     @Autowired
@@ -51,7 +55,8 @@ public class ModuleClassApplicationService {
             PeopleFacade.Scheduling peopleFacade,
             AcademicPlanningDataSource planningDataSource,
             ModuleClassEnrollmentQuery enrollmentQuery,
-            OpeningDemandCalculator demandCalculator) {
+            OpeningDemandCalculator demandCalculator,
+            EntityManager entityManager) {
         this(
                 semesterRepository,
                 moduleClassRepository,
@@ -60,6 +65,7 @@ public class ModuleClassApplicationService {
                 planningDataSource,
                 enrollmentQuery,
                 demandCalculator,
+                entityManager,
                 Clock.system(BUSINESS_ZONE));
     }
 
@@ -71,6 +77,7 @@ public class ModuleClassApplicationService {
             AcademicPlanningDataSource planningDataSource,
             ModuleClassEnrollmentQuery enrollmentQuery,
             OpeningDemandCalculator demandCalculator,
+            EntityManager entityManager,
             Clock clock) {
         this.semesterRepository = semesterRepository;
         this.moduleClassRepository = moduleClassRepository;
@@ -79,6 +86,7 @@ public class ModuleClassApplicationService {
         this.planningDataSource = planningDataSource;
         this.enrollmentQuery = enrollmentQuery;
         this.demandCalculator = demandCalculator;
+        this.entityManager = entityManager;
         this.clock = clock.withZone(BUSINESS_ZONE);
     }
 
@@ -152,11 +160,13 @@ public class ModuleClassApplicationService {
 
         // Tìm số thứ tự lớn nhất hiện có của mỗi môn
         Map<Long, Integer> sequences = new HashMap<>();
-        history.forEach(item -> sequences.merge(item.getSubjectId(), item.getClassSequence(), Math::max));
+        history.forEach(item -> sequences.merge(item.getSubject().getId(), item.getClassSequence(), Math::max));
 
         var created = new ArrayList<ModuleClass>();
         LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
         for (var subject : request.getSubjects()) {
+            // Facade đã kiểm tra và khóa môn; reference chỉ dùng để gán quan hệ, không thay thế validation.
+            var subjectReference = entityManager.getReference(Subject.class, subject.getSubjectId());
             for (var item : subject.getClasses()) {
 
                 // môn chưa có key thì đặt giá trị 1; đã có thì cộng 1 vào giá trị cũ. merge trả về giá trị mới.
@@ -173,7 +183,7 @@ public class ModuleClassApplicationService {
                 // tạo mới entity
                 var moduleClass = ModuleClass.builder()
                         .semester(semester)
-                        .subjectId(subject.getSubjectId())
+                        .subject(subjectReference)
                         .moduleClassCode(code)
                         .classSequence(sequence)
                         .maxCapacity(item.getMaxCapacity())
@@ -229,7 +239,8 @@ public class ModuleClassApplicationService {
 
         // lấy dữ liệu học phần, giảng viên của lớp học phần, sức chứa
         var data = lecturerDisplayData(List.of(moduleClass));
-        var subjects = indexSubjects(curriculumFacade.findSubjectsByIds(Set.of(moduleClass.getSubjectId())));
+        var subjects = indexSubjects(curriculumFacade.findSubjectsByIds(
+                Set.of(moduleClass.getSubject().getId())));
         int oldCapacity = moduleClass.getMaxCapacity();
 
         // Chỉ thay đổi entity sau khi mọi điều kiện và dữ liệu trả về đã được kiểm tra.
@@ -295,7 +306,8 @@ public class ModuleClassApplicationService {
 
         // lấy dữ liệu học phần, giảng viên của lớp học phần, trạng thái
         var data = lecturerDisplayData(List.of(moduleClass));
-        var subjects = indexSubjects(curriculumFacade.findSubjectsByIds(Set.of(moduleClass.getSubjectId())));
+        var subjects = indexSubjects(curriculumFacade.findSubjectsByIds(
+                Set.of(moduleClass.getSubject().getId())));
         var oldStatus = moduleClass.getStatus();
 
         // Hủy là trạng thái nghiệp vụ, vẫn giữ bản ghi/mã/STT và không thay đổi Enrollment hay điểm.
@@ -364,7 +376,7 @@ public class ModuleClassApplicationService {
 
         // gom dữ liệu subject: Map<Long, SubjectSimpleResponse>
         var subjects = indexSubjects(curriculumFacade.findSubjectsByIds(
-                page.stream().map(ModuleClass::getSubjectId).collect(Collectors.toSet())));
+                page.stream().map(item -> item.getSubject().getId()).collect(Collectors.toSet())));
 
         // gom dữ liệu giảng viên: Map<Long, String>
         var lecturerData = lecturerDisplayData(page.getContent());
@@ -381,7 +393,8 @@ public class ModuleClassApplicationService {
                 .orElseThrow(() -> new BaseException(ErrorCode.MODULE_CLASS_NOT_FOUND));
 
         // lấy dữ liệu subject: Map<Long, SubjectSimpleResponse> của lớp học phần
-        var subjects = indexSubjects(curriculumFacade.findSubjectsByIds(Set.of(moduleClass.getSubjectId())));
+        var subjects = indexSubjects(curriculumFacade.findSubjectsByIds(
+                Set.of(moduleClass.getSubject().getId())));
 
         // lấy dữ liệu giảng viên: Map<Long, String> của lớp học phần
         var lecturerData = lecturerDisplayData(List.of(moduleClass));
@@ -431,8 +444,9 @@ public class ModuleClassApplicationService {
     private Map<Long, String> lecturerDisplayData(Collection<ModuleClass> classes) {
 
         var ids = classes.stream()
-                .map(ModuleClass::getLecturerId)
+                .map(ModuleClass::getLecturer)
                 .filter(Objects::nonNull)
+                .map(Lecturer::getId)
                 .collect(Collectors.toSet());
 
         if (ids.isEmpty()) return Map.of();
@@ -445,7 +459,7 @@ public class ModuleClassApplicationService {
         // Theo quy ước "đã phát sinh": mọi lớp chưa hủy, kể cả lớp đã ẩn, vẫn phải xác nhận.
         return classes.stream()
                 .filter(item -> item.getStatus() != ModuleClassStatus.CANCELLED)
-                .collect(Collectors.groupingBy(ModuleClass::getSubjectId, Collectors.counting()));
+                .collect(Collectors.groupingBy(item -> item.getSubject().getId(), Collectors.counting()));
     }
 
     private Map<Long, SubjectSimpleResponse> indexSubjects(List<SubjectSimpleResponse> subjects) {
@@ -455,18 +469,19 @@ public class ModuleClassApplicationService {
     private ModuleClassResponse toResponse(
             ModuleClass item, Map<Long, SubjectSimpleResponse> subjects, Map<Long, String> lecturerNames) {
 
-        var subject = subjects.get(item.getSubjectId());
-        String lecturerName = item.getLecturerId() == null ? null : lecturerNames.get(item.getLecturerId());
+        var subject = subjects.get(item.getSubject().getId());
+        Long lecturerId = item.getLecturer() == null ? null : item.getLecturer().getId();
+        String lecturerName = lecturerId == null ? null : lecturerNames.get(lecturerId);
 
         return ModuleClassResponse.builder()
                 .id(item.getId())
                 .semesterId(item.getSemester().getId())
                 .semesterCode(item.getSemester().getSemesterCode())
-                .subjectId(item.getSubjectId())
+                .subjectId(item.getSubject().getId())
                 .subjectCode(subject == null ? null : subject.getSubjectCode())
                 .subjectName(subject == null ? null : subject.getSubjectName())
                 .credits(subject == null ? 0 : subject.getCredits())
-                .lecturerId(item.getLecturerId())
+                .lecturerId(lecturerId)
                 .lecturerName(lecturerName)
                 .classSequence(item.getClassSequence())
                 .moduleClassCode(item.getModuleClassCode())

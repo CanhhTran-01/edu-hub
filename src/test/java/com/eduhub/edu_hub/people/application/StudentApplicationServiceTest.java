@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import com.eduhub.edu_hub.curriculum.api.dto.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
+import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.people.api.dto.UpdateStudentRequest;
 import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
 import com.eduhub.edu_hub.people.domain.model.Cohort;
@@ -61,7 +62,9 @@ class StudentApplicationServiceTest {
     void profileGetsTheCurrentMajorNameThroughTheCurriculumFacade() {
         var student = new Student();
         var administrativeClass = new AdministrativeClass();
-        administrativeClass.setMajorId(2L);
+        var major = Major.builder().build();
+        major.setId(2L);
+        administrativeClass.setMajor(major);
         administrativeClass.setCohort(new Cohort());
         administrativeClass.setTrainingType(TrainingType.CHINH_QUY);
         student.setAdministrativeClass(administrativeClass);

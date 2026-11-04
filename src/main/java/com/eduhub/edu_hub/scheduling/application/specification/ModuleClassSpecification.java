@@ -29,9 +29,9 @@ public final class ModuleClassSpecification {
             if (request.getSemesterId() != null)
                 predicates.add(builder.equal(root.get("semester").get("id"), request.getSemesterId()));
             if (request.getSubjectId() != null)
-                predicates.add(builder.equal(root.get("subjectId"), request.getSubjectId()));
+                predicates.add(builder.equal(root.get("subject").get("id"), request.getSubjectId()));
             if (request.getLecturerId() != null)
-                predicates.add(builder.equal(root.get("lecturerId"), request.getLecturerId()));
+                predicates.add(builder.equal(root.get("lecturer").get("id"), request.getLecturerId()));
             if (request.getStatus() != null) predicates.add(builder.equal(root.get("status"), request.getStatus()));
             return builder.and(predicates.toArray(Predicate[]::new));
         };
