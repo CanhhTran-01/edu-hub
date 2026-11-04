@@ -10,6 +10,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.eduhub.edu_hub.curriculum.api.dto.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.identity.application.CreateStudentAccountResult;
 import com.eduhub.edu_hub.identity.application.IdentityFacade;
@@ -27,7 +28,9 @@ import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,11 +42,24 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 @ExtendWith(MockitoExtension.class)
 class StudentCreationServiceTest {
-    @Mock StudentRepository students;
-    @Mock AdministrativeClassRepository classes;
-    @Mock StudentCodeGenerator generator;
-    @Mock IdentityFacade identity;
-    @Mock AuditLogRepository audit;
+    @Mock
+    StudentRepository students;
+
+    @Mock
+    AdministrativeClassRepository classes;
+
+    @Mock
+    CurriculumFacade.ReferenceData curriculum;
+
+    @Mock
+    StudentCodeGenerator generator;
+
+    @Mock
+    IdentityFacade identity;
+
+    @Mock
+    AuditLogRepository audit;
+
     private StudentApplicationService service;
     private AdministrativeClass administrativeClass;
 
@@ -52,10 +68,18 @@ class StudentCreationServiceTest {
         PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
         when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         var majors = mock(CurriculumFacade.Majors.class);
-        org.mockito.Mockito.lenient().when(majors.requireMajor(any())).thenReturn(
-                new com.eduhub.edu_hub.curriculum.api.dto.MajorResponse(1L, "CNTT", "CNTT"));
-        service = new StudentApplicationService(students, majors, classes, (CurriculumFacade.ReferenceData) generator, (StudentCodeGenerator) identity, (IdentityFacade) audit,
-                (AuditLogRepository) transactionManager, new TransactionTemplate(transactionManager));
+        org.mockito.Mockito.lenient()
+                .when(majors.requireMajor(any()))
+                .thenReturn(new com.eduhub.edu_hub.curriculum.api.dto.MajorResponse(1L, "CNTT", "CNTT"));
+        service = new StudentApplicationService(
+                students,
+                majors,
+                classes,
+                curriculum,
+                generator,
+                identity,
+                audit,
+                new TransactionTemplate(transactionManager));
         when(identity.requireAcademicAdmin(any())).thenReturn("admin_test");
 
         Cohort cohort = new Cohort();
@@ -66,7 +90,6 @@ class StudentCreationServiceTest {
         administrativeClass.setClassName("L01");
         administrativeClass.setMajorId(10L);
         administrativeClass.setMajorCode("CT");
-        administrativeClass.setMajorName("Công nghệ thông tin");
         administrativeClass.setCohort(cohort);
         administrativeClass.setTrainingType(TrainingType.CHINH_QUY);
         administrativeClass.setMaxCapacity(50);
@@ -89,10 +112,13 @@ class StudentCreationServiceTest {
             return student;
         });
         when(students.findByIdAndDeletedFalse(30L)).thenAnswer(invocation -> Optional.of(savedStudent()));
+        when(curriculum.findMajorsByIds(Set.of(10L)))
+                .thenReturn(List.of(new MajorSimpleResponse(10L, "CNTT", "Công nghệ thông tin", null)));
 
         var response = service.create(request, " admin_test ");
 
         assertThat(response.notificationStatus()).isEqualTo("SENT");
+        assertThat(response.student().getMajorName()).isEqualTo("Công nghệ thông tin");
         verify(identity).createStudentAccountWithoutNotification(any());
         verify(identity).sendStudentAccountNotification(20L, "12345");
         verify(students).existsByEmailIgnoreCaseAndDeletedFalse("student@test.com");
@@ -105,9 +131,8 @@ class StudentCreationServiceTest {
         when(students.countByAdministrativeClass_IdAndDeletedFalse(1L)).thenReturn(50L);
 
         assertThatThrownBy(() -> service.create(request(), "admin"))
-                .isInstanceOfSatisfying(BaseException.class,
-                        exception -> assertThat(exception.getErrorCode())
-                                .isEqualTo(ErrorCode.CLASS_CAPACITY_EXCEEDED));
+                .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.CLASS_CAPACITY_EXCEEDED));
         verify(identity, never()).createStudentAccountWithoutNotification(any());
     }
 

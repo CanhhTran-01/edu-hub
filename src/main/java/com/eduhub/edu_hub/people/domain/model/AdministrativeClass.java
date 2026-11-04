@@ -24,9 +24,6 @@ public class AdministrativeClass extends BaseEntity {
     @Column(name = "major_id", nullable = false)
     private Long majorId;
 
-    @Column(name = "major_name", nullable = false)
-    private String majorName;
-
     @Column(name = "major_code", nullable = false)
     private String majorCode;
 
