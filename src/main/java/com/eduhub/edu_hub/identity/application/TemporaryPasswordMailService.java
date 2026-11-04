@@ -15,6 +15,10 @@ public class TemporaryPasswordMailService {
     private String from;
 
     public void send(String recipient, String temporaryPassword) {
+        sendAccount(recipient, null, temporaryPassword);
+    }
+
+    public void sendAccount(String recipient, String username, String temporaryPassword) {
         if (from.isBlank()) {
             throw new org.springframework.mail.MailSendException("Gmail sender is not configured");
         }
@@ -24,6 +28,9 @@ public class TemporaryPasswordMailService {
         message.setSubject("Smart Edu - Mat khau tam thoi");
         message.setText(
                 "Mat khau tam thoi cua ban: " + temporaryPassword + "\nVui long dang nhap va doi mat khau ngay.");
+        message.setText("Mat khau tam thoi cua ban: " + temporaryPassword
+                + (username == null ? "" : "\nTen dang nhap: " + username)
+                + "\nVui long dang nhap va doi mat khau ngay.");
         sender.send(message);
     }
 }

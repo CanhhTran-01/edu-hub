@@ -10,8 +10,16 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface StudentRepository extends JpaRepository<Student, Long>, JpaSpecificationExecutor<Student> {
+    @EntityGraph(attributePaths = {"administrativeClass", "administrativeClass.cohort"})
+    Optional<Student> findByUserIdAndDeletedFalse(Long userId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select s from Student s where s.userId = :userId and s.deleted = false")
+    Optional<Student> findMyProfileForUpdate(@Param("userId") Long userId);
     @EntityGraph(attributePaths = {"administrativeClass", "administrativeClass.cohort"})
     Optional<Student> findByIdAndDeletedFalse(Long id);
 
@@ -21,4 +29,22 @@ public interface StudentRepository extends JpaRepository<Student, Long>, JpaSpec
     @Override
     @EntityGraph(attributePaths = {"administrativeClass", "administrativeClass.cohort"})
     Page<Student> findAll(Specification<Student> specification, Pageable pageable);
+
+    boolean existsByAdmissionApplicationCodeAndDeletedFalse(String admissionApplicationCode);
+
+    boolean existsByEmailIgnoreCaseAndDeletedFalse(String email);
+
+    boolean existsByCitizenIdAndDeletedFalse(String citizenId);
+
+    boolean existsByFullNameIgnoreCaseAndDateOfBirthAndDeletedFalse(
+            String fullName, java.time.LocalDate dateOfBirth);
+
+    boolean existsByStudentCode(String studentCode);
+
+    List<Student> findAllByAdministrativeClass_IdAndDeletedFalse(Long classId);
+
+    long countByAdministrativeClass_IdAndDeletedFalse(Long classId);
+
+    @Query("select student.studentCode from Student student where student.administrativeClass.id = :classId")
+    List<String> findStudentCodesByAdministrativeClassId(@Param("classId") Long classId);
 }

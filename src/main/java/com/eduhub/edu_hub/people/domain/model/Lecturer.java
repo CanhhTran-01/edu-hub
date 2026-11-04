@@ -34,6 +34,15 @@ public class Lecturer extends BaseEntity {
     private String email;
     private String phone;
 
+    private java.time.LocalDate dateOfBirth;
+    private String citizenId;
+
+    @Enumerated(EnumType.STRING)
+    private com.eduhub.edu_hub.people.domain.enums.AccountNotificationStatus accountNotificationStatus;
+
+    @Column(columnDefinition = "TEXT")
+    private String accountNotificationError;
+
     @Enumerated(EnumType.STRING)
     private LecturerStatus status;
 }

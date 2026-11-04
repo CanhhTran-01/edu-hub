@@ -14,4 +14,7 @@ import lombok.Setter;
 public class Faculty extends BaseEntity {
     @Column(name = "faculty_name", nullable = false)
     private String facultyName;
+
+    @Column(nullable = false)
+    private boolean active = true;
 }

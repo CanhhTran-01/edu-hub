@@ -23,6 +23,10 @@ public interface CurriculumFacade {
         Optional<CurriculumResponse> findCurriculum(Long majorId, Long cohortId, TrainingType trainingType);
     }
 
+    interface Majors {
+        com.eduhub.edu_hub.curriculum.api.dto.MajorResponse requireMajor(Long id);
+        java.util.Optional<com.eduhub.edu_hub.curriculum.api.dto.MajorResponse> findMajorByCode(String code);
+    }
     /** Read facet phục vụ mở lớp, không làm giả các capability chưa triển khai của Facade đầy đủ. */
     interface ClassOpening {
         List<CurriculumOpeningSubjectResponse> findPlanningSubjects();
