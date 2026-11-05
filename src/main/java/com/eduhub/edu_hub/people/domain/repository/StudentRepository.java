@@ -20,6 +20,7 @@ public interface StudentRepository extends JpaRepository<Student, Long>, JpaSpec
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from Student s where s.userId = :userId and s.deleted = false")
     Optional<Student> findMyProfileForUpdate(@Param("userId") Long userId);
+
     @EntityGraph(attributePaths = {"administrativeClass", "administrativeClass.cohort"})
     Optional<Student> findByIdAndDeletedFalse(Long id);
 
@@ -36,8 +37,7 @@ public interface StudentRepository extends JpaRepository<Student, Long>, JpaSpec
 
     boolean existsByCitizenIdAndDeletedFalse(String citizenId);
 
-    boolean existsByFullNameIgnoreCaseAndDateOfBirthAndDeletedFalse(
-            String fullName, java.time.LocalDate dateOfBirth);
+    boolean existsByFullNameIgnoreCaseAndDateOfBirthAndDeletedFalse(String fullName, java.time.LocalDate dateOfBirth);
 
     boolean existsByStudentCode(String studentCode);
 

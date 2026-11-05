@@ -1,6 +1,8 @@
 package com.eduhub.edu_hub.identity.application;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
@@ -9,9 +11,13 @@ import com.eduhub.edu_hub.identity.domain.model.User;
 import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
 import com.eduhub.edu_hub.shared.exception.BaseException;
+import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -47,6 +53,40 @@ class AdminUserServiceTest {
                 .thenReturn(1L);
 
         assertThatThrownBy(() -> service.lock("token", 1L, "test")).isInstanceOf(BaseException.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"STUDENT", "LECTURER", "ACADEMIC_ADMIN"})
+    void authenticatedUsersCanLockAnotherAccountWithoutSystemAdminRole(String roleName) {
+        Role role = new Role();
+        role.setRoleName(roleName);
+        User actor = new User();
+        actor.setId(1L);
+        actor.setUsername("actor");
+        actor.setRole(role);
+        actor.setStatus(UserStatus.ACTIVE);
+        User target = new User();
+        target.setId(2L);
+        target.setStatus(UserStatus.ACTIVE);
+        var targetSession = session(target);
+        when(tokens.validateAccessToken("token")).thenReturn(new TokenService.TokenClaims(1L, 3L, "actor"));
+        when(users.findByUsernameAndDeletedFalse("actor")).thenReturn(Optional.of(actor));
+        when(sessions.findByIdAndRevokedFalse(3L)).thenReturn(Optional.of(session(actor)));
+        when(users.findById(2L)).thenReturn(Optional.of(target));
+        when(sessions.findByUser_IdAndRevokedFalse(2L)).thenReturn(List.of(targetSession));
+
+        service.lock("token", 2L, "test");
+
+        assertThat(target.getStatus()).isEqualTo(UserStatus.LOCKED);
+        assertThat(targetSession.isRevoked()).isTrue();
+    }
+
+    @Test
+    void invalidTokenStillCannotManageAccounts() {
+        assertThatThrownBy(() -> service.lock("invalid", 2L, "test"))
+                .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.UNAUTHENTICATED));
+        verifyNoInteractions(users, sessions);
     }
 
     private com.eduhub.edu_hub.identity.domain.model.RefreshToken session(User user) {

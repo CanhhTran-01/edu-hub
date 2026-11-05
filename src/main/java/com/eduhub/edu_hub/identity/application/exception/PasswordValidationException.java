@@ -7,6 +7,7 @@ import lombok.Getter;
 @Getter
 public class PasswordValidationException extends RuntimeException {
     private final List<FieldErrorDetail> errors;
+
     public PasswordValidationException(List<FieldErrorDetail> errors) {
         this.errors = List.copyOf(errors);
     }

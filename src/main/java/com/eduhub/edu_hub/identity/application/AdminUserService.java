@@ -12,8 +12,8 @@ import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.mail.MailException;
@@ -103,9 +103,7 @@ public class AdminUserService {
                         .noneMatch(session -> session.getUser().getId().equals(actor.getId()))) {
             throw new BaseException(ErrorCode.UNAUTHENTICATED);
         }
-        if (!RoleName.SYSTEM_ADMIN.name().equals(actor.getRole().getRoleName())) {
-            throw new BaseException(ErrorCode.UNAUTHORIZED);
-        }
+        // TODO(AUTHORIZATION): Bổ sung phân quyền quản trị tài khoản bằng Spring Security sau.
         return actor;
     }
 

@@ -16,9 +16,7 @@ public interface IdentityFacade {
 
     CreateStudentAccountResult sendStudentAccountNotification(Long userId, String initialPassword);
 
-    String requireAcademicAdmin(String accessToken);
-
-    UserInfoResponse requireCurrentStudent(String accessToken);
+    UserInfoResponse requireCurrentUser(String accessToken);
 
     /** Kiểm tra tồn tại */
     boolean existsByUsername(String username);

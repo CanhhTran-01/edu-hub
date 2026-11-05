@@ -6,6 +6,8 @@ import java.util.List;
 
 public interface ClassAssignmentStrategy {
     AssignmentResult assign(List<AdmissionCandidate> candidates, List<ClassState> classes);
+
     record ClassState(AdministrativeClass administrativeClass, List<Student> existingStudents) {}
+
     record AssignmentResult(List<String> duplicateNameWarnings, List<String> capacityWarnings) {}
 }

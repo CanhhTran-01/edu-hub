@@ -29,7 +29,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class SubjectController {
     private final SubjectApplicationService subjectApplicationService;
 
-
     // TODO(CURRICULUM_VALIDATION): curriculum(n)--(n)subject, cần kiểm tra recommend_semester <= duration_semesters
     //  và subject/major/curriculum chưa bị ẩn hoặc ngừng sử dụng trước khi thay đổi quan hệ
 

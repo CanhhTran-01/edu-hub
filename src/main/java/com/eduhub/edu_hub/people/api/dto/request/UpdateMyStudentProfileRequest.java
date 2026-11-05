@@ -11,17 +11,40 @@ public class UpdateMyStudentProfileRequest {
     @DecimalMin(value = "0.0", message = "GPA mục tiêu phải từ 0 đến 4")
     @DecimalMax(value = "4.0", message = "GPA mục tiêu phải từ 0 đến 4")
     private BigDecimal targetGpa;
+
     @Size(max = 255, message = "Số điện thoại tối đa 255 ký tự")
     private String phone;
+
     private boolean targetGpaPresent;
     private boolean phonePresent;
 
-    public BigDecimal getTargetGpa() { return targetGpa; }
-    public String getPhone() { return phone; }
-    public void setTargetGpa(BigDecimal value) { targetGpa = value; targetGpaPresent = true; }
-    public void setPhone(String value) { phone = value; phonePresent = true; }
-    @JsonIgnore public boolean hasTargetGpa() { return targetGpaPresent; }
-    @JsonIgnore public boolean hasPhone() { return phonePresent; }
+    public BigDecimal getTargetGpa() {
+        return targetGpa;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public void setTargetGpa(BigDecimal value) {
+        targetGpa = value;
+        targetGpaPresent = true;
+    }
+
+    public void setPhone(String value) {
+        phone = value;
+        phonePresent = true;
+    }
+
+    @JsonIgnore
+    public boolean hasTargetGpa() {
+        return targetGpaPresent;
+    }
+
+    @JsonIgnore
+    public boolean hasPhone() {
+        return phonePresent;
+    }
 
     @JsonAnySetter
     public void rejectUnknownField(String field, Object value) {

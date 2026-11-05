@@ -24,7 +24,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -55,23 +54,13 @@ public class StudentController {
     }
 
     @PostMapping
-    public ApiResponse<CreateStudentResponse> create(
-            @Valid @RequestBody CreateStudentRequest request,
-            @RequestHeader("Authorization") String authorization) {
-        return ApiResponse.success(studentService.create(request, token(authorization)));
+    public ApiResponse<CreateStudentResponse> create(@Valid @RequestBody CreateStudentRequest request) {
+        return ApiResponse.success(studentService.create(request));
     }
 
     @PostMapping("/{id}/account-notification/resend")
-    public ApiResponse<AccountNotificationResponse> resendAccountNotification(
-            @PathVariable Long id, @RequestHeader("Authorization") String authorization) {
-        return ApiResponse.success(studentService.resendAccountNotification(id, token(authorization)));
-    }
-
-    private String token(String authorization) {
-        if (authorization == null || !authorization.startsWith("Bearer ") || authorization.length() == 7) {
-            throw new BaseException(ErrorCode.UNAUTHENTICATED);
-        }
-        return authorization.substring(7);
+    public ApiResponse<AccountNotificationResponse> resendAccountNotification(@PathVariable Long id) {
+        return ApiResponse.success(studentService.resendAccountNotification(id));
     }
 
     @GetMapping

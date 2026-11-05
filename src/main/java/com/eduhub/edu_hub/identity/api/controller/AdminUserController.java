@@ -62,5 +62,4 @@ public class AdminUserController {
     private String token(String authorization) {
         return authorization.substring(7);
     }
-
 }

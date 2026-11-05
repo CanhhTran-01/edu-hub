@@ -17,18 +17,19 @@ public class MyStudentProfileController {
     private final MyStudentProfileService profiles;
 
     @GetMapping
-    public ApiResponse<StudentResponse> get(@RequestHeader("Authorization") String authorization) {
+    public ApiResponse<StudentResponse> getMyProfile(@RequestHeader("Authorization") String authorization) {
         return ApiResponse.success(profiles.get(token(authorization)));
     }
 
     @PatchMapping
-    public ApiResponse<StudentResponse> update(@RequestHeader("Authorization") String authorization,
+    public ApiResponse<StudentResponse> updateMyProfile(
+            @RequestHeader("Authorization") String authorization,
             @Valid @RequestBody UpdateMyStudentProfileRequest request) {
         return ApiResponse.success(profiles.update(token(authorization), request));
     }
 
     private String token(String authorization) {
-        if (authorization == null || !authorization.startsWith("Bearer ") || authorization.length() <= 7)
+        if (authorization == null || !authorization.startsWith("Bearer ") || authorization.length() == 7)
             throw new BaseException(ErrorCode.UNAUTHENTICATED);
         return authorization.substring(7);
     }

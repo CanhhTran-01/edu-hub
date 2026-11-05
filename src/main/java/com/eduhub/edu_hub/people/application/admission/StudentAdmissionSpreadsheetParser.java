@@ -1,18 +1,17 @@
 package com.eduhub.edu_hub.people.application.admission;
 
 import com.eduhub.edu_hub.people.api.dto.response.AdmissionErrorResponse;
-import java.io.InputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.DataFormatter;
@@ -25,8 +24,15 @@ import org.springframework.stereotype.Component;
 @Component
 public class StudentAdmissionSpreadsheetParser {
     public static final List<String> HEADERS = List.of(
-            "ma_ho_so", "ho_ten", "ngay_sinh", "gioi_tinh", "email",
-            "diem_xet_tuyen", "ma_nganh", "ma_khoa", "he_dao_tao");
+            "ma_ho_so",
+            "ho_ten",
+            "ngay_sinh",
+            "gioi_tinh",
+            "email",
+            "diem_xet_tuyen",
+            "ma_nganh",
+            "ma_khoa",
+            "he_dao_tao");
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/uuuu");
     private final DataFormatter formatter = new DataFormatter(Locale.ROOT);
 
@@ -38,7 +44,8 @@ public class StudentAdmissionSpreadsheetParser {
             if (header == null) return structureError("Thiếu dòng tiêu đề");
             Map<String, Integer> columns = new LinkedHashMap<>();
             for (Cell cell : header) columns.put(text(cell).toLowerCase(Locale.ROOT), cell.getColumnIndex());
-            List<String> missing = HEADERS.stream().filter(name -> !columns.containsKey(name)).toList();
+            List<String> missing =
+                    HEADERS.stream().filter(name -> !columns.containsKey(name)).toList();
             if (!missing.isEmpty()) return structureError("Thiếu cột: " + String.join(", ", missing));
 
             List<AdmissionCandidate> candidates = new ArrayList<>();
@@ -69,7 +76,9 @@ public class StudentAdmissionSpreadsheetParser {
         value.setTrainingType(required(row, columns, "he_dao_tao", errors, value.getApplicationCode()));
         Cell dateCell = row.getCell(columns.get("ngay_sinh"));
         try {
-            if (dateCell != null && dateCell.getCellType() == CellType.NUMERIC && DateUtil.isCellDateFormatted(dateCell)) {
+            if (dateCell != null
+                    && dateCell.getCellType() == CellType.NUMERIC
+                    && DateUtil.isCellDateFormatted(dateCell)) {
                 value.setDateOfBirth(dateCell.getLocalDateTimeCellValue().toLocalDate());
             } else {
                 value.setDateOfBirth(LocalDate.parse(text(dateCell), DATE_FORMAT));
@@ -89,8 +98,8 @@ public class StudentAdmissionSpreadsheetParser {
         return value;
     }
 
-    private String required(Row row, Map<String, Integer> columns, String field,
-            List<AdmissionErrorResponse> errors, String code) {
+    private String required(
+            Row row, Map<String, Integer> columns, String field, List<AdmissionErrorResponse> errors, String code) {
         String value = text(row.getCell(columns.get(field))).trim();
         if (value.isBlank()) {
             errors.add(error(row, code, field, "Thiếu dữ liệu bắt buộc"));
@@ -100,13 +109,18 @@ public class StudentAdmissionSpreadsheetParser {
     }
 
     private boolean isBlank(Row row, Map<String, Integer> columns) {
-        return columns.values().stream().allMatch(index -> text(row.getCell(index)).isBlank());
+        return columns.values().stream()
+                .allMatch(index -> text(row.getCell(index)).isBlank());
     }
 
-    private String text(Cell cell) { return cell == null ? "" : formatter.formatCellValue(cell); }
+    private String text(Cell cell) {
+        return cell == null ? "" : formatter.formatCellValue(cell);
+    }
+
     private AdmissionErrorResponse error(Row row, String code, String field, String reason) {
         return new AdmissionErrorResponse(row.getRowNum() + 1, code, field, reason);
     }
+
     private AdmissionParseResult structureError(String reason) {
         return new AdmissionParseResult(0, List.of(), List.of(new AdmissionErrorResponse(1, null, "file", reason)));
     }

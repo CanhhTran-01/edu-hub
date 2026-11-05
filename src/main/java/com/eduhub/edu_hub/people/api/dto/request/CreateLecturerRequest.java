@@ -14,12 +14,15 @@ public class CreateLecturerRequest {
     @NotNull
     @jakarta.validation.constraints.Past
     private LocalDate dateOfBirth;
+
     @NotBlank
     @jakarta.validation.constraints.Email
     @jakarta.validation.constraints.Size(max = 255)
     private String email;
+
     @jakarta.validation.constraints.Size(max = 255)
     private String phone;
+
     @jakarta.validation.constraints.Size(max = 255)
     private String citizenId;
 

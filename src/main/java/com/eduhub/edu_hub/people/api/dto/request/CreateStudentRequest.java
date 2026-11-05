@@ -44,6 +44,7 @@ public class CreateStudentRequest {
 
     @DecimalMin("0.0")
     private BigDecimal entranceScore;
+
     @NotBlank
     private String reason;
 }

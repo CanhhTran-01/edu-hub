@@ -23,23 +23,13 @@ public class LecturerController {
     private final LecturerCreationService creationService;
 
     @PostMapping
-    public ApiResponse<CreateLecturerResponse> create(
-            @Valid @RequestBody CreateLecturerRequest request,
-            @RequestHeader("Authorization") String authorization) {
-        return ApiResponse.success(creationService.create(request, token(authorization)));
+    public ApiResponse<CreateLecturerResponse> create(@Valid @RequestBody CreateLecturerRequest request) {
+        return ApiResponse.success(creationService.create(request));
     }
 
     @PostMapping("/{id}/account-notification/resend")
-    public ApiResponse<LecturerNotificationResponse> resend(
-            @PathVariable Long id,
-            @RequestHeader("Authorization") String authorization) {
-        return ApiResponse.success(creationService.resend(id, token(authorization)));
-    }
-
-    private String token(String authorization) {
-        if (authorization == null || !authorization.startsWith("Bearer ") || authorization.length() == 7)
-            throw new BaseException(ErrorCode.UNAUTHENTICATED);
-        return authorization.substring(7);
+    public ApiResponse<LecturerNotificationResponse> resend(@PathVariable Long id) {
+        return ApiResponse.success(creationService.resend(id));
     }
 
     @GetMapping

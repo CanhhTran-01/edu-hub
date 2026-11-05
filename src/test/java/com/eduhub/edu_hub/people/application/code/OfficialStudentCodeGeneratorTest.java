@@ -12,10 +12,10 @@ import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class OfficialStudentCodeGeneratorTest {
@@ -97,7 +97,8 @@ class OfficialStudentCodeGeneratorTest {
         value.setMajor(major);
         org.mockito.Mockito.lenient()
                 .when(majors.requireMajor(id))
-                .thenReturn(new com.eduhub.edu_hub.curriculum.application.facade.dto.MajorResponse(id, canonical, "Major"));
+                .thenReturn(
+                        new com.eduhub.edu_hub.curriculum.application.facade.dto.MajorResponse(id, canonical, "Major"));
         value.setCohort(cohort);
         value.setClassName(className);
         return value;

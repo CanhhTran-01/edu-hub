@@ -45,7 +45,7 @@ public class PasswordPolicyValidator {
         if (matchesCurrentPassword) {
             errors.add(new FieldErrorDetail("newPassword", "Mật khẩu mới không được trùng mật khẩu hiện tại"));
         }
-        
+
         if (!errors.isEmpty()) throw new PasswordValidationException(errors);
     }
 }

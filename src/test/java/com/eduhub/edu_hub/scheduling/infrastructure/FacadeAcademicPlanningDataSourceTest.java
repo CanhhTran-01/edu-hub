@@ -8,8 +8,8 @@ import com.eduhub.edu_hub.curriculum.application.facade.dto.CurriculumAssignment
 import com.eduhub.edu_hub.enrollment.application.EnrollmentFacade;
 import com.eduhub.edu_hub.enrollment.application.facade.dto.LearningAttemptResponse;
 import com.eduhub.edu_hub.enrollment.application.facade.dto.LearningHistoryResponse;
-import com.eduhub.edu_hub.people.application.facade.dto.StudentPlanningResponse;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
+import com.eduhub.edu_hub.people.application.facade.dto.StudentPlanningResponse;
 import com.eduhub.edu_hub.scheduling.application.port.PlanningSnapshot;
 import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.enums.TrainingType;
@@ -17,11 +17,11 @@ import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.util.List;
 import java.util.Set;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
-import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 
 @ExtendWith(MockitoExtension.class)

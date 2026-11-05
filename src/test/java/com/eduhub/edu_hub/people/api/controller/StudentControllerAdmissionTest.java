@@ -25,7 +25,8 @@ class StudentControllerAdmissionTest {
         AdmissionPreviewResponse response = new AdmissionPreviewResponse(
                 UUID.randomUUID(), "students.xlsx", 1, 1, 0, List.of(), List.of(), List.of(), List.of());
         when(admissionService.preview(any())).thenReturn(response);
-        MockMvc mvc = MockMvcBuilders.standaloneSetup(new StudentController(studentService, admissionService)).build();
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new StudentController(studentService, admissionService))
+                .build();
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 "students.xlsx",

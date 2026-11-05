@@ -5,7 +5,6 @@ import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
-
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.ResponseEntity;
@@ -34,7 +33,8 @@ public class MyStudentProfileExceptionHandler {
             }
             cause = cause.getCause();
         }
-        return ResponseEntity.badRequest().body(ApiResponse.validationError(
-                List.of(new FieldErrorDetail("request", message)), request.getRequestURI()));
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.validationError(
+                        List.of(new FieldErrorDetail("request", message)), request.getRequestURI()));
     }
 }

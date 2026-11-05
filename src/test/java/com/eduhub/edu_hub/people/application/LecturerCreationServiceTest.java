@@ -35,9 +35,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionSystemException;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.transaction.TransactionSystemException;
 
 class LecturerCreationServiceTest {
     private final LecturerRepository lecturers = mock(LecturerRepository.class);
@@ -56,8 +56,8 @@ class LecturerCreationServiceTest {
         when(transactionManager.getTransaction(any())).thenAnswer(call -> new SimpleTransactionStatus());
         var transactions = new TransactionTemplate(transactionManager);
         var notifications = new LecturerAccountNotificationService(lecturers, identity, transactions);
-        service = new LecturerCreationService(lecturers, faculties, codes, identity, transactions, queries, notifications);
-        when(identity.requireAcademicAdmin("token")).thenReturn("admin");
+        service = new LecturerCreationService(
+                lecturers, faculties, codes, identity, transactions, queries, notifications);
 
         request = new CreateLecturerRequest();
         request.setFullName(" Nguyen Van A ");
@@ -73,7 +73,7 @@ class LecturerCreationServiceTest {
     void createsAccountAndKeepsDataWhenEmailFails() {
         prepareCreation(false, "EMAIL_SEND_FAILED");
 
-        var response = service.create(request, "token");
+        var response = service.create(request);
 
         assertThat(response.notificationStatus()).isEqualTo("FAILED");
         assertThat(response.notificationError()).isEqualTo("EMAIL_SEND_FAILED");
@@ -91,7 +91,6 @@ class LecturerCreationServiceTest {
         assertThat(command.getValue().username()).isEqualTo("GV000001");
         assertThat(command.getValue().email()).isEqualTo("a@example.test");
         assertThat(command.getValue().initialPassword()).isEqualTo("12345");
-        verify(identity).requireAcademicAdmin("token");
         verify(lecturers).save(savedLecturer);
     }
 
@@ -99,7 +98,7 @@ class LecturerCreationServiceTest {
     void commitsCreationBeforeSendingAndCommitsNotificationBeforeReturning() {
         prepareCreation(true, null);
 
-        var response = service.create(request, "token");
+        var response = service.create(request);
 
         var order = inOrder(lecturers, identity, transactionManager, queries);
         order.verify(lecturers).saveAndFlush(any(Lecturer.class));
@@ -116,10 +115,10 @@ class LecturerCreationServiceTest {
     void doesNotSendNotificationWhenCreationCommitFails() {
         prepareCreation(true, null);
         doThrow(new TransactionSystemException("Cannot commit lecturer"))
-                .when(transactionManager).commit(any());
+                .when(transactionManager)
+                .commit(any());
 
-        assertThatThrownBy(() -> service.create(request, "token"))
-                .isInstanceOf(TransactionSystemException.class);
+        assertThatThrownBy(() -> service.create(request)).isInstanceOf(TransactionSystemException.class);
 
         verify(identity, never()).sendLecturerAccountNotification(any(), anyString());
         verifyNoInteractions(queries);
@@ -129,10 +128,10 @@ class LecturerCreationServiceTest {
     void rollsBackCreationAndDoesNotSendWhenSavingFails() {
         prepareCreation(true, null);
         doThrow(new DataIntegrityViolationException("Duplicate lecturer"))
-                .when(lecturers).saveAndFlush(any());
+                .when(lecturers)
+                .saveAndFlush(any());
 
-        assertThatThrownBy(() -> service.create(request, "token"))
-                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> service.create(request)).isInstanceOf(DataIntegrityViolationException.class);
 
         verify(transactionManager).rollback(any());
         verify(identity, never()).sendLecturerAccountNotification(any(), anyString());
@@ -143,9 +142,10 @@ class LecturerCreationServiceTest {
     void duplicateNameAndBirthDateOnlyProduceWarning() {
         prepareCreation(true, null);
         when(lecturers.existsByFullNameIgnoreCaseAndDateOfBirthAndDeletedFalse(
-                "Nguyen Van A", request.getDateOfBirth())).thenReturn(true);
+                        "Nguyen Van A", request.getDateOfBirth()))
+                .thenReturn(true);
 
-        var response = service.create(request, "token");
+        var response = service.create(request);
 
         assertThat(response.warnings()).containsExactly("Trùng họ tên và ngày sinh; cần kiểm tra thủ công");
         verify(lecturers).saveAndFlush(any(Lecturer.class));
@@ -157,7 +157,7 @@ class LecturerCreationServiceTest {
         prepareCreation(true, null);
         request.setCitizenId("  \t ");
 
-        service.create(request, "token");
+        service.create(request);
 
         assertThat(savedLecturer.getCitizenId()).isNull();
         verify(lecturers, never()).existsByCitizenIdAndDeletedFalse(anyString());
@@ -167,9 +167,9 @@ class LecturerCreationServiceTest {
     void rejectsDuplicateEmailBeforeCreatingAnything() {
         when(lecturers.existsByEmailIgnoreCaseAndDeletedFalse("a@example.test")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.create(request, "token"))
-                .isInstanceOfSatisfying(BaseException.class, exception ->
-                        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.DUPLICATE_LECTURER_EMAIL));
+        assertThatThrownBy(() -> service.create(request))
+                .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.DUPLICATE_LECTURER_EMAIL));
 
         verifyNoInteractions(codes);
         verify(identity, never()).createLecturerAccountWithoutNotification(any());
@@ -179,9 +179,9 @@ class LecturerCreationServiceTest {
     void rejectsDuplicateCitizenIdBeforeCreatingAnything() {
         when(lecturers.existsByCitizenIdAndDeletedFalse("123456")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.create(request, "token"))
-                .isInstanceOfSatisfying(BaseException.class, exception ->
-                        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.DUPLICATE_LECTURER_CITIZEN_ID));
+        assertThatThrownBy(() -> service.create(request))
+                .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.DUPLICATE_LECTURER_CITIZEN_ID));
 
         verifyNoInteractions(faculties, codes);
         verify(identity, never()).createLecturerAccountWithoutNotification(any());
@@ -191,9 +191,9 @@ class LecturerCreationServiceTest {
     void rejectsMissingOrInactiveFaculty() {
         when(faculties.findByIdAndDeletedFalseAndActiveTrue(1L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.create(request, "token"))
-                .isInstanceOfSatisfying(BaseException.class, exception ->
-                        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FACULTY_NOT_ACTIVE));
+        assertThatThrownBy(() -> service.create(request))
+                .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.FACULTY_NOT_ACTIVE));
 
         verifyNoInteractions(codes);
     }
@@ -202,9 +202,9 @@ class LecturerCreationServiceTest {
     void rejectsBlankReason() {
         request.setReason("   ");
 
-        assertThatThrownBy(() -> service.create(request, "token"))
-                .isInstanceOfSatisfying(BaseException.class, exception ->
-                        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.VALIDATION_ERROR));
+        assertThatThrownBy(() -> service.create(request))
+                .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.VALIDATION_ERROR));
 
         verifyNoInteractions(lecturers, faculties, codes);
     }
@@ -213,22 +213,11 @@ class LecturerCreationServiceTest {
     void rejectsReasonLongerThanFiveHundredCharacters() {
         request.setReason("x".repeat(501));
 
-        assertThatThrownBy(() -> service.create(request, "token"))
-                .isInstanceOfSatisfying(BaseException.class, exception ->
-                        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.VALIDATION_ERROR));
+        assertThatThrownBy(() -> service.create(request))
+                .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.VALIDATION_ERROR));
 
         verifyNoInteractions(lecturers, faculties, codes);
-    }
-
-    @Test
-    void rejectsUnauthorizedCreationBeforeOpeningTransaction() {
-        doThrow(new BaseException(ErrorCode.UNAUTHORIZED)).when(identity).requireAcademicAdmin("token");
-
-        assertThatThrownBy(() -> service.create(request, "token"))
-                .isInstanceOfSatisfying(BaseException.class, exception ->
-                        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.UNAUTHORIZED));
-
-        verifyNoInteractions(transactionManager, lecturers, faculties, codes, queries);
     }
 
     @Test
@@ -238,36 +227,24 @@ class LecturerCreationServiceTest {
         when(identity.sendLecturerAccountNotification(2L, "12345"))
                 .thenReturn(new CreateStudentAccountResult(2L, true, null));
 
-        var response = service.resend(3L, "token");
+        var response = service.resend(3L);
 
         assertThat(response.lecturerId()).isEqualTo(3L);
         assertThat(response.lecturerCode()).isEqualTo("GV000001");
         assertThat(response.notificationStatus()).isEqualTo("SENT");
         assertThat(lecturer.getAccountNotificationStatus()).isEqualTo(AccountNotificationStatus.SENT);
-        verify(identity).requireAcademicAdmin("token");
         verify(lecturers).save(lecturer);
         verifyNoInteractions(codes, faculties, queries);
         verify(identity, never()).createLecturerAccountWithoutNotification(any());
     }
 
     @Test
-    void rejectsUnauthorizedResendBeforeReadingProfile() {
-        doThrow(new BaseException(ErrorCode.UNAUTHORIZED)).when(identity).requireAcademicAdmin("token");
-
-        assertThatThrownBy(() -> service.resend(3L, "token"))
-                .isInstanceOfSatisfying(BaseException.class, exception ->
-                        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.UNAUTHORIZED));
-
-        verifyNoInteractions(transactionManager, lecturers, codes);
-    }
-
-    @Test
     void rejectsResendForMissingLecturer() {
         when(lecturers.findByIdAndDeletedFalse(3L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.resend(3L, "token"))
-                .isInstanceOfSatisfying(BaseException.class, exception ->
-                        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.LECTURER_NOT_FOUND));
+        assertThatThrownBy(() -> service.resend(3L))
+                .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.LECTURER_NOT_FOUND));
 
         verify(identity, never()).sendLecturerAccountNotification(any(), anyString());
         verifyNoInteractions(transactionManager, codes);
@@ -279,9 +256,9 @@ class LecturerCreationServiceTest {
         lecturer.setUserId(null);
         when(lecturers.findByIdAndDeletedFalse(3L)).thenReturn(Optional.of(lecturer));
 
-        assertThatThrownBy(() -> service.resend(3L, "token"))
-                .isInstanceOfSatisfying(BaseException.class, exception ->
-                        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.USER_NOT_FOUND));
+        assertThatThrownBy(() -> service.resend(3L))
+                .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.USER_NOT_FOUND));
 
         verify(identity, never()).sendLecturerAccountNotification(any(), anyString());
         verifyNoInteractions(transactionManager, codes);
@@ -302,7 +279,10 @@ class LecturerCreationServiceTest {
         when(identity.sendLecturerAccountNotification(eq(2L), anyString()))
                 .thenReturn(new CreateStudentAccountResult(2L, emailSent, emailError));
         when(queries.findById(3L))
-                .thenReturn(LecturerResponse.builder().id(3L).lecturerCode("GV000001").build());
+                .thenReturn(LecturerResponse.builder()
+                        .id(3L)
+                        .lecturerCode("GV000001")
+                        .build());
     }
 
     private Lecturer existingLecturer() {

@@ -22,45 +22,64 @@ class MyStudentProfileServiceTest {
     MyStudentProfileService service = new MyStudentProfileService(identity, students, queries);
     Student student;
 
-    @BeforeEach void setup() {
-        when(identity.requireCurrentStudent("token")).thenReturn(
-                UserInfoResponse.builder().id(7L).username("CT080101").role("STUDENT").build());
-        student = new Student(); student.setId(9L); student.setUserId(7L);
-        student.setStudentCode("CT080101"); student.setFullName("Original Name");
-        student.setPhone("0900000000"); student.setTargetGpa(new BigDecimal("3.20"));
+    @BeforeEach
+    void setup() {
+        when(identity.requireCurrentUser("token"))
+                .thenReturn(UserInfoResponse.builder()
+                        .id(7L)
+                        .username("CT080101")
+                        .role("STUDENT")
+                        .build());
+        student = new Student();
+        student.setId(9L);
+        student.setUserId(7L);
+        student.setStudentCode("CT080101");
+        student.setFullName("Original Name");
+        student.setPhone("0900000000");
+        student.setTargetGpa(new BigDecimal("3.20"));
     }
 
-    @Test void getUsesIdentityUserIdNotStudentId() {
+    @Test
+    void getUsesIdentityUserIdNotStudentId() {
         when(students.findByUserIdAndDeletedFalse(7L)).thenReturn(Optional.of(student));
-        service.get("token"); verify(queries).findById(9L);
+        service.get("token");
+        verify(queries).findById(9L);
     }
 
-    @Test void patchChangesOnlyProvidedFields() {
+    @Test
+    void patchChangesOnlyProvidedFields() {
         when(students.findMyProfileForUpdate(7L)).thenReturn(Optional.of(student));
-        var request = new UpdateMyStudentProfileRequest(); request.setTargetGpa(new BigDecimal("4"));
+        var request = new UpdateMyStudentProfileRequest();
+        request.setTargetGpa(new BigDecimal("4"));
         service.update("token", request);
         assertThat(student.getTargetGpa()).isEqualByComparingTo("4");
         assertThat(student.getPhone()).isEqualTo("0900000000");
         assertThat(student.getFullName()).isEqualTo("Original Name");
-        verify(identity).requireCurrentStudent("token");
+        verify(identity).requireCurrentUser("token");
         verify(students).save(student);
     }
 
-    @Test void noOpDoesNotWrite() {
+    @Test
+    void noOpDoesNotWrite() {
         when(students.findMyProfileForUpdate(7L)).thenReturn(Optional.of(student));
-        var request = new UpdateMyStudentProfileRequest(); request.setTargetGpa(new BigDecimal("3.2"));
+        var request = new UpdateMyStudentProfileRequest();
+        request.setTargetGpa(new BigDecimal("3.2"));
         service.update("token", request);
         verify(students, never()).save(any());
     }
 
-    @Test void explicitNullClearsOnlySpecifiedField() {
+    @Test
+    void explicitNullClearsOnlySpecifiedField() {
         when(students.findMyProfileForUpdate(7L)).thenReturn(Optional.of(student));
-        var request = new UpdateMyStudentProfileRequest(); request.setPhone(null);
+        var request = new UpdateMyStudentProfileRequest();
+        request.setPhone(null);
         service.update("token", request);
-        assertThat(student.getPhone()).isNull(); assertThat(student.getTargetGpa()).isEqualByComparingTo("3.20");
+        assertThat(student.getPhone()).isNull();
+        assertThat(student.getTargetGpa()).isEqualByComparingTo("3.20");
     }
 
-    @Test void missingStudentIsRejected() {
+    @Test
+    void missingStudentIsRejected() {
         when(students.findByUserIdAndDeletedFalse(7L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.get("token")).isInstanceOf(BaseException.class);
         verifyNoInteractions(queries);

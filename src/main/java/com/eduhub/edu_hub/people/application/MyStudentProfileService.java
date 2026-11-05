@@ -15,13 +15,14 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class MyStudentProfileService {
+    // TODO(AUTHORIZATION): Bổ sung phân quyền hồ sơ cá nhân bằng Spring Security sau.
     private final IdentityFacade identity;
     private final StudentRepository students;
     private final StudentApplicationService studentQueries;
 
     public StudentResponse get(String token) {
 
-        var current = identity.requireCurrentStudent(token);
+        var current = identity.requireCurrentUser(token);
 
         var student = students.findByUserIdAndDeletedFalse(current.getId())
                 .orElseThrow(() -> new BaseException(ErrorCode.STUDENT_NOT_FOUND));
@@ -32,7 +33,7 @@ public class MyStudentProfileService {
     @Transactional
     public StudentResponse update(String token, UpdateMyStudentProfileRequest request) {
 
-        var current = identity.requireCurrentStudent(token);
+        var current = identity.requireCurrentUser(token);
 
         var student = students.findMyProfileForUpdate(current.getId())
                 .orElseThrow(() -> new BaseException(ErrorCode.STUDENT_NOT_FOUND));
@@ -41,7 +42,8 @@ public class MyStudentProfileService {
             var value = request.getTargetGpa();
             if (value != null && (value.signum() < 0 || value.compareTo(java.math.BigDecimal.valueOf(4)) > 0))
                 throw new BaseException(ErrorCode.INVALID_TARGET_GPA);
-            boolean same = value == null ? student.getTargetGpa() == null
+            boolean same = value == null
+                    ? student.getTargetGpa() == null
                     : student.getTargetGpa() != null && value.compareTo(student.getTargetGpa()) == 0;
             if (!same) {
                 changed = true;
@@ -49,7 +51,8 @@ public class MyStudentProfileService {
             }
         }
         if (request.hasPhone()) {
-            String phone = request.getPhone() == null ? null : request.getPhone().trim();
+            String phone =
+                    request.getPhone() == null ? null : request.getPhone().trim();
             if (!Objects.equals(phone, student.getPhone())) {
                 changed = true;
                 student.setPhone(phone);

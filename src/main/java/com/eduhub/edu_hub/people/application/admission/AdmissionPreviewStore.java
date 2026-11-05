@@ -10,7 +10,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class AdmissionPreviewStore {
     private final Map<UUID, AdmissionBatchState> batches = new ConcurrentHashMap<>();
-    public void put(AdmissionBatchState batch) { batches.put(batch.getId(), batch); }
+
+    public void put(AdmissionBatchState batch) {
+        batches.put(batch.getId(), batch);
+    }
+
     public AdmissionBatchState get(UUID id) {
         AdmissionBatchState batch = batches.get(id);
         if (batch == null) throw new BaseException(ErrorCode.ADMISSION_BATCH_NOT_FOUND);

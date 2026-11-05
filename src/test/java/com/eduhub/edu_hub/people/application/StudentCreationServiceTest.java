@@ -32,10 +32,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -76,7 +76,6 @@ class StudentCreationServiceTest {
                 generator,
                 identity,
                 new TransactionTemplate(transactionManager));
-        when(identity.requireAcademicAdmin(any())).thenReturn("admin_test");
 
         Cohort cohort = new Cohort();
         cohort.setId(8L);
@@ -112,7 +111,7 @@ class StudentCreationServiceTest {
         when(curriculum.findMajorsByIds(Set.of(10L)))
                 .thenReturn(List.of(new MajorSimpleResponse(10L, "CNTT", "Công nghệ thông tin", null)));
 
-        var response = service.create(request, " admin_test ");
+        var response = service.create(request);
 
         assertThat(response.notificationStatus()).isEqualTo("SENT");
         assertThat(response.student().getMajorName()).isEqualTo("Công nghệ thông tin");
@@ -127,7 +126,7 @@ class StudentCreationServiceTest {
         when(classes.findByIdForStudentCodeUpdate(1L)).thenReturn(Optional.of(administrativeClass));
         when(students.countByAdministrativeClass_IdAndDeletedFalse(1L)).thenReturn(50L);
 
-        assertThatThrownBy(() -> service.create(request(), "admin"))
+        assertThatThrownBy(() -> service.create(request()))
                 .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
                         .isEqualTo(ErrorCode.CLASS_CAPACITY_EXCEEDED));
         verify(identity, never()).createStudentAccountWithoutNotification(any());
@@ -148,7 +147,7 @@ class StudentCreationServiceTest {
         });
         when(students.findByIdAndDeletedFalse(30L)).thenAnswer(invocation -> Optional.of(savedStudent()));
 
-        var response = service.create(request(), "admin");
+        var response = service.create(request());
 
         assertThat(response.notificationStatus()).isEqualTo("FAILED");
         assertThat(response.notificationError()).isEqualTo("EMAIL_SEND_FAILED");
@@ -164,7 +163,7 @@ class StudentCreationServiceTest {
                 .thenReturn(new CreateStudentAccountResult(20L, true, null));
         when(students.save(any(Student.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        var response = service.resendAccountNotification(30L, "admin");
+        var response = service.resendAccountNotification(30L);
 
         assertThat(response.notificationStatus()).isEqualTo("SENT");
         verify(identity, never()).createStudentAccountWithoutNotification(any());

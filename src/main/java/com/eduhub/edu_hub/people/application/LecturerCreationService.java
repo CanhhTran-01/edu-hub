@@ -36,8 +36,8 @@ public class LecturerCreationService {
     private final LecturerAccountNotificationService accountNotificationService;
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public CreateLecturerResponse create(CreateLecturerRequest request, String token) {
-        identityFacade.requireAcademicAdmin(token);
+    public CreateLecturerResponse create(CreateLecturerRequest request) {
+        // TODO(AUTHORIZATION): Bổ sung phân quyền tạo giảng viên bằng Spring Security sau.
 
         CreatedLecturer created = transactionTemplate.execute(status -> createInTransaction(request));
         if (created == null) {
@@ -54,8 +54,8 @@ public class LecturerCreationService {
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public LecturerNotificationResponse resend(Long id, String token) {
-        identityFacade.requireAcademicAdmin(token);
+    public LecturerNotificationResponse resend(Long id) {
+        // TODO(AUTHORIZATION): Bổ sung phân quyền gửi lại thông báo tài khoản bằng Spring Security sau.
         return accountNotificationService.send(id, INITIAL_PASSWORD);
     }
 

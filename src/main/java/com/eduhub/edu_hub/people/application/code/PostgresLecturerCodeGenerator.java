@@ -1,11 +1,11 @@
 package com.eduhub.edu_hub.people.application.code;
 
+import com.eduhub.edu_hub.shared.exception.BaseException;
+import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
-import com.eduhub.edu_hub.shared.exception.BaseException;
-import com.eduhub.edu_hub.shared.exception.ErrorCode;
 
 @Component
 @RequiredArgsConstructor

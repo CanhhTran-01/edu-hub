@@ -33,16 +33,16 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.transaction.TransactionDefinition;
 
 @Service
 @RequiredArgsConstructor
@@ -60,8 +60,8 @@ public class StudentApplicationService {
     private final TransactionTemplate transactionTemplate;
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public CreateStudentResponse create(CreateStudentRequest request, String accessToken) {
-        identityFacade.requireAcademicAdmin(accessToken);
+    public CreateStudentResponse create(CreateStudentRequest request) {
+        // TODO(AUTHORIZATION): Bổ sung phân quyền tạo sinh viên bằng Spring Security sau.
         CreatedStudent created = transactionTemplate.execute(status -> createInTransaction(request));
         if (created == null) {
             throw new BaseException(ErrorCode.UNEXPECTED_ERROR);
@@ -81,8 +81,8 @@ public class StudentApplicationService {
     }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public AccountNotificationResponse resendAccountNotification(Long studentId, String accessToken) {
-        identityFacade.requireAcademicAdmin(accessToken);
+    public AccountNotificationResponse resendAccountNotification(Long studentId) {
+        // TODO(AUTHORIZATION): Bổ sung phân quyền gửi lại thông báo tài khoản bằng Spring Security sau.
         Student student = studentRepository
                 .findByIdAndDeletedFalse(studentId)
                 .orElseThrow(() -> new BaseException(ErrorCode.STUDENT_NOT_FOUND));

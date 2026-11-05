@@ -25,7 +25,9 @@ public interface CurriculumFacade {
 
     interface Majors {
         com.eduhub.edu_hub.curriculum.application.facade.dto.MajorResponse requireMajor(Long id);
-        java.util.Optional<com.eduhub.edu_hub.curriculum.application.facade.dto.MajorResponse> findMajorByCode(String code);
+
+        java.util.Optional<com.eduhub.edu_hub.curriculum.application.facade.dto.MajorResponse> findMajorByCode(
+                String code);
     }
     /** Read facet phục vụ mở lớp, không làm giả các capability chưa triển khai của Facade đầy đủ. */
     interface ClassOpening {

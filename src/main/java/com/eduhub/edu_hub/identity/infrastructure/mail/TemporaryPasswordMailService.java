@@ -29,11 +29,13 @@ public class TemporaryPasswordMailService {
         message.setFrom(from);
         message.setTo(recipient);
         message.setSubject("EduHub - Mật khẩu tạm thời");
-        String body = """
+        String body =
+                """
             Mật khẩu tạm thời của bạn: %s
             Tên đăng nhập: %s
             Vui lòng đăng nhập và đổi mật khẩu ngay.
-        """.formatted(temporaryPassword, username == null ? "" : username);
+        """
+                        .formatted(temporaryPassword, username == null ? "" : username);
         message.setText(body);
 
         sender.send(message);

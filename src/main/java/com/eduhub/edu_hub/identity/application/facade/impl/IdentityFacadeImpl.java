@@ -17,8 +17,8 @@ import com.eduhub.edu_hub.shared.enums.RoleName;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.time.LocalDateTime;
-import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.MailException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -43,7 +43,8 @@ public class IdentityFacadeImpl implements IdentityFacade {
         }
         Role role = roles.findByRoleNameAndDeletedFalse(RoleName.LECTURER.name())
                 .orElseThrow(() -> new BaseException(ErrorCode.VALIDATION_ERROR));
-        return save(command.username(), command.email(), command.initialPassword(), role, true).getId();
+        return save(command.username(), command.email(), command.initialPassword(), role, true)
+                .getId();
     }
 
     @Override
@@ -52,7 +53,9 @@ public class IdentityFacadeImpl implements IdentityFacade {
 
         User account = user(userId);
 
-        if (account.isDeleted() || !RoleName.LECTURER.name().equals(account.getRole().getRoleName())
+        // Kiểm tra loại tài khoản nhận thông báo, không phải quyền của người gọi.
+        if (account.isDeleted()
+                || !RoleName.LECTURER.name().equals(account.getRole().getRoleName())
                 || account.getStatus() != UserStatus.ACTIVE) {
             return new CreateStudentAccountResult(userId, false, "ACCOUNT_NOT_AVAILABLE");
         }
@@ -97,37 +100,7 @@ public class IdentityFacadeImpl implements IdentityFacade {
 
     @Override
     @Transactional(readOnly = true)
-    public String requireAcademicAdmin(String accessToken) {
-
-        TokenService.TokenClaims claims = tokens.validateAccessToken(accessToken);
-
-        if (claims == null) {
-            throw new BaseException(ErrorCode.UNAUTHENTICATED);
-        }
-
-        User actor = users.findByUsernameAndDeletedFalse(claims.username())
-                .orElseThrow(() -> new BaseException(ErrorCode.UNAUTHENTICATED));
-
-        if (!actor.getId().equals(claims.userId())
-                || actor.getStatus() != UserStatus.ACTIVE
-                || sessions.findByIdAndRevokedFalse(claims.sessionId()).stream()
-                        .noneMatch(session -> session.getUser().getId().equals(actor.getId()))) {
-            throw new BaseException(ErrorCode.UNAUTHENTICATED);
-        }
-
-        String role = actor.getRole().getRoleName();
-
-        if (!RoleName.ACADEMIC_ADMIN.name().equals(role)
-                && !RoleName.SYSTEM_ADMIN.name().equals(role)) {
-            throw new BaseException(ErrorCode.UNAUTHORIZED);
-        }
-
-        return actor.getUsername();
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public UserInfoResponse requireCurrentStudent(String accessToken) {
+    public UserInfoResponse requireCurrentUser(String accessToken) {
 
         TokenService.TokenClaims claims = tokens.validateAccessToken(accessToken);
 
@@ -139,15 +112,15 @@ public class IdentityFacadeImpl implements IdentityFacade {
 
         boolean validSession = sessions.findByIdAndRevokedFalse(claims.sessionId())
                 .filter(session -> session.getUser().getId().equals(current.getId()))
-                .filter(session -> now.isBefore(session.getExpiresAt())).isPresent();
+                .filter(session -> now.isBefore(session.getExpiresAt()))
+                .isPresent();
 
-        if (!current.getId().equals(claims.userId()) || current.getStatus() != UserStatus.ACTIVE
-                || (current.getLockedUntil() != null && now.isBefore(current.getLockedUntil())) || !validSession) {
+        if (!current.getId().equals(claims.userId())
+                || current.getStatus() != UserStatus.ACTIVE
+                || (current.getLockedUntil() != null && now.isBefore(current.getLockedUntil()))
+                || !validSession) {
             throw new BaseException(ErrorCode.UNAUTHENTICATED);
         }
-
-        if (!RoleName.STUDENT.name().equals(current.getRole().getRoleName()))
-            throw new BaseException(ErrorCode.UNAUTHORIZED);
 
         return response(current);
     }
@@ -161,8 +134,13 @@ public class IdentityFacadeImpl implements IdentityFacade {
         Role role = roles.findByRoleNameAndDeletedFalse(RoleName.STUDENT.name())
                 .orElseThrow(() -> new BaseException(ErrorCode.VALIDATION_ERROR));
 
-        return save(command.username(), command.email(), command.initialPassword(), role,
-                command.requirePasswordChange()).getId();
+        return save(
+                        command.username(),
+                        command.email(),
+                        command.initialPassword(),
+                        role,
+                        command.requirePasswordChange())
+                .getId();
     }
 
     private User save(String username, String email, String rawPassword, Role role, boolean firstLogin) {
@@ -179,11 +157,12 @@ public class IdentityFacadeImpl implements IdentityFacade {
     }
 
     @Override
-    public boolean existsByUsername(String username) { return users.existsByUsername(username); }
+    public boolean existsByUsername(String username) {
+        return users.existsByUsername(username);
+    }
 
     private User user(Long id) {
-        return users.findById(id)
-                .orElseThrow(() -> new BaseException(ErrorCode.USER_NOT_FOUND));
+        return users.findById(id).orElseThrow(() -> new BaseException(ErrorCode.USER_NOT_FOUND));
     }
 
     private UserInfoResponse response(User user) {
@@ -191,7 +170,8 @@ public class IdentityFacadeImpl implements IdentityFacade {
                 .id(user.getId())
                 .username(user.getUsername())
                 .email(user.getEmail())
-                .role(user.getRole().getRoleName()).status(user.getStatus().name())
+                .role(user.getRole().getRoleName())
+                .status(user.getStatus().name())
                 .isFirstLogin(user.isFirstLogin())
                 .build();
     }

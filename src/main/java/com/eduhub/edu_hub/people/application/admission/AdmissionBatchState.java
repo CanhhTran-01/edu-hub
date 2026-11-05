@@ -27,9 +27,15 @@ public class AdmissionBatchState {
     @Setter
     private boolean confirmed;
 
-    public AdmissionBatchState(UUID id, String fileName, int totalRows, List<AdmissionCandidate> candidates,
-            List<AdmissionErrorResponse> errors, List<AdministrativeClass> classes,
-            List<String> duplicateNameWarnings, List<String> capacityWarnings) {
+    public AdmissionBatchState(
+            UUID id,
+            String fileName,
+            int totalRows,
+            List<AdmissionCandidate> candidates,
+            List<AdmissionErrorResponse> errors,
+            List<AdministrativeClass> classes,
+            List<String> duplicateNameWarnings,
+            List<String> capacityWarnings) {
         this.id = id;
         this.fileName = fileName;
         this.totalRows = totalRows;
