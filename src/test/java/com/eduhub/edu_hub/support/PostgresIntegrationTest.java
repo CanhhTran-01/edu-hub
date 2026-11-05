@@ -9,6 +9,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 @SpringBootTest(
         properties = {
             "spring.config.import=",
+            "spring.flyway.locations=classpath:db/migration,classpath:db/seed",
             "spring.jpa.hibernate.ddl-auto=validate",
             "spring.jpa.open-in-view=false",
             "jwt.secret=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="

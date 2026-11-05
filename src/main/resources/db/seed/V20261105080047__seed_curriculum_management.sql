@@ -1,7 +1,6 @@
 -- Dữ liệu dev/test: 4 ngành, 4 CTĐT chính quy 4 năm, 40 môn bắt buộc/CTĐT.
 -- Từng học phần và kỳ khuyến nghị được liệt kê tường minh trong VALUES.
 -- ID do database sinh; tra khóa ngoại theo mã để không phụ thuộc sequence.
-
 INSERT INTO majors (
     major_code, major_name, status, created_at, updated_at, created_by, updated_by, is_deleted
 )
@@ -14,7 +13,7 @@ FROM (VALUES
     ('TTNT', 'Trí tuệ nhân tạo')
 ) AS seed(major_code, major_name);
 
--- Bổ sung 104 học phần; dùng lại các mã CS/MATH/PRJ đã có trong migration học phần.
+-- Bổ sung 104 học phần; dùng lại các mã CS/MATH/PRJ từ seed_subject_management.
 INSERT INTO subjects (
     subject_code, subject_name, credits, status, created_at, updated_at, created_by, updated_by, is_deleted
 )
@@ -132,22 +131,22 @@ FROM (VALUES
     ('AI410', 'Khóa luận tốt nghiệp Trí tuệ nhân tạo', 5)
 ) AS seed(subject_code, subject_name, credits);
 
--- Chỉ là mẫu CTĐT; mapping với khóa tuyển sinh do BE1/People cung cấp sau.
+-- Mẫu CTĐT chưa gắn khóa. Tín chỉ tốt nghiệp giữ nguyên tổng 40 môn REQUIRED của từng mẫu.
 -- Tra ID bằng scalar subquery: mã tham chiếu thiếu sẽ vi phạm NOT NULL thay vì mất dòng seed.
 INSERT INTO curriculums (
-    curriculum_code, curriculum_name, major_id, training_type, duration_semesters, status,
+    curriculum_code, curriculum_name, major_id, training_type, duration_semesters, required_graduation_credits, status,
     created_at, updated_at, created_by, updated_by, is_deleted
 )
 SELECT seed.curriculum_code, seed.curriculum_name,
     (SELECT id FROM majors WHERE major_code = seed.major_code AND status = 'ACTIVE' AND is_deleted = FALSE),
-    seed.training_type, seed.duration_semesters, 'ACTIVE',
+    seed.training_type, seed.duration_semesters, seed.required_graduation_credits, 'ACTIVE',
     CURRENT_TIMESTAMP AT TIME ZONE 'UTC', CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'seed', 'seed', FALSE
 FROM (VALUES
-    ('CNTT_4Y_V1', 'Chương trình đào tạo Công nghệ thông tin 4 năm', 'CNTT', 'CHINH_QUY', 8),
-    ('ATTT_4Y_V1', 'Chương trình đào tạo An toàn thông tin 4 năm', 'ATTT', 'CHINH_QUY', 8),
-    ('DTVT_4Y_V1', 'Chương trình đào tạo Điện tử viễn thông 4 năm', 'DTVT', 'CHINH_QUY', 8),
-    ('TTNT_4Y_V1', 'Chương trình đào tạo Trí tuệ nhân tạo 4 năm', 'TTNT', 'CHINH_QUY', 8)
-) AS seed(curriculum_code, curriculum_name, major_code, training_type, duration_semesters);
+    ('CNTT_4Y_V1', 'Chương trình đào tạo Công nghệ thông tin 4 năm', 'CNTT', 'CHINH_QUY', 8, 124),
+    ('ATTT_4Y_V1', 'Chương trình đào tạo An toàn thông tin 4 năm', 'ATTT', 'CHINH_QUY', 8, 123),
+    ('DTVT_4Y_V1', 'Chương trình đào tạo Điện tử viễn thông 4 năm', 'DTVT', 'CHINH_QUY', 8, 123),
+    ('TTNT_4Y_V1', 'Chương trình đào tạo Trí tuệ nhân tạo 4 năm', 'TTNT', 'CHINH_QUY', 8, 124)
+) AS seed(curriculum_code, curriculum_name, major_code, training_type, duration_semesters, required_graduation_credits);
 
 -- 160 quan hệ: 4 CTĐT x 8 kỳ x 5 môn, tất cả REQUIRED.
 -- recommend_semester thuộc quan hệ CTĐT - học phần, không gắn vào Subject.
@@ -360,4 +359,3 @@ FROM (VALUES
     ('TTNT_4Y_V1', 'AI409', 8),
     ('TTNT_4Y_V1', 'AI410', 8)
 ) AS seed(curriculum_code, subject_code, recommend_semester);
-

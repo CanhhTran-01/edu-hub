@@ -61,8 +61,8 @@ ALTER TABLE curriculums ALTER COLUMN required_graduation_credits SET NOT NULL;
 
 ALTER TABLE students ADD COLUMN academic_warning_reason TEXT;
 
--- FK mới vẫn kiểm tra mọi liên kết mới. ID giảng viên fixture còn sót phải được
--- đối soát riêng; không đổi hoặc xóa giảng viên của lớp cũ một cách tự động.
+-- FK mới vẫn kiểm tra mọi liên kết mới. ID giảng viên fixture còn sót phải được đối soát riêng
+-- Không đổi hoặc xóa giảng viên của lớp cũ một cách tự động.
 ALTER TABLE module_classes ADD CONSTRAINT fk_module_classes_lecturer
     FOREIGN KEY (lecturer_id) REFERENCES lecturers(id) NOT VALID;
 DO $$

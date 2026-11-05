@@ -1,15 +1,29 @@
 server:
   port: 8080
-
 jwt:
   secret: ${JWT_SECRET}
 
 spring:
+  application:
+    name: edu-hub
   config:
     import: "optional:file:.env[.properties]"
 
-  application:
-    name: edu-hub
+  datasource:
+    url: ${DBMS_CONNECTION}
+    username: ${DBMS_USERNAME}
+    password: ${DBMS_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+
+  flyway:
+    enabled: true
+    locations:
+      - classpath:db/migration
+      # đối với dev cần thêm "- classpath:db/seed" để khởi tạo dữ liệu test local
 
   mail:
     host: smtp.gmail.com
@@ -22,17 +36,6 @@ spring:
       mail.smtp.connectiontimeout: 10000
       mail.smtp.timeout: 10000
       mail.smtp.writetimeout: 10000
-
-  datasource:
-    url: ${DBMS_CONNECTION}
-    username: ${DBMS_USERNAME}
-    password: ${DBMS_PASSWORD}
-    driver-class-name: org.postgresql.Driver
-
-  jpa:
-    hibernate:
-      ddl-auto: none
-    show-sql: false
 
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}  # mặc định dev, prod override bằng env var

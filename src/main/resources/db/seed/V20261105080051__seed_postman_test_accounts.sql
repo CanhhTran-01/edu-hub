@@ -1,7 +1,6 @@
--- Chỉ bật thư mục db/test-seed trong cấu hình database local/test.
--- spring.flyway.locations=classpath:db/migration,classpath:db/test-seed
--- Mật khẩu chung: Postman@123 (lưu BCrypt). Không bắt buộc đổi mật khẩu lần đầu.
--- Không ghi đè tài khoản trùng username; chỉ tạo tài khoản đăng nhập, chưa tạo hồ sơ People.
+-- Tài khoản test chỉ dùng cho môi trường phát triển
+-- Mật khẩu chung: Postman@123 (lưu dạng BCrypt), tạm thời không bắt buộc đổi mật khẩu lần đầu.
+-- Không ghi đè tài khoản trùng username, chỉ tạo tài khoản đăng nhập, chưa tạo hồ sơ People.
 INSERT INTO users (
     username, email, password_hash, role_id, status, is_first_login,
     created_at, updated_at, created_by, updated_by

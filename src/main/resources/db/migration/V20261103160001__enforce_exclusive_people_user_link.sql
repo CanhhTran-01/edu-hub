@@ -12,9 +12,9 @@ BEGIN
     END IF;
 END $$;
 
--- One shared unique key guarantees exclusivity across both tables, including
--- concurrent transactions and transactions using REPEATABLE READ isolation.
--- This is an internal integrity table, not another profile or an audit trail.
+-- Một khóa duy nhất (unique key) dùng chung đảm bảo tính loại trừ lẫn nhau giữa cả hai bảng,
+-- kể cả với các giao dịch chạy đồng thời và các giao dịch dùng mức cô lập REPEATABLE READ.
+-- Đây là bảng nội bộ phục vụ toàn vẹn dữ liệu, không phải một hồ sơ (profile) khác hay nhật ký kiểm toán (audit trail).
 CREATE TABLE people_user_links (
     user_id BIGINT PRIMARY KEY REFERENCES users(id),
     student_id BIGINT UNIQUE REFERENCES students(id) ON DELETE CASCADE,
@@ -29,8 +29,8 @@ SELECT user_id, id FROM students WHERE user_id IS NOT NULL;
 INSERT INTO people_user_links (user_id, lecturer_id)
 SELECT user_id, id FROM lecturers WHERE user_id IS NOT NULL;
 
--- Synchronize assignments in the same transaction as the profile write.
--- Soft-deleting a profile does not release its account for another profile.
+-- Đồng bộ các bản ghi gán (assignments) trong cùng một giao dịch với thao tác ghi hồ sơ.
+-- Việc xóa mềm một hồ sơ không giải phóng tài khoản của nó để gán cho hồ sơ khác.
 CREATE FUNCTION enforce_exclusive_people_user_link() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
     IF TG_OP = 'UPDATE' AND OLD.user_id IS NOT DISTINCT FROM NEW.user_id THEN

@@ -1,5 +1,5 @@
--- Development fixtures for admission import: curriculum owns the canonical major.
--- No students or accounts are created here.
+-- Dữ liệu mẫu cho dev khi import tuyển sinh: ngành học gốc do curriculum quản lý.
+-- File này không tạo sinh viên hay tài khoản.
 DO $$
 BEGIN
     IF (SELECT count(*) FROM majors WHERE major_code = 'CNTT' AND is_deleted = FALSE) <> 1 THEN
@@ -18,10 +18,10 @@ WHERE NOT EXISTS (
 );
 
 INSERT INTO administrative_classes (
-    class_name, major_id, major_name, major_code, cohort_id, training_type,
+    class_name, major_id, cohort_id, training_type,
     min_capacity, max_capacity, created_at, updated_at, created_by, updated_by
 )
-SELECT seed.class_name, major.id, major.major_name, major.major_code, cohort.id, 'CHINH_QUY',
+SELECT seed.class_name, major.id, cohort.id, 'CHINH_QUY',
        2, 50, CURRENT_TIMESTAMP AT TIME ZONE 'UTC', CURRENT_TIMESTAMP AT TIME ZONE 'UTC',
        'admission-seed', 'admission-seed'
 FROM (VALUES ('L01'), ('L02')) AS seed(class_name)

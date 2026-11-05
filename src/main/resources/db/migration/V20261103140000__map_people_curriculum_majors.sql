@@ -1,5 +1,6 @@
--- Scalar reference only: runtime reads go through CurriculumFacade.Majors.
--- Explicit legacy prefixes are approved mappings; temporary numeric IDs are never evidence.
+-- Chỉ là tham chiếu vô hướng (scalar): khi chạy, việc đọc dữ liệu đi qua CurriculumFacade.Majors.
+-- Các tiền tố legacy (cũ) được khai báo tường minh là ánh xạ đã được phê duyệt.
+-- ID số tạm thời không bao giờ được coi là bằng chứng.
 DO $$
 DECLARE unresolved TEXT;
 BEGIN
@@ -17,8 +18,7 @@ BEGIN
 END $$;
 
 UPDATE administrative_classes ac
-SET major_id = m.id, major_code = m.major_code, major_name = m.major_name
-FROM majors m
+SET major_id = m.id, major_code = m.major_code, major_name = m.major_name FROM majors m
 WHERE upper(m.major_code) = CASE upper(trim(ac.major_code))
     WHEN 'CT' THEN 'CNTT' WHEN 'AT' THEN 'ATTT'
     WHEN 'DT' THEN 'DTVT' WHEN 'AI' THEN 'TTNT'

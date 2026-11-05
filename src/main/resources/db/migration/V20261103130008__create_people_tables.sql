@@ -72,6 +72,7 @@ CREATE TABLE lecturers (
     created_by VARCHAR(255),
     updated_by VARCHAR(255),
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+
     CONSTRAINT chk_lecturer_notification_status CHECK (account_notification_status IN ('PENDING', 'SENT', 'FAILED'))
 );
 
@@ -81,31 +82,10 @@ CREATE INDEX idx_students_class_id ON students (class_id);
 CREATE INDEX idx_students_user_id ON students (user_id);
 CREATE INDEX idx_lecturers_faculty_id ON lecturers (faculty_id);
 CREATE INDEX idx_lecturers_user_id ON lecturers (user_id);
+CREATE UNIQUE INDEX uk_lecturers_email_active ON lecturers (lower(trim(email)))WHERE is_deleted = FALSE AND email IS NOT NULL;
+CREATE UNIQUE INDEX uk_lecturers_citizen_id_active ON lecturers (citizen_id)WHERE is_deleted = FALSE AND citizen_id IS NOT NULL;
 
-CREATE UNIQUE INDEX uk_lecturers_email_active ON lecturers (lower(trim(email)))
-    WHERE is_deleted = FALSE AND email IS NOT NULL;
-CREATE UNIQUE INDEX uk_lecturers_citizen_id_active ON lecturers (citizen_id)
-    WHERE is_deleted = FALSE AND citizen_id IS NOT NULL;
-
--- Global official lecturer codes start at GV000001; TEST-GV fixtures do not consume values.
--- PostgreSQL nextval does not reclaim values on rollback or soft deletion.
+-- Mã giảng viên chính thức dùng chung toàn hệ thống, bắt đầu từ GV000001.
+-- Dữ liệu mẫu TEST-GV không tiêu tốn giá trị của sequence này.
+-- nextval của PostgreSQL không thu hồi giá trị khi rollback hoặc khi xóa mềm.
 CREATE SEQUENCE lecturer_code_seq AS BIGINT START WITH 1 NO CYCLE;
-
-
-INSERT INTO faculties (faculty_name, created_at, updated_at, created_by, updated_by)
-VALUES
-    ('Công nghệ thông tin', CURRENT_TIMESTAMP AT TIME ZONE 'UTC', CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'seed', 'seed'),
-    ('Điện tử viễn thông', CURRENT_TIMESTAMP AT TIME ZONE 'UTC', CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'seed', 'seed');
-
-INSERT INTO lecturers (
-    faculty_id, lecturer_code, full_name, email, phone, status,
-    created_at, updated_at, created_by, updated_by
-)
-SELECT faculties.id, seed.lecturer_code, seed.full_name, seed.email, seed.phone, seed.status,
-       CURRENT_TIMESTAMP AT TIME ZONE 'UTC', CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'seed', 'seed'
-FROM (VALUES
-    ('Công nghệ thông tin', 'TEST-GV001', 'Nguyễn Văn An', 'gv001@example.test', '0910000001', 'ACTIVE'),
-    ('Công nghệ thông tin', 'TEST-GV002', 'Trần Thị Bình', 'gv002@example.test', '0910000002', 'INACTIVE'),
-    ('Điện tử viễn thông', 'TEST-GV003', 'Lê Minh Cường', 'gv003@example.test', '0910000003', 'ACTIVE')
-) AS seed(faculty_name, lecturer_code, full_name, email, phone, status)
-JOIN faculties ON faculties.faculty_name = seed.faculty_name;
