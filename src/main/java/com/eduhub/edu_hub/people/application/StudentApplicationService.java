@@ -321,6 +321,53 @@ public class StudentApplicationService {
                 .orElseThrow(() -> new BaseException(ErrorCode.STUDENT_NOT_FOUND));
     }
 
+    @Transactional
+    public StudentResponse deactivate(Long id, String reason, String accessToken) {
+        return changeActivityStatus(id, ActivityStatus.DEACTIVATED, reason, accessToken);
+    }
+
+    @Transactional
+    public StudentResponse activate(Long id, String reason, String accessToken) {
+        return changeActivityStatus(id, ActivityStatus.STUDYING, reason, accessToken);
+    }
+
+    private StudentResponse changeActivityStatus(
+            Long id, ActivityStatus targetStatus, String reason, String accessToken) {
+        String actor = identityFacade.requireAcademicAdmin(accessToken);
+        String normalizedReason = reason == null ? "" : reason.strip();
+        if (normalizedReason.isEmpty() || normalizedReason.length() > 500) {
+            throw new BaseException(ErrorCode.VALIDATION_ERROR);
+        }
+        Student student = studentRepository
+                .findByIdAndDeletedFalse(id)
+                .orElseThrow(() -> new BaseException(ErrorCode.STUDENT_NOT_FOUND));
+        if (student.getActivityStatus() == ActivityStatus.DELETED) {
+            throw new BaseException(ErrorCode.VALIDATION_ERROR);
+        }
+        if (student.getUserId() == null) {
+            throw new BaseException(ErrorCode.USER_NOT_FOUND);
+        }
+        ActivityStatus previousStatus = student.getActivityStatus();
+        if (previousStatus == targetStatus) {
+            return toResponse(student);
+        }
+
+        if (targetStatus == ActivityStatus.DEACTIVATED) {
+            identityFacade.disableUser(student.getUserId());
+        } else {
+            identityFacade.enableUser(student.getUserId());
+        }
+        student.setActivityStatus(targetStatus);
+        Student saved = studentRepository.save(student);
+        audit(
+                targetStatus == ActivityStatus.DEACTIVATED ? "DEACTIVATE_STUDENT" : "ACTIVATE_STUDENT",
+                id.toString(),
+                "studentCode=" + student.getStudentCode() + ",status=" + previousStatus + "->" + targetStatus
+                        + ",reason=" + normalizedReason,
+                actor);
+        return toResponse(saved);
+    }
+
     private StudentResponse toResponse(Student student) {
         return toResponse(student, majorNames(List.of(student)));
     }

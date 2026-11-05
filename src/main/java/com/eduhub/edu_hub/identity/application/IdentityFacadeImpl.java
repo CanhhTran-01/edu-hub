@@ -159,8 +159,22 @@ public class IdentityFacadeImpl implements IdentityFacade {
 
     @Override public void lockUser(Long userId, String reason) { throw new UnsupportedOperationException(); }
     @Override public void unlockUser(Long userId) { throw new UnsupportedOperationException(); }
-    @Override public void disableUser(Long userId) { user(userId).setStatus(UserStatus.DISABLED); }
-    @Override public void enableUser(Long userId) { user(userId).setStatus(UserStatus.ACTIVE); }
+    @Override
+    @Transactional
+    public void disableUser(Long userId) {
+        User account = user(userId);
+        account.setStatus(UserStatus.DISABLED);
+        sessions.findByUser_IdAndRevokedFalse(userId).forEach(session -> session.setRevoked(true));
+    }
+
+    @Override
+    @Transactional
+    public void enableUser(Long userId) {
+        User account = user(userId);
+        account.setStatus(UserStatus.ACTIVE);
+        account.setLockedUntil(null);
+        account.setFailedLoginCount(0);
+    }
     @Override public String resetPassword(Long userId) { throw new UnsupportedOperationException(); }
     @Override public Optional<UserInfoResponse> findById(Long userId) { return users.findById(userId).map(this::response); }
     @Override public Optional<UserInfoResponse> findByUsername(String username) { return users.findByUsernameAndDeletedFalse(username).map(this::response); }

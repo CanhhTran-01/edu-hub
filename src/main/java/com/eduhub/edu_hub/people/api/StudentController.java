@@ -17,6 +17,8 @@ import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -104,4 +106,25 @@ public class StudentController {
             @PathVariable Long id, @Valid @RequestBody UpdateStudentRequest request) {
         return ApiResponse.success(studentService.update(id, request));
     }
+
+    @PostMapping("/{id}/deactivate")
+    public ApiResponse<StudentResponse> deactivate(
+            @PathVariable Long id,
+            @Valid @RequestBody StudentStatusBody body,
+            @RequestHeader("Authorization") String authorization) {
+        return ApiResponse.success(studentService.deactivate(id, body.reason(), token(authorization)));
+    }
+
+    @PostMapping("/{id}/activate")
+    public ApiResponse<StudentResponse> activate(
+            @PathVariable Long id,
+            @Valid @RequestBody StudentStatusBody body,
+            @RequestHeader("Authorization") String authorization) {
+        return ApiResponse.success(studentService.activate(id, body.reason(), token(authorization)));
+    }
+
+    public record StudentStatusBody(
+            @NotBlank(message = "Lý do không được để trống")
+            @Size(max = 500, message = "Lý do không được vượt quá 500 ký tự")
+            String reason) {}
 }

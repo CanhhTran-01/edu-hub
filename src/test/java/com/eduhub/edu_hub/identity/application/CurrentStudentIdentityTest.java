@@ -53,4 +53,29 @@ class CurrentStudentIdentityTest {
         when(tokens.validateAccessToken("token")).thenReturn(new TokenService.TokenClaims(99L, 3L, "CT080101"));
         assertThatThrownBy(() -> facade.requireCurrentStudent("token")).isInstanceOf(BaseException.class);
     }
+
+    @Test void disablingAccountRevokesEveryActiveSession() {
+        RefreshToken second = new RefreshToken();
+        when(users.findById(7L)).thenReturn(Optional.of(user));
+        when(sessions.findByUser_IdAndRevokedFalse(7L)).thenReturn(java.util.List.of(session, second));
+
+        facade.disableUser(7L);
+
+        assertThat(user.getStatus()).isEqualTo(UserStatus.DISABLED);
+        assertThat(session.isRevoked()).isTrue();
+        assertThat(second.isRevoked()).isTrue();
+    }
+
+    @Test void enablingAccountClearsTemporaryLockState() {
+        user.setStatus(UserStatus.DISABLED);
+        user.setFailedLoginCount(5);
+        user.setLockedUntil(LocalDateTime.now(ZoneOffset.UTC).plusMinutes(10));
+        when(users.findById(7L)).thenReturn(Optional.of(user));
+
+        facade.enableUser(7L);
+
+        assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
+        assertThat(user.getFailedLoginCount()).isZero();
+        assertThat(user.getLockedUntil()).isNull();
+    }
 }
