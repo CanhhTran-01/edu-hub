@@ -1,26 +1,24 @@
 package com.eduhub.edu_hub.people.application;
 
-import com.eduhub.edu_hub.curriculum.api.dto.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
+import com.eduhub.edu_hub.curriculum.application.facade.dto.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.domain.model.Major;
-import com.eduhub.edu_hub.identity.application.CreateStudentAccountCommand;
-import com.eduhub.edu_hub.identity.application.CreateStudentAccountResult;
-import com.eduhub.edu_hub.identity.application.IdentityFacade;
-import com.eduhub.edu_hub.people.api.dto.AccountNotificationResponse;
-import com.eduhub.edu_hub.people.api.dto.CreateStudentRequest;
-import com.eduhub.edu_hub.people.api.dto.CreateStudentResponse;
-import com.eduhub.edu_hub.people.api.dto.StudentResponse;
-import com.eduhub.edu_hub.people.api.dto.StudentSearchRequest;
-import com.eduhub.edu_hub.people.api.dto.UpdateStudentRequest;
-import com.eduhub.edu_hub.people.application.admission.StudentCodeGenerator;
+import com.eduhub.edu_hub.identity.application.command.CreateStudentAccountCommand;
+import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
+import com.eduhub.edu_hub.identity.application.result.CreateStudentAccountResult;
+import com.eduhub.edu_hub.people.api.dto.request.CreateStudentRequest;
+import com.eduhub.edu_hub.people.api.dto.request.StudentSearchRequest;
+import com.eduhub.edu_hub.people.api.dto.request.UpdateStudentRequest;
+import com.eduhub.edu_hub.people.api.dto.response.AccountNotificationResponse;
+import com.eduhub.edu_hub.people.api.dto.response.CreateStudentResponse;
+import com.eduhub.edu_hub.people.api.dto.response.StudentResponse;
+import com.eduhub.edu_hub.people.application.code.StudentCodeGenerator;
 import com.eduhub.edu_hub.people.domain.enums.AccountNotificationStatus;
 import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
 import com.eduhub.edu_hub.people.domain.model.Cohort;
 import com.eduhub.edu_hub.people.domain.model.Student;
 import com.eduhub.edu_hub.people.domain.repository.AdministrativeClassRepository;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
-import com.eduhub.edu_hub.shared.audit.AuditLog;
-import com.eduhub.edu_hub.shared.audit.AuditLogRepository;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.BaseException;
@@ -35,15 +33,16 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.TransactionDefinition;
 
 @Service
 @RequiredArgsConstructor
@@ -58,37 +57,32 @@ public class StudentApplicationService {
     private final CurriculumFacade.ReferenceData curriculum;
     private final StudentCodeGenerator studentCodeGenerator;
     private final IdentityFacade identityFacade;
-    private final AuditLogRepository auditLogRepository;
     private final TransactionTemplate transactionTemplate;
 
-    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CreateStudentResponse create(CreateStudentRequest request, String accessToken) {
-        String normalizedActor = identityFacade.requireAcademicAdmin(accessToken);
-        CreatedStudent created = transactionTemplate.execute(status -> createInTransaction(request, normalizedActor));
+        identityFacade.requireAcademicAdmin(accessToken);
+        CreatedStudent created = transactionTemplate.execute(status -> createInTransaction(request));
         if (created == null) {
             throw new BaseException(ErrorCode.UNEXPECTED_ERROR);
         }
 
         CreateStudentAccountResult notification =
                 identityFacade.sendStudentAccountNotification(created.userId(), INITIAL_PASSWORD);
+
         AccountNotificationStatus notificationStatus =
                 notification.emailSent() ? AccountNotificationStatus.SENT : AccountNotificationStatus.FAILED;
-        recordNotificationResult(
-                created.studentId(),
-                created.studentCode(),
-                notificationStatus,
-                notification.emailError(),
-                normalizedActor,
-                "CREATE_STUDENT_ACCOUNT_NOTIFICATION");
+
+        recordNotificationResult(created.studentId(), notificationStatus, notification.emailError());
 
         StudentResponse student = findById(created.studentId());
         return new CreateStudentResponse(
                 student, created.warnings(), notificationStatus.name(), notification.emailError());
     }
 
-    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public AccountNotificationResponse resendAccountNotification(Long studentId, String accessToken) {
-        String normalizedActor = identityFacade.requireAcademicAdmin(accessToken);
+        identityFacade.requireAcademicAdmin(accessToken);
         Student student = studentRepository
                 .findByIdAndDeletedFalse(studentId)
                 .orElseThrow(() -> new BaseException(ErrorCode.STUDENT_NOT_FOUND));
@@ -100,18 +94,12 @@ public class StudentApplicationService {
                 identityFacade.sendStudentAccountNotification(student.getUserId(), INITIAL_PASSWORD);
         AccountNotificationStatus notificationStatus =
                 notification.emailSent() ? AccountNotificationStatus.SENT : AccountNotificationStatus.FAILED;
-        recordNotificationResult(
-                studentId,
-                student.getStudentCode(),
-                notificationStatus,
-                notification.emailError(),
-                normalizedActor,
-                "RESEND_STUDENT_ACCOUNT_NOTIFICATION");
+        recordNotificationResult(studentId, notificationStatus, notification.emailError());
         return new AccountNotificationResponse(
                 studentId, student.getStudentCode(), notificationStatus.name(), notification.emailError());
     }
 
-    private CreatedStudent createInTransaction(CreateStudentRequest request, String actor) {
+    private CreatedStudent createInTransaction(CreateStudentRequest request) {
         String fullName = request.getFullName().trim();
         String email = request.getEmail().trim().toLowerCase(Locale.ROOT);
         String citizenId = normalizeCitizenId(request.getCitizenId());
@@ -168,13 +156,8 @@ public class StudentApplicationService {
         if (possibleDuplicate) {
             warnings.add("Có hồ sơ khác trùng họ tên và ngày sinh; cần kiểm tra thủ công");
         }
-        audit(
-                "CREATE_STUDENT",
-                saved.getId().toString(),
-                "studentCode=" + studentCode + ",classId=" + administrativeClass.getId() + ",reason=" + reason
-                        + ",warnings=" + warnings,
-                actor);
-        return new CreatedStudent(saved.getId(), userId, studentCode, List.copyOf(warnings));
+        // TODO(AUDIT_LOG): Bổ sung lại nhật ký tạo sinh viên sau.
+        return new CreatedStudent(saved.getId(), userId, List.copyOf(warnings));
     }
 
     private void validateClassScope(CreateStudentRequest request, AdministrativeClass administrativeClass) {
@@ -194,15 +177,13 @@ public class StudentApplicationService {
         return normalized.isBlank() ? null : normalized;
     }
 
-    private void recordNotificationResult(
-            Long studentId,
-            String studentCode,
-            AccountNotificationStatus status,
-            String error,
-            String actor,
-            String action) {
-        TransactionTemplate updateTemplate = new TransactionTemplate(transactionTemplate.getTransactionManager());
+    private void recordNotificationResult(Long studentId, AccountNotificationStatus status, String error) {
+
+        TransactionTemplate updateTemplate =
+                new TransactionTemplate(Objects.requireNonNull(transactionTemplate.getTransactionManager()));
+
         updateTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
         updateTemplate.executeWithoutResult(transactionStatus -> {
             Student student = studentRepository
                     .findByIdAndDeletedFalse(studentId)
@@ -210,25 +191,12 @@ public class StudentApplicationService {
             student.setAccountNotificationStatus(status);
             student.setAccountNotificationError(error);
             studentRepository.save(student);
-            audit(
-                    action,
-                    studentId.toString(),
-                    "studentCode=" + studentCode + ",status=" + status + ",error=" + error,
-                    actor);
+
+            // TODO(AUDIT_LOG): Bổ sung lại nhật ký gửi/gửi lại thông báo tài khoản sinh viên sau.
         });
     }
 
-    private void audit(String action, String entityId, String details, String actor) {
-        AuditLog log = new AuditLog();
-        log.setActor(actor);
-        log.setAction(action);
-        log.setEntityType("STUDENT");
-        log.setEntityId(entityId);
-        log.setDetails(details);
-        auditLogRepository.save(log);
-    }
-
-    private record CreatedStudent(Long studentId, Long userId, String studentCode, List<String> warnings) {}
+    private record CreatedStudent(Long studentId, Long userId, List<String> warnings) {}
 
     @Transactional
     public StudentResponse update(Long id, UpdateStudentRequest request) {

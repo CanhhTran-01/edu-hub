@@ -4,12 +4,15 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-import com.eduhub.edu_hub.curriculum.api.dto.SubjectSimpleResponse;
+import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.curriculum.domain.model.Subject;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.domain.model.Lecturer;
-import com.eduhub.edu_hub.scheduling.api.dto.*;
+import com.eduhub.edu_hub.scheduling.api.dto.request.CreateModuleClassesRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.CreateModuleClassRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.SubjectClassesRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.response.ModuleClassResponse;
 import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassOpeningException;
 import com.eduhub.edu_hub.scheduling.application.port.AcademicPlanningDataSource;
 import com.eduhub.edu_hub.scheduling.application.port.ModuleClassEnrollmentQuery;
@@ -24,13 +27,13 @@ import jakarta.persistence.EntityManager;
 import java.time.*;
 import java.util.*;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.Mock;
 
 @ExtendWith(MockitoExtension.class)
 class ModuleClassApplicationServiceTest {

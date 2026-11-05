@@ -2,7 +2,7 @@ package com.eduhub.edu_hub.scheduling.application;
 
 import static org.assertj.core.api.Assertions.*;
 
-import com.eduhub.edu_hub.curriculum.api.dto.CurriculumOpeningSubjectResponse;
+import com.eduhub.edu_hub.curriculum.application.facade.dto.CurriculumOpeningSubjectResponse;
 import com.eduhub.edu_hub.scheduling.application.port.PlanningSnapshot;
 import com.eduhub.edu_hub.scheduling.application.port.PlanningSnapshot.*;
 import com.eduhub.edu_hub.scheduling.infrastructure.PlanningTestData;

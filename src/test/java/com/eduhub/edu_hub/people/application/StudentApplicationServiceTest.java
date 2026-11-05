@@ -4,10 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-import com.eduhub.edu_hub.curriculum.api.dto.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
+import com.eduhub.edu_hub.curriculum.application.facade.dto.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.domain.model.Major;
-import com.eduhub.edu_hub.people.api.dto.UpdateStudentRequest;
+import com.eduhub.edu_hub.people.api.dto.request.UpdateStudentRequest;
 import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
 import com.eduhub.edu_hub.people.domain.model.Cohort;
 import com.eduhub.edu_hub.people.domain.model.Student;
@@ -17,11 +17,11 @@ import com.eduhub.edu_hub.shared.enums.TrainingType;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
-import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.Mock;
 
 @ExtendWith(MockitoExtension.class)
 class StudentApplicationServiceTest {

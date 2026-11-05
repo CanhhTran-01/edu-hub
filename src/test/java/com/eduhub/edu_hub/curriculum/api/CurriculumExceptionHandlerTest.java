@@ -13,13 +13,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.eduhub.edu_hub.curriculum.api.controller.SubjectController;
-import com.eduhub.edu_hub.curriculum.api.dto.SetPrerequisiteRequest;
-import com.eduhub.edu_hub.curriculum.api.dto.SubjectActionRequest;
-import com.eduhub.edu_hub.curriculum.api.dto.SubjectSimpleResponse;
+import com.eduhub.edu_hub.curriculum.api.dto.request.SetPrerequisiteRequest;
+import com.eduhub.edu_hub.curriculum.api.dto.request.SubjectActionRequest;
+import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.api.exception.CurriculumExceptionHandler;
-import com.eduhub.edu_hub.curriculum.application.SubjectApplicationService;
 import com.eduhub.edu_hub.curriculum.application.exception.PrerequisiteCycleException;
 import com.eduhub.edu_hub.curriculum.application.exception.SubjectHasDependentsException;
+import com.eduhub.edu_hub.curriculum.application.SubjectApplicationService;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;

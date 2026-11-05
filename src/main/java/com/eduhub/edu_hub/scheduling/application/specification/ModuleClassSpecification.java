@@ -1,6 +1,6 @@
 package com.eduhub.edu_hub.scheduling.application.specification;
 
-import com.eduhub.edu_hub.scheduling.api.dto.ModuleClassSearchRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.ModuleClassSearchRequest;
 import com.eduhub.edu_hub.scheduling.domain.model.ModuleClass;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;

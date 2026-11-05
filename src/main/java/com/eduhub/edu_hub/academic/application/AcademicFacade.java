@@ -1,6 +1,6 @@
 package com.eduhub.edu_hub.academic.application;
 
-import com.eduhub.edu_hub.academic.api.dto.StudentAcademicSummaryResponse;
+import com.eduhub.edu_hub.academic.application.facade.dto.StudentAcademicSummaryResponse;
 import java.math.BigDecimal;
 
 public interface AcademicFacade {

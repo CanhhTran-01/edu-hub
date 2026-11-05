@@ -2,7 +2,7 @@ package com.eduhub.edu_hub.scheduling.infrastructure;
 
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.enrollment.application.EnrollmentFacade;
-import com.eduhub.edu_hub.people.api.dto.StudentPlanningResponse;
+import com.eduhub.edu_hub.people.application.facade.dto.StudentPlanningResponse;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.scheduling.application.port.AcademicPlanningDataSource;
 import com.eduhub.edu_hub.scheduling.application.port.PlanningSnapshot;

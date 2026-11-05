@@ -1,12 +1,17 @@
 package com.eduhub.edu_hub.scheduling.application;
 
-import com.eduhub.edu_hub.curriculum.api.dto.SubjectSimpleResponse;
+import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.curriculum.domain.model.Subject;
-import com.eduhub.edu_hub.people.api.dto.LecturerResponse;
+import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.domain.model.Lecturer;
-import com.eduhub.edu_hub.scheduling.api.dto.*;
+import com.eduhub.edu_hub.scheduling.api.dto.request.CancelModuleClassRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.CreateModuleClassesRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.ModuleClassSearchRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.UpdateModuleClassRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.response.ModuleClassResponse;
+import com.eduhub.edu_hub.scheduling.api.dto.response.OpeningSubjectResponse;
 import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassConflictException;
 import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassOpeningException;
 import com.eduhub.edu_hub.scheduling.application.port.AcademicPlanningDataSource;

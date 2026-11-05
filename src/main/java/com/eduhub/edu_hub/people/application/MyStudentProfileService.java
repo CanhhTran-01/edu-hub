@@ -1,14 +1,11 @@
 package com.eduhub.edu_hub.people.application;
 
-import com.eduhub.edu_hub.identity.application.IdentityFacade;
-import com.eduhub.edu_hub.people.api.dto.StudentResponse;
-import com.eduhub.edu_hub.people.api.dto.UpdateMyStudentProfileRequest;
+import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
+import com.eduhub.edu_hub.people.api.dto.request.UpdateMyStudentProfileRequest;
+import com.eduhub.edu_hub.people.api.dto.response.StudentResponse;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
-import com.eduhub.edu_hub.shared.audit.AuditLog;
-import com.eduhub.edu_hub.shared.audit.AuditLogRepository;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
-import java.util.ArrayList;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,21 +18,25 @@ public class MyStudentProfileService {
     private final IdentityFacade identity;
     private final StudentRepository students;
     private final StudentApplicationService studentQueries;
-    private final AuditLogRepository audits;
 
     public StudentResponse get(String token) {
+
         var current = identity.requireCurrentStudent(token);
+
         var student = students.findByUserIdAndDeletedFalse(current.getId())
                 .orElseThrow(() -> new BaseException(ErrorCode.STUDENT_NOT_FOUND));
+
         return studentQueries.findById(student.getId());
     }
 
     @Transactional
     public StudentResponse update(String token, UpdateMyStudentProfileRequest request) {
+
         var current = identity.requireCurrentStudent(token);
+
         var student = students.findMyProfileForUpdate(current.getId())
                 .orElseThrow(() -> new BaseException(ErrorCode.STUDENT_NOT_FOUND));
-        var changes = new ArrayList<String>();
+        boolean changed = false;
         if (request.hasTargetGpa()) {
             var value = request.getTargetGpa();
             if (value != null && (value.signum() < 0 || value.compareTo(java.math.BigDecimal.valueOf(4)) > 0))
@@ -43,23 +44,20 @@ public class MyStudentProfileService {
             boolean same = value == null ? student.getTargetGpa() == null
                     : student.getTargetGpa() != null && value.compareTo(student.getTargetGpa()) == 0;
             if (!same) {
-                changes.add("targetGpa: " + student.getTargetGpa() + " -> " + value);
+                changed = true;
                 student.setTargetGpa(value);
             }
         }
         if (request.hasPhone()) {
             String phone = request.getPhone() == null ? null : request.getPhone().trim();
             if (!Objects.equals(phone, student.getPhone())) {
-                changes.add("phone: " + student.getPhone() + " -> " + phone);
+                changed = true;
                 student.setPhone(phone);
             }
         }
-        if (!changes.isEmpty()) {
+        if (changed) {
             students.save(student);
-            AuditLog audit = new AuditLog();
-            audit.setActor(current.getUsername()); audit.setAction("UPDATE_MY_STUDENT_PROFILE");
-            audit.setEntityType("STUDENT"); audit.setEntityId(student.getId().toString());
-            audit.setDetails(String.join("; ", changes)); audits.save(audit);
+            // TODO(AUDIT_LOG): Bổ sung lại nhật ký cập nhật hồ sơ cá nhân sinh viên sau.
         }
         return studentQueries.findById(student.getId());
     }

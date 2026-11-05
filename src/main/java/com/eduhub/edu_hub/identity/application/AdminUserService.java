@@ -1,18 +1,19 @@
 package com.eduhub.edu_hub.identity.application;
 
-import com.eduhub.edu_hub.identity.api.dto.UserInfoResponse;
+import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.model.User;
 import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
+import com.eduhub.edu_hub.identity.infrastructure.mail.TemporaryPasswordMailService;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.enums.RoleName;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.mail.MailException;

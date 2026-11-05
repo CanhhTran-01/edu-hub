@@ -1,7 +1,7 @@
 package com.eduhub.edu_hub.scheduling.application;
 
-import com.eduhub.edu_hub.curriculum.api.dto.CurriculumOpeningSubjectResponse;
-import com.eduhub.edu_hub.scheduling.api.dto.OpeningSubjectResponse;
+import com.eduhub.edu_hub.curriculum.application.facade.dto.CurriculumOpeningSubjectResponse;
+import com.eduhub.edu_hub.scheduling.api.dto.response.OpeningSubjectResponse;
 import com.eduhub.edu_hub.scheduling.application.port.PlanningSnapshot;
 import com.eduhub.edu_hub.scheduling.application.port.PlanningSnapshot.Attempt;
 import com.eduhub.edu_hub.scheduling.application.port.PlanningSnapshot.Outcome;

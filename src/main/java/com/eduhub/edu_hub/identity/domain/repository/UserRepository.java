@@ -1,5 +1,6 @@
 package com.eduhub.edu_hub.identity.domain.repository;
 
+import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.model.User;
 import jakarta.persistence.LockModeType;
 import java.util.Optional;
@@ -25,6 +26,5 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @EntityGraph(attributePaths = "role")
     Page<User> findByDeletedFalseAndUsernameContainingIgnoreCase(String username, Pageable pageable);
 
-    long countByDeletedFalseAndStatusAndRole_RoleName(
-            com.eduhub.edu_hub.identity.domain.enums.UserStatus status, String roleName);
+    long countByDeletedFalseAndStatusAndRole_RoleName(UserStatus status, String roleName);
 }

@@ -1,6 +1,6 @@
 package com.eduhub.edu_hub.scheduling.application.specification;
 
-import com.eduhub.edu_hub.scheduling.api.dto.RoomSearchRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.RoomSearchRequest;
 import com.eduhub.edu_hub.scheduling.domain.model.Room;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;

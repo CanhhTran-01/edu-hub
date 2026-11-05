@@ -1,6 +1,11 @@
 package com.eduhub.edu_hub.curriculum.api.controller;
 
-import com.eduhub.edu_hub.curriculum.api.dto.*;
+import com.eduhub.edu_hub.curriculum.api.dto.request.CreateSubjectRequest;
+import com.eduhub.edu_hub.curriculum.api.dto.request.SetPrerequisiteRequest;
+import com.eduhub.edu_hub.curriculum.api.dto.request.SubjectActionRequest;
+import com.eduhub.edu_hub.curriculum.api.dto.request.SubjectSearchRequest;
+import com.eduhub.edu_hub.curriculum.api.dto.request.UpdateSubjectRequest;
+import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectResponse;
 import com.eduhub.edu_hub.curriculum.application.SubjectApplicationService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.PageResponse;

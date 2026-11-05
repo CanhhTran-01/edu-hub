@@ -1,7 +1,7 @@
 package com.eduhub.edu_hub.people.application;
 
-import com.eduhub.edu_hub.people.api.dto.LecturerResponse;
-import com.eduhub.edu_hub.people.api.dto.LecturerSearchRequest;
+import com.eduhub.edu_hub.people.api.dto.request.LecturerSearchRequest;
+import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
 import com.eduhub.edu_hub.people.domain.enums.LecturerStatus;
 import com.eduhub.edu_hub.people.domain.model.Faculty;
 import com.eduhub.edu_hub.people.domain.model.Lecturer;

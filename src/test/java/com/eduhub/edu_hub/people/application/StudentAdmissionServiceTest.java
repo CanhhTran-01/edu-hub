@@ -11,32 +11,30 @@ import static org.mockito.Mockito.doAnswer;
 
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.curriculum.domain.model.Major;
-import com.eduhub.edu_hub.identity.application.CreateStudentAccountResult;
-import com.eduhub.edu_hub.identity.application.IdentityFacade;
-import com.eduhub.edu_hub.people.api.dto.AdmissionConfirmRequest;
+import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
+import com.eduhub.edu_hub.identity.application.result.CreateStudentAccountResult;
+import com.eduhub.edu_hub.people.api.dto.request.AdmissionConfirmRequest;
 import com.eduhub.edu_hub.people.application.admission.AdmissionBatchState;
 import com.eduhub.edu_hub.people.application.admission.AdmissionCandidate;
 import com.eduhub.edu_hub.people.application.admission.AdmissionPreviewStore;
 import com.eduhub.edu_hub.people.application.admission.ClassAssignmentStrategy;
 import com.eduhub.edu_hub.people.application.admission.StudentAdmissionSpreadsheetParser;
-import com.eduhub.edu_hub.people.application.admission.StudentCodeGenerator;
+import com.eduhub.edu_hub.people.application.code.StudentCodeGenerator;
 import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
 import com.eduhub.edu_hub.people.domain.model.Student;
 import com.eduhub.edu_hub.people.domain.repository.AdministrativeClassRepository;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
-import com.eduhub.edu_hub.shared.audit.AuditLogRepository;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
+import org.junit.jupiter.api.Test;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.Mock;
 import org.springframework.mock.web.MockMultipartFile;
 
 @ExtendWith(MockitoExtension.class)
@@ -47,7 +45,6 @@ class StudentAdmissionServiceTest {
     @Mock AdministrativeClassRepository classes;
     @Mock StudentCodeGenerator generator;
     @Mock IdentityFacade identity;
-    @Mock AuditLogRepository audit;
     @Mock CurriculumFacade.Majors majors;
     private AdmissionPreviewStore store;
     private StudentAdmissionService service;
@@ -56,7 +53,7 @@ class StudentAdmissionServiceTest {
     void setUp() {
         store = new AdmissionPreviewStore();
         service = new StudentAdmissionService(parser, strategy, store, students, classes, generator, identity,
-                majors, audit);
+                majors);
     }
 
     @Test
@@ -110,7 +107,7 @@ class StudentAdmissionServiceTest {
         var cohort = new com.eduhub.edu_hub.people.domain.model.Cohort(); cohort.setCohortCode("K20"); target.setCohort(cohort);
         target.setTrainingType(com.eduhub.edu_hub.shared.enums.TrainingType.CHINH_QUY);
         when(majors.findMajorByCode(any())).thenReturn(Optional.of(
-                new com.eduhub.edu_hub.curriculum.api.dto.MajorResponse(42L, "ATTT", "An toan thong tin")));
+                new com.eduhub.edu_hub.curriculum.application.facade.dto.MajorResponse(42L, "ATTT", "An toan thong tin")));
         when(classes.findByMajor_IdAndCohort_CohortCodeIgnoreCaseAndTrainingTypeAndDeletedFalse(
                 any(), any(), any())).thenReturn(List.of(target));
         when(students.findAllByAdministrativeClass_IdAndDeletedFalse(1L)).thenReturn(List.of());
@@ -127,7 +124,6 @@ class StudentAdmissionServiceTest {
         assertThat(result.errors()).anyMatch(error -> error.reason().contains("Trùng mã hồ sơ"));
         verify(students, never()).save(any());
         verify(identity, never()).createStudentAccount(any());
-        verify(audit, never()).save(any());
     }
 
     private AdmissionBatchState batch() {

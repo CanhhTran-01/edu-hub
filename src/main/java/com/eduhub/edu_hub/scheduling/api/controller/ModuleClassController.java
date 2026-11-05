@@ -1,6 +1,11 @@
 package com.eduhub.edu_hub.scheduling.api.controller;
 
-import com.eduhub.edu_hub.scheduling.api.dto.*;
+import com.eduhub.edu_hub.scheduling.api.dto.request.CancelModuleClassRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.CreateModuleClassesRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.ModuleClassSearchRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.UpdateModuleClassRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.response.ModuleClassResponse;
+import com.eduhub.edu_hub.scheduling.api.dto.response.OpeningSubjectResponse;
 import com.eduhub.edu_hub.scheduling.application.ModuleClassApplicationService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.PageResponse;

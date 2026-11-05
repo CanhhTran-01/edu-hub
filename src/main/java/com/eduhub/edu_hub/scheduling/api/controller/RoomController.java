@@ -1,6 +1,10 @@
 package com.eduhub.edu_hub.scheduling.api.controller;
 
-import com.eduhub.edu_hub.scheduling.api.dto.*;
+import com.eduhub.edu_hub.scheduling.api.dto.request.ChangeRoomStatusRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.CreateRoomRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.RoomSearchRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.UpdateRoomRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.response.RoomResponse;
 import com.eduhub.edu_hub.scheduling.application.RoomApplicationService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.PageResponse;

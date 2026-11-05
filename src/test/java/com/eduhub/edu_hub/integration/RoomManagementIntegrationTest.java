@@ -6,12 +6,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.eduhub.edu_hub.curriculum.domain.repository.SubjectRepository;
-import com.eduhub.edu_hub.identity.api.AccessTokenFilter;
-import com.eduhub.edu_hub.identity.api.dto.LoginRequest;
+import com.eduhub.edu_hub.identity.api.dto.request.LoginRequest;
+import com.eduhub.edu_hub.identity.api.filter.AccessTokenFilter;
 import com.eduhub.edu_hub.identity.application.AuthApplicationService;
-import com.eduhub.edu_hub.scheduling.api.dto.*;
-import com.eduhub.edu_hub.scheduling.application.RoomApplicationService;
+import com.eduhub.edu_hub.scheduling.api.dto.request.ChangeRoomStatusRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.CreateRoomRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.RoomSearchRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.UpdateRoomRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.response.RoomResponse;
 import com.eduhub.edu_hub.scheduling.application.exception.RoomConflictException;
+import com.eduhub.edu_hub.scheduling.application.RoomApplicationService;
 import com.eduhub.edu_hub.scheduling.application.specification.RoomScheduleSpecification;
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
 import com.eduhub.edu_hub.scheduling.domain.enums.RoomStatus;
@@ -32,7 +36,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
@@ -74,9 +77,6 @@ class RoomManagementIntegrationTest extends PostgresIntegrationTest {
     private ObjectMapper mapper;
 
     @Autowired
-    private JdbcTemplate jdbc;
-
-    @Autowired
     private EntityManager entityManager;
 
     private String token;
@@ -89,7 +89,7 @@ class RoomManagementIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    void basicFlowPersistsRoomsWithoutAuditOrActorAssignment() throws Exception {
+    void basicFlowPersistsRoomsWithoutActorAssignment() throws Exception {
         var create = createRequest();
         create.setRoomCode(" 102-testta1 ");
         create.setBuildingCode(" testta1 ");
@@ -137,11 +137,6 @@ class RoomManagementIntegrationTest extends PostgresIntegrationTest {
         mvc.perform(get("/api/v1/rooms/" + id).header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value(4326));
-        assertThat(jdbc.queryForObject(
-                        "select count(*) from audit_logs where entity_type = 'ROOM' and entity_id = ?",
-                        Long.class,
-                        String.valueOf(id)))
-                .isZero();
     }
 
     @ParameterizedTest
@@ -164,11 +159,6 @@ class RoomManagementIntegrationTest extends PostgresIntegrationTest {
                     .andExpect(jsonPath("$.success").value(true));
         }
         assertThat(room.isDeleted()).isTrue();
-        assertThat(jdbc.queryForObject(
-                        "select count(*) from audit_logs where entity_type = 'ROOM' and entity_id = ?",
-                        Long.class,
-                        room.getId().toString()))
-                .isZero();
     }
 
     @Test

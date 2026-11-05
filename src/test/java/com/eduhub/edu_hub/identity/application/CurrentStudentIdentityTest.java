@@ -1,7 +1,11 @@
 package com.eduhub.edu_hub.identity.application;
 
+import com.eduhub.edu_hub.identity.infrastructure.mail.TemporaryPasswordMailService;
+
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
+
+import com.eduhub.edu_hub.identity.application.facade.impl.IdentityFacadeImpl;
 import com.eduhub.edu_hub.identity.domain.model.*;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.repository.*;

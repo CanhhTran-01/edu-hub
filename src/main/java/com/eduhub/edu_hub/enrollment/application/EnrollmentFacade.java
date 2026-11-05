@@ -1,8 +1,8 @@
 package com.eduhub.edu_hub.enrollment.application;
 
-import com.eduhub.edu_hub.enrollment.api.dto.EnrollmentResponse;
-import com.eduhub.edu_hub.enrollment.api.dto.LearningHistoryResponse;
-import com.eduhub.edu_hub.enrollment.api.dto.ModuleClassUsageResponse;
+import com.eduhub.edu_hub.enrollment.api.dto.response.EnrollmentResponse;
+import com.eduhub.edu_hub.enrollment.application.facade.dto.LearningHistoryResponse;
+import com.eduhub.edu_hub.enrollment.application.facade.dto.ModuleClassUsageResponse;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;

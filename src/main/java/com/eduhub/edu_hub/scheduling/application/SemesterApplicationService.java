@@ -1,9 +1,9 @@
 package com.eduhub.edu_hub.scheduling.application;
 
-import com.eduhub.edu_hub.scheduling.api.dto.CreateSemesterRequest;
-import com.eduhub.edu_hub.scheduling.api.dto.SemesterResponse;
-import com.eduhub.edu_hub.scheduling.api.dto.SemesterSearchRequest;
-import com.eduhub.edu_hub.scheduling.api.dto.UpdateSemesterRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.CreateSemesterRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.SemesterSearchRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.UpdateSemesterRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.response.SemesterResponse;
 import com.eduhub.edu_hub.scheduling.application.exception.SemesterConflictException;
 import com.eduhub.edu_hub.scheduling.application.specification.SemesterSpecification;
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;

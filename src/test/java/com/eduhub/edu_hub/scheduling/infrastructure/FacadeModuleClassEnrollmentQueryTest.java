@@ -3,8 +3,8 @@ package com.eduhub.edu_hub.scheduling.infrastructure;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import com.eduhub.edu_hub.enrollment.api.dto.ModuleClassUsageResponse;
 import com.eduhub.edu_hub.enrollment.application.EnrollmentFacade;
+import com.eduhub.edu_hub.enrollment.application.facade.dto.ModuleClassUsageResponse;
 import com.eduhub.edu_hub.scheduling.application.port.ModuleClassEnrollmentQuery;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;

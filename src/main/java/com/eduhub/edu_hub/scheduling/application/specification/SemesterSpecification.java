@@ -1,6 +1,6 @@
 package com.eduhub.edu_hub.scheduling.application.specification;
 
-import com.eduhub.edu_hub.scheduling.api.dto.SemesterSearchRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.SemesterSearchRequest;
 import com.eduhub.edu_hub.scheduling.domain.model.Semester;
 import jakarta.persistence.criteria.Predicate;
 import java.time.LocalDate;

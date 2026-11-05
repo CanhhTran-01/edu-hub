@@ -1,7 +1,7 @@
 package com.eduhub.edu_hub.curriculum.application;
 
-import com.eduhub.edu_hub.curriculum.api.dto.MajorResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
+import com.eduhub.edu_hub.curriculum.application.facade.dto.MajorResponse;
 import com.eduhub.edu_hub.curriculum.domain.repository.MajorRepository;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;

@@ -1,12 +1,12 @@
 package com.eduhub.edu_hub.people.application.admission;
 
-import com.eduhub.edu_hub.people.api.dto.AdmissionErrorResponse;
-import java.io.IOException;
+import com.eduhub.edu_hub.people.api.dto.response.AdmissionErrorResponse;
 import java.io.InputStream;
+import java.io.IOException;
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;

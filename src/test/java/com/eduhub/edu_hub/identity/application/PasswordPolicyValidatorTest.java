@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.eduhub.edu_hub.identity.application.exception.PasswordValidationException;
 import org.junit.jupiter.api.Test;
 
 class PasswordPolicyValidatorTest {

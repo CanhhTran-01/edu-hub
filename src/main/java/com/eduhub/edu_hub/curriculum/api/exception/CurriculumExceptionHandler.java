@@ -1,7 +1,7 @@
 package com.eduhub.edu_hub.curriculum.api.exception;
 
 import com.eduhub.edu_hub.curriculum.api.controller.SubjectController;
-import com.eduhub.edu_hub.curriculum.api.dto.SubjectSimpleResponse;
+import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.exception.PrerequisiteCycleException;
 import com.eduhub.edu_hub.curriculum.application.exception.SubjectHasDependentsException;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
@@ -9,8 +9,8 @@ import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.stream.Collectors;
-import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.core.Ordered;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;

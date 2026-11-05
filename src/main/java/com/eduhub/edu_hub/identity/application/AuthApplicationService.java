@@ -1,9 +1,9 @@
 package com.eduhub.edu_hub.identity.application;
 
-import com.eduhub.edu_hub.identity.api.dto.ChangePasswordRequest;
-import com.eduhub.edu_hub.identity.api.dto.LoginRequest;
-import com.eduhub.edu_hub.identity.api.dto.LoginResponse;
-import com.eduhub.edu_hub.identity.api.dto.UserInfoResponse;
+import com.eduhub.edu_hub.identity.api.dto.request.ChangePasswordRequest;
+import com.eduhub.edu_hub.identity.api.dto.request.LoginRequest;
+import com.eduhub.edu_hub.identity.api.dto.response.LoginResponse;
+import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.model.RefreshToken;
 import com.eduhub.edu_hub.identity.domain.model.User;

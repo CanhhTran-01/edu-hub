@@ -1,9 +1,9 @@
 package com.eduhub.edu_hub.people.application.facade.impl;
 
-import com.eduhub.edu_hub.people.api.dto.LecturerResponse;
-import com.eduhub.edu_hub.people.api.dto.StudentPlanningResponse;
-import com.eduhub.edu_hub.people.application.LecturerApplicationService;
+import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
+import com.eduhub.edu_hub.people.application.facade.dto.StudentPlanningResponse;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
+import com.eduhub.edu_hub.people.application.LecturerApplicationService;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
 import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import java.util.List;

@@ -1,0 +1,16 @@
+package com.eduhub.edu_hub.identity.api.dto.response;
+
+import lombok.Builder;
+import lombok.Data;
+
+@Data
+@Builder
+public class UserInfoResponse {
+    private Long id;
+    private String username;
+    private String email;
+    private String role;
+    private String fullName;
+    private boolean isFirstLogin;
+    private String status;
+}

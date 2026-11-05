@@ -23,16 +23,20 @@ public class TokenService {
     private final ObjectMapper objectMapper;
 
     public TokenService(@Value("${jwt.secret}") String encodedSigningKey, ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
         this.signingKey = Base64.getDecoder().decode(encodedSigningKey);
+
         if (signingKey.length < 32) {
             throw new IllegalArgumentException("JWT_SECRET must contain at least 32 random bytes (Base64)");
         }
-        this.objectMapper = objectMapper;
     }
 
     public String accessToken(User user, Long sessionId, Instant issuedAt, Instant expiresAt) {
         try {
-            String header = encode(objectMapper.writeValueAsBytes(Map.of("alg", "HS256", "typ", "JWT")));
+            String header = encode(objectMapper.writeValueAsBytes(Map.of(
+                    "alg", "HS256",
+                    "typ", "JWT")));
+
             String payload = encode(objectMapper.writeValueAsBytes(Map.of(
                     "sub", user.getUsername(),
                     "uid", user.getId(),
@@ -40,10 +44,14 @@ public class TokenService {
                     "role", user.getRole().getRoleName(),
                     "iat", issuedAt.getEpochSecond(),
                     "exp", expiresAt.getEpochSecond())));
+
             String signedPart = header + "." + payload;
+
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(signingKey, "HmacSHA256"));
+
             return signedPart + "." + encode(mac.doFinal(signedPart.getBytes(StandardCharsets.US_ASCII)));
+
         } catch (Exception exception) {
             throw new IllegalStateException("Unable to sign access token", exception);
         }
@@ -52,24 +60,32 @@ public class TokenService {
     public TokenClaims validateAccessToken(String token) {
         try {
             String[] parts = token.split("\\.", -1);
+
             if (parts.length != 3) return null;
+
             String signedPart = parts[0] + "." + parts[1];
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(signingKey, "HmacSHA256"));
+
             if (!MessageDigest.isEqual(
                     mac.doFinal(signedPart.getBytes(StandardCharsets.US_ASCII)),
                     Base64.getUrlDecoder().decode(parts[2]))) return null;
+
             JsonNode header = objectMapper.readTree(Base64.getUrlDecoder().decode(parts[0]));
+
             if (!"HS256".equals(header.path("alg").asText())
                     || !"JWT".equals(header.path("typ").asText())) {
                 return null;
             }
+
             JsonNode claims = objectMapper.readTree(Base64.getUrlDecoder().decode(parts[1]));
             long expiry = claims.path("exp").asLong(0);
             long sessionId = claims.path("sid").asLong(0);
             long userId = claims.path("uid").asLong(0);
+
             if (expiry <= Instant.now().getEpochSecond() || sessionId <= 0 || userId <= 0) return null;
-            return new TokenClaims(userId, sessionId, claims.path("sub").asText());
+
+            return new TokenClaims(userId, sessionId, claims.path("sub").asString());
         } catch (Exception exception) {
             return null;
         }

@@ -10,20 +10,19 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.eduhub.edu_hub.curriculum.api.dto.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
+import com.eduhub.edu_hub.curriculum.application.facade.dto.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.domain.model.Major;
-import com.eduhub.edu_hub.identity.application.CreateStudentAccountResult;
-import com.eduhub.edu_hub.identity.application.IdentityFacade;
-import com.eduhub.edu_hub.people.api.dto.CreateStudentRequest;
-import com.eduhub.edu_hub.people.application.admission.StudentCodeGenerator;
+import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
+import com.eduhub.edu_hub.identity.application.result.CreateStudentAccountResult;
+import com.eduhub.edu_hub.people.api.dto.request.CreateStudentRequest;
+import com.eduhub.edu_hub.people.application.code.StudentCodeGenerator;
 import com.eduhub.edu_hub.people.domain.enums.AccountNotificationStatus;
 import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
 import com.eduhub.edu_hub.people.domain.model.Cohort;
 import com.eduhub.edu_hub.people.domain.model.Student;
 import com.eduhub.edu_hub.people.domain.repository.AdministrativeClassRepository;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
-import com.eduhub.edu_hub.shared.audit.AuditLogRepository;
 import com.eduhub.edu_hub.shared.enums.TrainingType;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
@@ -33,10 +32,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
+import org.junit.jupiter.api.Test;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.Mock;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -58,9 +57,6 @@ class StudentCreationServiceTest {
     @Mock
     IdentityFacade identity;
 
-    @Mock
-    AuditLogRepository audit;
-
     private StudentApplicationService service;
     private AdministrativeClass administrativeClass;
 
@@ -71,7 +67,7 @@ class StudentCreationServiceTest {
         var majors = mock(CurriculumFacade.Majors.class);
         org.mockito.Mockito.lenient()
                 .when(majors.requireMajor(any()))
-                .thenReturn(new com.eduhub.edu_hub.curriculum.api.dto.MajorResponse(1L, "CNTT", "CNTT"));
+                .thenReturn(new com.eduhub.edu_hub.curriculum.application.facade.dto.MajorResponse(1L, "CNTT", "CNTT"));
         service = new StudentApplicationService(
                 students,
                 majors,
@@ -79,7 +75,6 @@ class StudentCreationServiceTest {
                 curriculum,
                 generator,
                 identity,
-                audit,
                 new TransactionTemplate(transactionManager));
         when(identity.requireAcademicAdmin(any())).thenReturn("admin_test");
 

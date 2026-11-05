@@ -54,7 +54,9 @@ public class BalancedClassAssignmentStrategy implements ClassAssignmentStrategy 
                 if (student.getEntranceScore() != null) { scoreSum = scoreSum.add(student.getEntranceScore()); scoreCount++; }
             });
         }
-        private long id() { return source.administrativeClass().getId(); }
+        private long id() {
+            return source.administrativeClass().getId();
+        }
         private String name() { return source.administrativeClass().getClassName(); }
         private int min() { return source.administrativeClass().getMinCapacity(); }
         private int size() { return source.existingStudents().size() + assigned.size(); }

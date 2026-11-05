@@ -5,20 +5,20 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.eduhub.edu_hub.curriculum.api.controller.SubjectController;
-import com.eduhub.edu_hub.curriculum.api.dto.CreateSubjectRequest;
-import com.eduhub.edu_hub.curriculum.api.dto.SetPrerequisiteRequest;
-import com.eduhub.edu_hub.curriculum.api.dto.SubjectActionRequest;
-import com.eduhub.edu_hub.curriculum.api.dto.SubjectResponse;
-import com.eduhub.edu_hub.curriculum.api.dto.SubjectSearchRequest;
-import com.eduhub.edu_hub.curriculum.api.dto.UpdateSubjectRequest;
+import com.eduhub.edu_hub.curriculum.api.dto.request.CreateSubjectRequest;
+import com.eduhub.edu_hub.curriculum.api.dto.request.SetPrerequisiteRequest;
+import com.eduhub.edu_hub.curriculum.api.dto.request.SubjectActionRequest;
+import com.eduhub.edu_hub.curriculum.api.dto.request.SubjectSearchRequest;
+import com.eduhub.edu_hub.curriculum.api.dto.request.UpdateSubjectRequest;
+import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectResponse;
 import com.eduhub.edu_hub.curriculum.application.SubjectApplicationService;
 import com.eduhub.edu_hub.curriculum.domain.enums.SubjectStatus;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import java.util.List;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
+import org.junit.jupiter.api.Test;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.Mock;
 import org.springframework.http.HttpStatus;
 
 @ExtendWith(MockitoExtension.class)

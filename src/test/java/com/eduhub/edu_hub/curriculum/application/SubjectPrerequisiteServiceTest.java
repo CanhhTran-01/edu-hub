@@ -8,8 +8,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.eduhub.edu_hub.curriculum.api.dto.SetPrerequisiteRequest;
-import com.eduhub.edu_hub.curriculum.api.dto.SubjectSimpleResponse;
+import com.eduhub.edu_hub.curriculum.api.dto.request.SetPrerequisiteRequest;
+import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.exception.PrerequisiteCycleException;
 import com.eduhub.edu_hub.curriculum.domain.enums.SubjectStatus;
 import com.eduhub.edu_hub.curriculum.domain.model.Subject;
@@ -21,11 +21,11 @@ import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
-import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.Mock;
 
 @ExtendWith(MockitoExtension.class)
 class SubjectPrerequisiteServiceTest {

@@ -1,13 +1,15 @@
 package com.eduhub.edu_hub.people.application.admission;
 
-import com.eduhub.edu_hub.people.api.dto.AdmissionErrorResponse;
+import com.eduhub.edu_hub.people.api.dto.response.AdmissionErrorResponse;
 import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
 import java.util.List;
 import java.util.UUID;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
+@AllArgsConstructor
 public class AdmissionBatchState {
     private final UUID id;
     private final String fileName;
@@ -15,10 +17,15 @@ public class AdmissionBatchState {
     private final List<AdmissionCandidate> candidates;
     private final List<AdmissionErrorResponse> errors;
     private final List<AdministrativeClass> classes;
-    private final List<String> manualAdjustments = new java.util.ArrayList<>();
-    @Setter private List<String> duplicateNameWarnings;
-    @Setter private List<String> capacityWarnings;
-    @Setter private boolean confirmed;
+
+    @Setter
+    private List<String> duplicateNameWarnings;
+
+    @Setter
+    private List<String> capacityWarnings;
+
+    @Setter
+    private boolean confirmed;
 
     public AdmissionBatchState(UUID id, String fileName, int totalRows, List<AdmissionCandidate> candidates,
             List<AdmissionErrorResponse> errors, List<AdministrativeClass> classes,

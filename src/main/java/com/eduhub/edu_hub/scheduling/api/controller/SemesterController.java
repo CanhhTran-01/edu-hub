@@ -1,9 +1,9 @@
 package com.eduhub.edu_hub.scheduling.api.controller;
 
-import com.eduhub.edu_hub.scheduling.api.dto.CreateSemesterRequest;
-import com.eduhub.edu_hub.scheduling.api.dto.SemesterResponse;
-import com.eduhub.edu_hub.scheduling.api.dto.SemesterSearchRequest;
-import com.eduhub.edu_hub.scheduling.api.dto.UpdateSemesterRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.CreateSemesterRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.SemesterSearchRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.UpdateSemesterRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.response.SemesterResponse;
 import com.eduhub.edu_hub.scheduling.application.SemesterApplicationService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.PageResponse;
