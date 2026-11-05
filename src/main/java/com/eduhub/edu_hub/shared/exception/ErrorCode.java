@@ -96,6 +96,14 @@ public enum ErrorCode {
     MODULE_CLASS_ENROLLMENT_DATA_UNAVAILABLE(
             4325, "Chưa có nguồn lịch sử đăng ký đầy đủ để kiểm tra hủy lớp", HttpStatus.SERVICE_UNAVAILABLE),
 
+    ROOM_NOT_FOUND(4326, "Không tìm thấy phòng học", HttpStatus.NOT_FOUND),
+    DUPLICATE_ROOM_CODE(4327, "Mã phòng đã tồn tại", HttpStatus.CONFLICT),
+    DUPLICATE_ROOM_LOCATION(4328, "Cơ sở, tòa nhà và số phòng đã tồn tại", HttpStatus.CONFLICT),
+    INVALID_ROOM_CODE(4329, "Mã phòng phải theo định dạng <số phòng>-<tòa nhà>, ví dụ 102-TA1", HttpStatus.BAD_REQUEST),
+    ROOM_IN_USE(
+            4330, "Phòng có lịch học thuộc kỳ chưa kết thúc, không được ngừng sử dụng hoặc xóa", HttpStatus.CONFLICT),
+    ROOM_CAPACITY_BELOW_CLASS(4331, "Sức chứa phòng nhỏ hơn sức chứa tối đa của lớp đang xếp", HttpStatus.CONFLICT),
+
     // Enrollment
     ENROLLMENT_NOT_FOUND(4401, "Không tìm thấy đăng ký", HttpStatus.NOT_FOUND),
     REGISTRATION_CLOSED(4402, "Đã hết thời gian đăng ký", HttpStatus.BAD_REQUEST),

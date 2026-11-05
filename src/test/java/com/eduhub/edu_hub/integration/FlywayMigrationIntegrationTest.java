@@ -29,7 +29,7 @@ class FlywayMigrationIntegrationTest {
         for (String table : new String[] {
             "users", "subjects", "majors", "curriculums", "curriculum_subjects",
             "semesters", "faculties", "lecturers", "cohorts", "administrative_classes",
-            "students", "module_classes", "people_user_links"
+            "students", "module_classes", "people_user_links", "rooms", "class_schedules"
         }) {
             assertThat(count(schema, table))
                     .as(table + " must not contain development fixtures")
@@ -42,6 +42,13 @@ class FlywayMigrationIntegrationTest {
                         Integer.class,
                         schema))
                 .isZero();
+        assertThat(jdbc.queryForList(
+                        "select column_name from information_schema.columns "
+                                + "where table_schema = ? and table_name = 'rooms'",
+                        String.class,
+                        schema))
+                .contains("room_code", "room_name", "campus", "building_code", "room_number")
+                .doesNotContain("room_type");
         assertThat(flyway.validateWithResult().validationSuccessful).isTrue();
     }
 
@@ -65,6 +72,23 @@ class FlywayMigrationIntegrationTest {
         assertThat(count(schema, "administrative_classes")).isEqualTo(2);
         assertThat(count(schema, "students")).isZero();
         assertThat(count(schema, "module_classes")).isZero();
+        assertThat(count(schema, "rooms")).isEqualTo(12);
+        assertThat(count(schema, "class_schedules")).isZero();
+        assertThat(jdbc.queryForObject(
+                        "select count(*) from development.rooms where not is_deleted and status = 'ACTIVE'",
+                        Integer.class))
+                .isEqualTo(9);
+        assertThat(jdbc.queryForObject(
+                        "select count(*) from development.rooms where not is_deleted and status = 'INACTIVE'",
+                        Integer.class))
+                .isEqualTo(2);
+        assertThat(jdbc.queryForObject("select count(*) from development.rooms where is_deleted", Integer.class))
+                .isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                        "select count(*) from development.rooms where room_code !~ '^[0-9]+-[A-Z0-9]+$' "
+                                + "or room_code <> room_number || '-' || building_code",
+                        Integer.class))
+                .isZero();
         assertThat(jdbc.queryForList(
                         "select required_graduation_credits from development.curriculums " + "order by curriculum_code",
                         Integer.class))
@@ -85,6 +109,7 @@ class FlywayMigrationIntegrationTest {
         assertThat(flyway.migrate().migrationsExecuted).isZero();
         assertThat(count(schema, "users")).isEqualTo(4);
         assertThat(count(schema, "curriculum_subjects")).isEqualTo(160);
+        assertThat(count(schema, "rooms")).isEqualTo(12);
     }
 
     private Flyway flyway(String schema, String... locations) {
