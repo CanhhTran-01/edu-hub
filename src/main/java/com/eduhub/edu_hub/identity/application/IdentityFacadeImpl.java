@@ -162,14 +162,18 @@ public class IdentityFacadeImpl implements IdentityFacade {
     @Override
     @Transactional
     public void disableUser(Long userId) {
+        // UC-10: tham gia transaction của People; DISABLED chặn đăng nhập mới.
         User account = user(userId);
         account.setStatus(UserStatus.DISABLED);
+        // Thu hồi mọi phiên đang mở để token cũ không tiếp tục truy cập API.
         sessions.findByUser_IdAndRevokedFalse(userId).forEach(session -> session.setRevoked(true));
     }
 
     @Override
     @Transactional
     public void enableUser(Long userId) {
+        // UC-10: mở lại đăng nhập và xóa khóa tạm do nhập sai mật khẩu.
+        // Giữ nguyên mật khẩu/firstLogin; các phiên bị thu hồi không được phục hồi.
         User account = user(userId);
         account.setStatus(UserStatus.ACTIVE);
         account.setLockedUntil(null);

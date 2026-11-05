@@ -323,6 +323,8 @@ public class StudentApplicationService {
 
     @Transactional
     public StudentResponse deactivate(Long id, String reason, String accessToken) {
+        // UC-10: transaction bao trùm Student, tài khoản qua IdentityFacade và audit.
+        // Nếu một bước lỗi, toàn bộ thay đổi trong transaction được rollback.
         return changeActivityStatus(id, ActivityStatus.DEACTIVATED, reason, accessToken);
     }
 
@@ -333,6 +335,7 @@ public class StudentApplicationService {
 
     private StudentResponse changeActivityStatus(
             Long id, ActivityStatus targetStatus, String reason, String accessToken) {
+        // Lấy actor từ token và kiểm tra role ACADEMIC_ADMIN/SYSTEM_ADMIN ở backend.
         String actor = identityFacade.requireAcademicAdmin(accessToken);
         String normalizedReason = reason == null ? "" : reason.strip();
         if (normalizedReason.isEmpty() || normalizedReason.length() > 500) {
@@ -342,6 +345,7 @@ public class StudentApplicationService {
                 .findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new BaseException(ErrorCode.STUDENT_NOT_FOUND));
         if (student.getActivityStatus() == ActivityStatus.DELETED) {
+            // Hồ sơ đã xóa không được khôi phục bằng luồng tái kích hoạt tạm thời.
             throw new BaseException(ErrorCode.VALIDATION_ERROR);
         }
         if (student.getUserId() == null) {
@@ -349,15 +353,18 @@ public class StudentApplicationService {
         }
         ActivityStatus previousStatus = student.getActivityStatus();
         if (previousStatus == targetStatus) {
+            // Request lặp cùng trạng thái: trả dữ liệu hiện tại, không ghi audit trùng.
             return toResponse(student);
         }
 
         if (targetStatus == ActivityStatus.DEACTIVATED) {
+            // Giữ boundary module: People không truy cập trực tiếp bảng users/sessions.
             identityFacade.disableUser(student.getUserId());
         } else {
             identityFacade.enableUser(student.getUserId());
         }
         student.setActivityStatus(targetStatus);
+        // Chỉ đổi trạng thái; giữ nguyên hồ sơ và lịch sử học vụ để tra cứu.
         Student saved = studentRepository.save(student);
         audit(
                 targetStatus == ActivityStatus.DEACTIVATED ? "DEACTIVATE_STUDENT" : "ACTIVATE_STUDENT",

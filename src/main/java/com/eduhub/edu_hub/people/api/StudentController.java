@@ -108,6 +108,7 @@ public class StudentController {
     }
 
     @PostMapping("/{id}/deactivate")
+    // UC-10: id là Student ID; nhận lý do và token để service xác thực người thao tác.
     public ApiResponse<StudentResponse> deactivate(
             @PathVariable Long id,
             @Valid @RequestBody StudentStatusBody body,
@@ -116,6 +117,7 @@ public class StudentController {
     }
 
     @PostMapping("/{id}/activate")
+    // UC-10: tái kích hoạt hồ sơ và tài khoản liên kết; không tạo tài khoản mới.
     public ApiResponse<StudentResponse> activate(
             @PathVariable Long id,
             @Valid @RequestBody StudentStatusBody body,
@@ -124,6 +126,7 @@ public class StudentController {
     }
 
     public record StudentStatusBody(
+            // Cả hai thao tác đều cần lý do để phục vụ tra soát trong audit_logs.
             @NotBlank(message = "Lý do không được để trống")
             @Size(max = 500, message = "Lý do không được vượt quá 500 ký tự")
             String reason) {}
