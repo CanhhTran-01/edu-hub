@@ -31,8 +31,6 @@ public interface StudentRepository extends JpaRepository<Student, Long>, JpaSpec
     @EntityGraph(attributePaths = {"administrativeClass", "administrativeClass.cohort"})
     Page<Student> findAll(Specification<Student> specification, Pageable pageable);
 
-    boolean existsByAdmissionApplicationCodeAndDeletedFalse(String admissionApplicationCode);
-
     boolean existsByEmailIgnoreCaseAndDeletedFalse(String email);
 
     boolean existsByCitizenIdAndDeletedFalse(String citizenId);
@@ -40,8 +38,6 @@ public interface StudentRepository extends JpaRepository<Student, Long>, JpaSpec
     boolean existsByFullNameIgnoreCaseAndDateOfBirthAndDeletedFalse(String fullName, java.time.LocalDate dateOfBirth);
 
     boolean existsByStudentCode(String studentCode);
-
-    List<Student> findAllByAdministrativeClass_IdAndDeletedFalse(Long classId);
 
     long countByAdministrativeClass_IdAndDeletedFalse(Long classId);
 

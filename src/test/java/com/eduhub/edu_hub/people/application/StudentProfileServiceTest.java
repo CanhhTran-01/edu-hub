@@ -15,11 +15,11 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-class MyStudentProfileServiceTest {
+class StudentProfileServiceTest {
     IdentityFacade identity = mock(IdentityFacade.class);
     StudentRepository students = mock(StudentRepository.class);
     StudentApplicationService queries = mock(StudentApplicationService.class);
-    MyStudentProfileService service = new MyStudentProfileService(identity, students, queries);
+    StudentProfileService service = new StudentProfileService(identity, students, queries);
     Student student;
 
     @BeforeEach

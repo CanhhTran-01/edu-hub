@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class MyStudentProfileService {
+public class StudentProfileService {
     // TODO(AUTHORIZATION): Bổ sung phân quyền hồ sơ cá nhân bằng Spring Security sau.
     private final IdentityFacade identity;
     private final StudentRepository students;

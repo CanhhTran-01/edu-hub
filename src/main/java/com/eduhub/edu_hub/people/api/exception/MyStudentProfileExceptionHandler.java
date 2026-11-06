@@ -1,6 +1,6 @@
 package com.eduhub.edu_hub.people.api.exception;
 
-import com.eduhub.edu_hub.people.api.controller.MyStudentProfileController;
+import com.eduhub.edu_hub.people.api.controller.StudentProfileController;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
 import jakarta.servlet.http.HttpServletRequest;
@@ -12,7 +12,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(assignableTypes = MyStudentProfileController.class)
+@RestControllerAdvice(assignableTypes = StudentProfileController.class)
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class MyStudentProfileExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)

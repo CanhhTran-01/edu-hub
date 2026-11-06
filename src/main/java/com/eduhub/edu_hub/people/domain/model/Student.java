@@ -31,9 +31,6 @@ public class Student extends BaseEntity {
     @Column(name = "student_code", nullable = false, unique = true)
     private String studentCode;
 
-    @Column(name = "admission_application_code", unique = true)
-    private String admissionApplicationCode;
-
     @Column(name = "full_name", nullable = false)
     private String fullName;
 

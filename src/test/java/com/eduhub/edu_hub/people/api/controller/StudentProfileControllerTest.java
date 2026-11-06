@@ -6,7 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.eduhub.edu_hub.people.api.exception.MyStudentProfileExceptionHandler;
-import com.eduhub.edu_hub.people.application.MyStudentProfileService;
+import com.eduhub.edu_hub.people.application.StudentProfileService;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,13 +16,13 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-class MyStudentProfileControllerTest {
-    MyStudentProfileService service = mock(MyStudentProfileService.class);
+class StudentProfileControllerTest {
+    StudentProfileService service = mock(StudentProfileService.class);
     MockMvc mvc;
 
     @BeforeEach
     void setup() {
-        mvc = MockMvcBuilders.standaloneSetup(new MyStudentProfileController(service))
+        mvc = MockMvcBuilders.standaloneSetup(new StudentProfileController(service))
                 .setControllerAdvice(new MyStudentProfileExceptionHandler(), new GlobalExceptionHandler())
                 .build();
     }
