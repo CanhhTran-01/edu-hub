@@ -11,7 +11,6 @@ import com.eduhub.edu_hub.admission.domain.policy.AdmissionBalancePolicy;
 import com.eduhub.edu_hub.admission.domain.policy.AdmissionCapacityPolicy;
 import com.eduhub.edu_hub.admission.domain.repository.AdmissionApplicantRepository;
 import com.eduhub.edu_hub.admission.domain.repository.AdmissionPlanClassRepository;
-import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.application.facade.dto.*;
 import com.eduhub.edu_hub.people.domain.model.*;
@@ -92,10 +91,6 @@ class AdmissionPlanQueryServiceTest {
     }
 
     private AdmissionPlan prepare(List<String> names) {
-        Major major = Major.builder().majorName("Công nghệ thông tin").build();
-        major.setId(2L);
-        Cohort cohort = new Cohort();
-        cohort.setId(3L);
         AdmissionPlan plan = AdmissionPlan.builder().build();
         plan.setId(1L);
         plan.setMajorId(2L);
@@ -105,12 +100,11 @@ class AdmissionPlanQueryServiceTest {
         plan.setMaxCapacity(10);
         plan.setSelectedClassCount(1);
         plan.setState(AdmissionPlanStatus.PREVIEWED);
-        AdministrativeClass target = new AdministrativeClass();
-        target.setId(10L);
-        target.setClassName("L01");
+
         AdmissionPlanClass slot = AdmissionPlanClass.builder().build();
         slot.setAdministrativeClassId(10L);
         slot.setTargetSize(names.size());
+
         List<AdmissionApplicant> rows = new ArrayList<>();
         for (int i = 0; i < names.size(); i++) {
             AdmissionApplicant row = AdmissionApplicant.builder().build();
@@ -120,6 +114,7 @@ class AdmissionPlanQueryServiceTest {
             row.setAdministrativeClassId(10L);
             rows.add(row);
         }
+
         when(applicants.findByPlan_IdOrderByRowNumber(1L)).thenReturn(rows);
         when(planClasses.findByPlan_IdOrderByPosition(1L)).thenReturn(List.of(slot));
         when(rooms.countSuitableRooms(10)).thenReturn(1L);

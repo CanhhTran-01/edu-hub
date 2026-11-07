@@ -33,7 +33,7 @@ class SerpentineClassAllocatorTest {
                         .toList())
                 .hasSize(3);
         assertThat(rows.subList(0, 6))
-                .extracting(row -> row.getAdministrativeClassId())
+                .extracting(AdmissionApplicant::getAdministrativeClassId)
                 .containsExactly(1L, 2L, 3L, 3L, 2L, 1L);
     }
 
@@ -48,7 +48,7 @@ class SerpentineClassAllocatorTest {
                 row("E", "Nguyễn Văn An", 26),
                 row("F", "Phạm Văn Dũng", 25));
         allocator.assign(rows, slots);
-        assertThat(rows).extracting(row -> row.getAdministrativeClassId()).containsExactly(1L, 2L, 2L, 1L, 1L, 2L);
+        assertThat(rows).extracting(AdmissionApplicant::getAdministrativeClassId).containsExactly(1L, 2L, 2L, 1L, 1L, 2L);
     }
 
     @Test
@@ -93,13 +93,13 @@ class SerpentineClassAllocatorTest {
         allocator.assign(rows, slots(4, 4));
         assertThat(rows).allMatch(row -> row.getAdministrativeClassId() != null);
         assertThat(rows.stream()
-                        .map(row -> row.getAdministrativeClassId())
+                        .map(AdmissionApplicant::getAdministrativeClassId)
                         .distinct()
                         .count())
                 .isEqualTo(2);
         assertThat(rows.stream()
                         .collect(java.util.stream.Collectors.groupingBy(
-                                row -> row.getAdministrativeClassId(), java.util.stream.Collectors.counting()))
+                                AdmissionApplicant::getAdministrativeClassId, java.util.stream.Collectors.counting()))
                         .values())
                 .containsExactlyInAnyOrder(4L, 4L);
     }
@@ -205,7 +205,7 @@ class SerpentineClassAllocatorTest {
     void breaksEqualScoreTiesByFullNameInsteadOfApplicationCode() {
         var rows = List.of(row("A", "Trần Văn Bình", 25), row("Z", "Nguyễn Văn An", 25));
         allocator.assign(rows, slots(1, 1));
-        assertThat(rows).extracting(row -> row.getAdministrativeClassId()).containsExactly(2L, 1L);
+        assertThat(rows).extracting(AdmissionApplicant::getAdministrativeClassId).containsExactly(2L, 1L);
     }
 
     private AdmissionApplicant enrolled(String code, String name, int score, Long target) {

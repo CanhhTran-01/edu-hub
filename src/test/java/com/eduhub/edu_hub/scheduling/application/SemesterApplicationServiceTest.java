@@ -155,8 +155,10 @@ class SemesterApplicationServiceTest {
     void registrationConflictIsCheckedSeparatelyAndDoesNotSave() {
         var conflict = semester(LocalDate.parse("2027-01-01"), LocalDate.parse("2027-05-01"));
         conflict.setSemesterName("Học kì 2 năm học 2026-2027");
+
         when(repository.findAll(ArgumentMatchers.<Specification<Semester>>any(), eq(Sort.by("id"))))
-                .thenReturn(List.of(), List.of(conflict));
+                .thenReturn(List.of())
+                .thenReturn(List.of(conflict));
 
         assertThatThrownBy(() -> service.createSemester(validRequest()))
                 .isInstanceOfSatisfying(SemesterConflictException.class, exception -> {

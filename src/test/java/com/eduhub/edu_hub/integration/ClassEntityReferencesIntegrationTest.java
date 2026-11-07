@@ -17,12 +17,14 @@ import com.eduhub.edu_hub.scheduling.api.dto.request.CreateModuleClassRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.CreateModuleClassesRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.ModuleClassSearchRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.SubjectClassesRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.response.ModuleClassResponse;
 import com.eduhub.edu_hub.scheduling.application.ModuleClassApplicationService;
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
 import com.eduhub.edu_hub.scheduling.domain.model.ModuleClass;
 import com.eduhub.edu_hub.scheduling.domain.model.Semester;
 import com.eduhub.edu_hub.scheduling.domain.repository.ModuleClassRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.SemesterRepository;
+import com.eduhub.edu_hub.shared.common.BaseEntity;
 import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.enums.TrainingType;
 import com.eduhub.edu_hub.support.PostgresIntegrationTest;
@@ -80,9 +82,9 @@ class ClassEntityReferencesIntegrationTest extends PostgresIntegrationTest {
         assertThat(major.getMajorCode()).isEqualTo("CNTT");
         assertThat(administrativeClasses.findByMajor_IdAndCohort_CohortCodeIgnoreCaseAndTrainingTypeAndDeletedFalse(
                         major.getId(), "CT8", TrainingType.CHINH_QUY))
-                .extracting(value -> value.getId())
+                .extracting(BaseEntity::getId)
                 .containsExactlyInAnyOrderElementsOf(
-                        byCode.stream().map(value -> value.getId()).toList());
+                        byCode.stream().map(BaseEntity::getId).toList());
         assertThat(studentCodes.generate(
                         byCode.stream()
                                 .filter(value -> value.getClassName().equals("L01"))
@@ -178,7 +180,7 @@ class ClassEntityReferencesIntegrationTest extends PostgresIntegrationTest {
         request.setSemesterId(semester.getId());
         request.setSubjectId(subject.getId());
         assertThat(moduleClassService.search(request).getContent())
-                .extracting(value -> value.getId())
+                .extracting(ModuleClassResponse::getId)
                 .containsExactly(unassigned.getId(), assigned.getId());
         request.setLecturerId(lecturer.getId());
         assertThat(moduleClassService.search(request).getContent())

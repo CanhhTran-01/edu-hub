@@ -1,21 +1,16 @@
 package com.eduhub.edu_hub.admission.application.service;
 
-import com.eduhub.edu_hub.admission.application.event.AdmissionNotificationQueued;
 import com.eduhub.edu_hub.admission.domain.enums.AdmissionApplicantStatus;
-import com.eduhub.edu_hub.admission.domain.enums.AdmissionNotificationKind;
-import com.eduhub.edu_hub.admission.domain.enums.AdmissionNotificationStatus;
-import com.eduhub.edu_hub.admission.domain.model.AdmissionNotification;
 import com.eduhub.edu_hub.admission.domain.model.StudentAdmission;
 import com.eduhub.edu_hub.admission.domain.policy.AdmissionIdentityPolicy;
 import com.eduhub.edu_hub.admission.domain.repository.AdmissionApplicantRepository;
-import com.eduhub.edu_hub.admission.domain.repository.AdmissionNotificationRepository;
 import com.eduhub.edu_hub.admission.domain.repository.StudentAdmissionRepository;
+import com.eduhub.edu_hub.notification.application.command.AdmissionNotificationCommand;
+import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.application.facade.dto.AdmissionStudentRegistration;
 import com.eduhub.edu_hub.shared.exception.*;
-import java.time.*;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.*;
 
@@ -24,11 +19,10 @@ import org.springframework.transaction.annotation.*;
 public class ApplicantEnrollmentService {
     private final AdmissionApplicantRepository applicants;
     private final StudentAdmissionRepository admissions;
-    private final AdmissionNotificationRepository notifications;
+    private final NotificationFacade.Queue notifications;
     private final PeopleFacade.Admission people;
     private final AdmissionIdentityPolicy identityPolicy;
     private final AdmissionProcessingLease lease;
-    private final ApplicationEventPublisher events;
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void enroll(Long planId, String token, Long applicantId) {
@@ -74,30 +68,18 @@ public class ApplicantEnrollmentService {
                 .entranceScore(row.getEntranceScore())
                 .build();
         admissions.saveAndFlush(admission);
-        var notice = AdmissionNotification.builder()
-                .admission(admission)
+        notifications.queueAdmission(AdmissionNotificationCommand.builder()
+                .admissionId(admission.getId())
                 .studentId(studentId)
                 .recipient(row.getEmail())
-                .nextAttemptAt(LocalDateTime.now(ZoneOffset.UTC))
-                .kind(
-                        registration.reused()
-                                ? AdmissionNotificationKind.RE_ENROLLMENT
-                                : AdmissionNotificationKind.INITIAL_ACCOUNT)
-                .state(
-                        row.getEmail() == null
-                                ? AdmissionNotificationStatus.SKIPPED
-                                : AdmissionNotificationStatus.PENDING)
-                .lastError(row.getEmail() == null ? "NO_EMAIL" : null)
-                .build();
-        notifications.saveAndFlush(notice);
+                .reEnrollment(registration.reused())
+                .build());
         row.setStudentId(studentId);
         row.setReuseAccount(registration.reused());
         row.setState(AdmissionApplicantStatus.ENROLLED);
         row.setErrorMessage(null);
         lease.renew(plan);
-        events.publishEvent(new AdmissionNotificationQueued(notice.getId()));
         // TODO(AUDIT_LOG): Ghi kết quả từng hồ sơ và việc dùng lại danh tính sau khi commit.
-        // TODO(NOTIFICATION_MODULE): Khi được yêu cầu, chuyển yêu cầu thông báo sang facade notification.
-        // Hiện giữ hàng đợi cùng transaction nhập học và gửi sau commit; chưa tích hợp dịch vụ bên ngoài.
+        // Hàng đợi thuộc notification nhưng tham gia cùng transaction; listener chỉ gửi sau commit.
     }
 }

@@ -2,6 +2,7 @@ package com.eduhub.edu_hub.admission.domain.policy;
 
 import static org.assertj.core.api.Assertions.*;
 
+import com.eduhub.edu_hub.admission.domain.model.ClassDivisionScenario;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -14,7 +15,7 @@ class AdmissionCapacityPolicyTest {
     @Test
     void offersEveryNormalScenarioAndOnlyRecommendsFewestClasses() {
         var scenarios = policy.scenarios(200, 40, 50, 15, 20);
-        assertThat(scenarios).extracting(value -> value.classCount()).containsExactly(4, 5);
+        assertThat(scenarios).extracting(ClassDivisionScenario::classCount).containsExactly(4, 5);
         assertThat(scenarios.getFirst().targetSizes()).containsExactly(50, 50, 50, 50);
         assertThat(scenarios.getLast().targetSizes()).containsExactly(40, 40, 40, 40, 40);
         assertThat(scenarios.getFirst().recommended()).isTrue();

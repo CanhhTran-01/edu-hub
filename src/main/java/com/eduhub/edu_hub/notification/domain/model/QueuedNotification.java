@@ -1,0 +1,40 @@
+package com.eduhub.edu_hub.notification.domain.model;
+
+import com.eduhub.edu_hub.notification.domain.enums.NotificationKind;
+import com.eduhub.edu_hub.notification.domain.enums.NotificationStatus;
+import com.eduhub.edu_hub.shared.common.BaseEntity;
+import jakarta.persistence.*;
+import java.time.LocalDateTime;
+import lombok.*;
+
+@Entity
+@Table(name = "admission_notifications")
+@Builder
+@Getter
+@Setter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+public class QueuedNotification extends BaseEntity {
+
+    // TODO(NOTIFICATION_STORAGE): Khi mở rộng hàng đợi sang nguồn khác, thiết kế sourceType/sourceId
+    //  và migration chuyển dữ liệu riêng; không tạo StudentAdmission giả cho luồng không nhập học.
+
+    @Column(name = "admission_id", nullable = false, unique = true)
+    private Long admissionId; // Giữ FK SQL hiện có, không giữ quan hệ JPA sang entity của admission
+
+    @Column(name = "student_id")
+    private Long studentId;
+
+    private String recipient;
+
+    @Enumerated(EnumType.STRING)
+    private NotificationKind kind;
+
+    @Enumerated(EnumType.STRING)
+    private NotificationStatus state;
+
+    // Một lần đầu + tối đa ba retry do scheduler; dừng tại bốn thất bại, không reset bộ đếm.
+    private int failureCount;
+    private LocalDateTime nextAttemptAt;
+    private String lastError;
+}

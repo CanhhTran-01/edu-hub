@@ -1,0 +1,22 @@
+[(${brandName})] - XÁC NHẬN NHẬP HỌC
+
+Xin chào,
+Hồ sơ nhập học của bạn đã được tiếp nhận trên [(${brandName})].
+Lần nhập học này được liên kết với tài khoản hiện có của bạn.
+[# th:if="${username != null}"]
+Tài khoản hiện có: [(${username})]
+[/]
+
+Vui lòng sử dụng mật khẩu hiện tại. Mật khẩu của bạn không bị đặt lại khi tiếp nhận hồ sơ nhập học này.
+Nếu tài khoản đang bị khóa hoặc bạn cần hỗ trợ đăng nhập, vui lòng liên hệ bộ phận học vụ.
+[# th:if="${loginUrl != null}"]
+Đăng nhập hệ thống: [(${loginUrl})]
+[/]
+[# th:if="${loginUrl == null}"]
+Vui lòng truy cập hệ thống của nhà trường để đăng nhập.
+[/]
+[# th:if="${supportEmail != null}"]
+Cần hỗ trợ? Liên hệ bộ phận học vụ qua [(${supportEmail})].
+[/]
+
+Đây là email tự động. Vui lòng bảo mật thông tin đăng nhập của bạn.

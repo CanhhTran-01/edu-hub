@@ -7,7 +7,7 @@ import com.eduhub.edu_hub.identity.application.facade.impl.IdentityFacadeImpl;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.model.*;
 import com.eduhub.edu_hub.identity.domain.repository.*;
-import com.eduhub.edu_hub.identity.infrastructure.mail.TemporaryPasswordMailService;
+import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -22,7 +22,7 @@ class CurrentStudentIdentityTest {
     RefreshTokenRepository sessions = mock(RefreshTokenRepository.class);
     TokenService tokens = mock(TokenService.class);
     IdentityFacadeImpl facade = new IdentityFacadeImpl(
-            users, mock(RoleRepository.class), sessions, tokens, mock(TemporaryPasswordMailService.class));
+            users, mock(RoleRepository.class), sessions, tokens, mock(NotificationFacade.Mail.class));
     User user;
     RefreshToken session;
 

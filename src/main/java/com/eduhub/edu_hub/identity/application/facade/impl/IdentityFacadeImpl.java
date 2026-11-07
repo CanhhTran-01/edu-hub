@@ -13,14 +13,16 @@ import com.eduhub.edu_hub.identity.domain.model.User;
 import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.RoleRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
-import com.eduhub.edu_hub.identity.infrastructure.mail.TemporaryPasswordMailService;
+import com.eduhub.edu_hub.notification.application.command.AccountEmailCommand;
+import com.eduhub.edu_hub.notification.application.command.AdmissionEmailCommand;
+import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
+import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
 import com.eduhub.edu_hub.shared.enums.RoleName;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.mail.MailException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,7 +35,7 @@ public class IdentityFacadeImpl implements IdentityFacade {
     private final RoleRepository roles;
     private final RefreshTokenRepository sessions;
     private final TokenService tokens;
-    private final TemporaryPasswordMailService mailService;
+    private final NotificationFacade.Mail notifications;
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
     @Override
@@ -99,13 +101,16 @@ public class IdentityFacadeImpl implements IdentityFacade {
         if (user.getEmail() == null || user.getEmail().isBlank()) {
             return new CreateStudentAccountResult(userId, false, "ACCOUNT_EMAIL_MISSING");
         }
-        try {
-            mailService.sendAccount(user.getEmail(), user.getUsername(), initialPassword);
-            return new CreateStudentAccountResult(userId, true, null);
-        } catch (MailException exception) {
+        var delivery = notifications.sendAccount(AccountEmailCommand.builder()
+                .recipient(user.getEmail())
+                .username(user.getUsername())
+                .temporaryPassword(initialPassword)
+                .templateType(EmailTemplateType.ACCOUNT_CREATED)
+                .build());
+        if (!delivery.sent()) {
             log.error("Initial account email failed for user {}", userId);
-            return new CreateStudentAccountResult(userId, false, "EMAIL_SEND_FAILED");
         }
+        return new CreateStudentAccountResult(userId, delivery.sent(), delivery.error());
     }
 
     @Override
@@ -161,13 +166,14 @@ public class IdentityFacadeImpl implements IdentityFacade {
         if (recipient == null || recipient.isBlank()) {
             return new CreateStudentAccountResult(userId, false, "ACCOUNT_EMAIL_MISSING");
         }
-        try {
-            mailService.sendAdmissionConfirmation(recipient, account.username());
-            return new CreateStudentAccountResult(userId, true, null);
-        } catch (MailException exception) {
+        var delivery = notifications.sendAdmissionConfirmation(AdmissionEmailCommand.builder()
+                .recipient(recipient)
+                .username(account.username())
+                .build());
+        if (!delivery.sent()) {
             log.error("Admission confirmation email failed for user {}", userId);
-            return new CreateStudentAccountResult(userId, false, "EMAIL_SEND_FAILED");
         }
+        return new CreateStudentAccountResult(userId, delivery.sent(), delivery.error());
     }
 
     private Long createStudentAccountRecord(CreateStudentAccountCommand command) {

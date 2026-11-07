@@ -55,3 +55,9 @@ admission:
   student-code-format: "[MaNganh][SttKhoa][SttLop][SttSVTrongLop]"
   notifications-enabled: true
   mail-retry-delay-ms: 60000
+
+notification:
+  mail:
+    brand-name: ${NOTIFICATION_MAIL_BRAND_NAME:EduHub}
+    login-url: ${NOTIFICATION_MAIL_LOGIN_URL:}
+    support-email: ${NOTIFICATION_MAIL_SUPPORT_EMAIL:}

@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" th:replace="~{mail/fragments/layout.html :: layout('Xác nhận nhập học', 'Hồ sơ nhập học đã được tiếp nhận. Tiếp tục sử dụng tài khoản và mật khẩu hiện tại.', ~{::content})}">
+<body>
+<div th:fragment="content">
+    <span style="display: inline-block; padding: 6px 10px; background-color: #eaf8f1; border-radius: 5px; color: #237653; font-size: 10px; line-height: 16px; font-weight: 700; letter-spacing: 1px;">ĐÃ TIẾP NHẬN HỒ SƠ</span>
+    <h1 class="email-title" style="margin: 18px 0 14px; color: #132d54; font-size: 28px; line-height: 36px; font-weight: 700;">Xác nhận<br>thông tin nhập học.</h1>
+    <p style="margin: 0 0 24px; color: #52647e; font-size: 15px; line-height: 25px;">Xin chào,<br>Hồ sơ nhập học của bạn đã được tiếp nhận trên <strong th:text="${brandName}">EduHub</strong>. Lần nhập học này được liên kết với tài khoản hiện có của bạn.</p>
+    <table th:if="${username != null}" role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width: 100%; table-layout: fixed; background-color: #f1f6ff; border: 1px solid #dbe7fd; border-radius: 10px;">
+        <tr><td style="padding: 20px 22px;">
+            <p style="margin: 0 0 6px; color: #64748b; font-size: 12px; line-height: 18px;">Tài khoản hiện có</p>
+            <p th:text="${username}" style="margin: 0; color: #183c76; font-family: Consolas, 'Courier New', monospace; font-size: 19px; line-height: 28px; font-weight: 700; word-break: break-all;">Mã tài khoản</p>
+        </td></tr>
+    </table>
+    <p style="margin: 24px 0 0; color: #24344d; font-size: 14px; line-height: 24px;">Vui lòng sử dụng <strong>mật khẩu hiện tại</strong>. Mật khẩu của bạn không bị đặt lại khi tiếp nhận hồ sơ nhập học này.</p>
+    <p style="margin: 14px 0 0; color: #64748b; font-size: 13px; line-height: 22px;">Nếu tài khoản đang bị khóa hoặc bạn cần hỗ trợ đăng nhập, vui lòng liên hệ bộ phận học vụ.</p>
+</div>
+</body>
+</html>

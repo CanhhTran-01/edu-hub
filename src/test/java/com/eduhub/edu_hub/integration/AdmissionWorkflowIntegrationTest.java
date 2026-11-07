@@ -11,7 +11,13 @@ import com.eduhub.edu_hub.admission.application.service.*;
 import com.eduhub.edu_hub.admission.domain.policy.*;
 import com.eduhub.edu_hub.admission.infrastructure.config.*;
 import com.eduhub.edu_hub.admission.infrastructure.spreadsheet.*;
-import com.eduhub.edu_hub.identity.infrastructure.mail.TemporaryPasswordMailService;
+import com.eduhub.edu_hub.notification.application.command.AdmissionNotificationCommand;
+import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
+import com.eduhub.edu_hub.notification.application.result.RenderedEmail;
+import com.eduhub.edu_hub.notification.application.service.QueuedNotificationSender;
+import com.eduhub.edu_hub.notification.infrastructure.dispatch.NotificationDispatcher;
+import com.eduhub.edu_hub.notification.infrastructure.mail.SmtpMailSender;
+import com.eduhub.edu_hub.notification.infrastructure.template.EmailTemplateRenderer;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.text.PersonText;
@@ -29,6 +35,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 @TestPropertySource(
         properties = {
@@ -55,13 +62,16 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
     AdmissionConfirmationService confirmation;
 
     @Autowired
-    AdmissionNotificationSender sender;
+    QueuedNotificationSender sender;
 
     @Autowired
     AdmissionNotificationQueryService notices;
 
     @Autowired
-    com.eduhub.edu_hub.admission.infrastructure.notification.AdmissionMailDispatcher dispatcher;
+    NotificationDispatcher dispatcher;
+
+    @Autowired
+    NotificationFacade.Queue notificationQueue;
 
     @Autowired
     JdbcTemplate jdbc;
@@ -70,7 +80,10 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
     com.eduhub.edu_hub.people.application.code.StudentCodeGenerator studentCodes;
 
     @MockitoBean
-    TemporaryPasswordMailService mail;
+    SmtpMailSender mail;
+
+    @MockitoSpyBean
+    EmailTemplateRenderer templates;
 
     private Long majorId;
     private Long cohortId;
@@ -201,8 +214,13 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
                 .isEqualTo(2);
         var notice = notices.list(next.id()).getFirst();
         sender.send(notice.id());
-        verify(mail).sendAdmissionConfirmation("reuse@example.com", person.studentCode());
-        verify(mail, never()).sendAccount(anyString(), anyString(), anyString());
+        verify(mail)
+                .send(
+                        eq("reuse@example.com"),
+                        argThat(email -> email.subject().contains("Xác nhận nhập học")
+                                && email.textBody().contains(person.studentCode())
+                                && !email.textBody().contains("12345")));
+        verifyNoMoreInteractions(mail);
     }
 
     @Test
@@ -292,7 +310,7 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
         var notification = notices.list(plan.id()).getFirst();
         doThrow(new MailSendException("unavailable"))
                 .when(mail)
-                .sendAccount(eq("failed@example.com"), anyString(), anyString());
+                .send(eq("failed@example.com"), any(RenderedEmail.class));
         sender.sendInitial(notification.id());
         assertThat(notices.list(plan.id()).getFirst().failureCount()).isEqualTo(1);
         jdbc.update(
@@ -316,7 +334,11 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
         assertThat(failed.failureCount()).isEqualTo(4);
         sender.send(notification.id());
         sender.sendInitial(notification.id());
-        verify(mail, times(4)).sendAccount(eq("failed@example.com"), anyString(), eq("12345"));
+        verify(mail, times(4))
+                .send(
+                        eq("failed@example.com"),
+                        argThat(email -> email.textBody().contains("12345")
+                                && email.htmlBody().contains("12345")));
         assertThat(jdbc.queryForObject("select count(*) from students where citizen_id='960000000001'", Integer.class))
                 .isEqualTo(1);
     }
@@ -574,8 +596,13 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
                         student.studentId()))
                 .isEqualTo(2);
         sender.send(notices.list(next.id()).getFirst().id());
-        verify(mail).sendAdmissionConfirmation("facade-reuse@example.com", student.studentCode());
-        verify(mail, never()).sendAccount(anyString(), anyString(), anyString());
+        verify(mail)
+                .send(
+                        eq("facade-reuse@example.com"),
+                        argThat(email -> email.subject().contains("Xác nhận nhập học")
+                                && email.textBody().contains(student.studentCode())
+                                && !email.textBody().contains("12345")));
+        verifyNoMoreInteractions(mail);
     }
 
     @Test
@@ -636,6 +663,92 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
         assertThat(completed.applicants().getLast().studentCode()).endsWith("02");
         assertThat(count("students")).isEqualTo(studentsBefore + 2);
         assertThat(count("users")).isEqualTo(usersBefore + 2);
+        verifyNoInteractions(mail);
+    }
+
+    @Test
+    void notificationQueueRequiresTheCallerTransaction() {
+        assertThatThrownBy(() -> notificationQueue.queueAdmission(AdmissionNotificationCommand.builder()
+                        .admissionId(1L)
+                        .studentId(1L)
+                        .build()))
+                .isInstanceOf(org.springframework.transaction.IllegalTransactionStateException.class);
+    }
+
+    @Test
+    void queuePersistenceFailureRollsBackAdmissionStudentAccountAndCodeCounter() throws Exception {
+        var plan = ready(
+                1,
+                3,
+                0,
+                candidate(
+                        "NOTIFICATION-ROLLBACK", "913000000001", "Nguyễn Văn An", "25", "queue-rollback@example.com"));
+        long studentsBefore = count("students");
+        long usersBefore = count("users");
+        long admissionsBefore = count("student_admissions");
+        long notificationsBefore = count("admission_notifications");
+        jdbc.execute(
+                """
+                create function admission_workflow.reject_notification_refactor_test() returns trigger
+                language plpgsql as $$
+                begin
+                    if new.recipient = 'queue-rollback@example.com' then
+                        raise exception 'Simulated queue persistence failure';
+                    end if;
+                    return new;
+                end;
+                $$
+                """);
+        try {
+            jdbc.execute(
+                    """
+                    create trigger reject_notification_refactor_test after insert on admission_notifications
+                    for each row execute function admission_workflow.reject_notification_refactor_test()
+                    """);
+            var result = confirmation.confirm(plan.id(), new ConfirmCommand(plan.revision(), false, false, null));
+            assertThat(result.failed()).isEqualTo(1);
+            assertThat(result.enrolled()).isZero();
+            assertThat(count("students")).isEqualTo(studentsBefore);
+            assertThat(count("users")).isEqualTo(usersBefore);
+            assertThat(count("student_admissions")).isEqualTo(admissionsBefore);
+            assertThat(count("admission_notifications")).isEqualTo(notificationsBefore);
+            assertThat(notices.list(plan.id())).isEmpty();
+            assertThat(jdbc.queryForObject(
+                            "select last_student_sequence from administrative_classes where id=?",
+                            Integer.class,
+                            plan.classes().getFirst().id()))
+                    .isZero();
+            verifyNoInteractions(mail);
+        } finally {
+            jdbc.execute("drop trigger if exists reject_notification_refactor_test on admission_notifications");
+            jdbc.execute("drop function admission_workflow.reject_notification_refactor_test()");
+        }
+    }
+
+    @Test
+    void renderingFailureDoesNotUndoEnrollmentAndIsRecordedForScheduledRetry() throws Exception {
+        var plan = ready(
+                1,
+                3,
+                0,
+                candidate("HTML-RENDER-FAIL", "914000000001", "Nguyễn Văn An", "25", "render-failure@example.com"));
+        var result = confirmation.confirm(plan.id(), new ConfirmCommand(plan.revision(), false, false, null));
+        assertThat(result.enrolled()).isEqualTo(1);
+        doThrow(new IllegalStateException("Template unavailable"))
+                .when(templates)
+                .renderAccount(any());
+        var notice = notices.list(plan.id()).getFirst();
+        sender.sendInitial(notice.id());
+        var failed = notices.list(plan.id()).getFirst();
+        assertThat(failed.state()).isEqualTo("FAILED");
+        assertThat(failed.failureCount()).isEqualTo(1);
+        assertThat(failed.error()).isEqualTo("EMAIL_TEMPLATE_RENDER_FAILED");
+        assertThat(jdbc.queryForObject("select count(*) from students where citizen_id='914000000001'", Integer.class))
+                .isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                        "select count(*) from student_admissions where application_code='HTML-RENDER-FAIL'",
+                        Integer.class))
+                .isEqualTo(1);
         verifyNoInteractions(mail);
     }
 

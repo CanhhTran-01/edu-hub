@@ -5,7 +5,9 @@ import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.model.User;
 import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
-import com.eduhub.edu_hub.identity.infrastructure.mail.TemporaryPasswordMailService;
+import com.eduhub.edu_hub.notification.application.command.AccountEmailCommand;
+import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
+import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.enums.RoleName;
 import com.eduhub.edu_hub.shared.exception.BaseException;
@@ -16,7 +18,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.mail.MailException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,7 +29,7 @@ public class AdminUserService {
     private final UserRepository users;
     private final RefreshTokenRepository sessions;
     private final TokenService tokens;
-    private final TemporaryPasswordMailService mailService;
+    private final NotificationFacade.Mail notifications;
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
     @Transactional(readOnly = true)
@@ -83,9 +84,13 @@ public class AdminUserService {
         target.setFirstLogin(true);
         target.setPasswordChangedAt(LocalDateTime.now(ZoneOffset.UTC));
         revoke(target);
-        try {
-            mailService.send(target.getEmail(), temporaryPassword);
-        } catch (MailException exception) {
+        var delivery = notifications.sendAccount(AccountEmailCommand.builder()
+                .recipient(target.getEmail())
+                .username(target.getUsername())
+                .temporaryPassword(temporaryPassword)
+                .templateType(EmailTemplateType.PASSWORD_RESET)
+                .build());
+        if (!delivery.sent()) {
             log.error("Password reset email failed for user {}", id);
             throw new BaseException(ErrorCode.PASSWORD_EMAIL_FAILED);
         }
