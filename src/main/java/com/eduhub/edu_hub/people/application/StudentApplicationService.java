@@ -9,7 +9,6 @@ import com.eduhub.edu_hub.identity.application.result.CreateStudentAccountResult
 import com.eduhub.edu_hub.people.api.dto.request.CreateStudentRequest;
 import com.eduhub.edu_hub.people.api.dto.request.StudentSearchRequest;
 import com.eduhub.edu_hub.people.api.dto.request.UpdateStudentRequest;
-import com.eduhub.edu_hub.people.api.dto.response.AccountNotificationResponse;
 import com.eduhub.edu_hub.people.api.dto.response.CreateStudentResponse;
 import com.eduhub.edu_hub.people.api.dto.response.StudentResponse;
 import com.eduhub.edu_hub.people.application.code.StudentCodeGenerator;
@@ -29,7 +28,6 @@ import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -61,17 +59,21 @@ public class StudentApplicationService {
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CreateStudentResponse create(CreateStudentRequest request) {
-        // TODO(AUTHORIZATION): Bổ sung phân quyền tạo sinh viên bằng Spring Security sau.
         CreatedStudent created = transactionTemplate.execute(status -> createInTransaction(request));
         if (created == null) {
             throw new BaseException(ErrorCode.UNEXPECTED_ERROR);
         }
 
-        CreateStudentAccountResult notification =
-                identityFacade.sendStudentAccountNotification(created.userId(), INITIAL_PASSWORD);
+        // TODO(SINGLE_STUDENT_NOTIFICATION_QUEUE): UC thêm đơn lẻ hiện chỉ gửi lần đầu ở đây.
+        // Khi tích hợp hàng đợi thông báo dùng chung, đưa cả luồng này vào scheduler với 3 retry.
+        // Không khôi phục endpoint resend hoặc reset bộ đếm để vượt giới hạn của luồng nhập học.
+        CreateStudentAccountResult notification = created.hasEmail()
+                ? identityFacade.sendStudentAccountNotification(created.userId(), INITIAL_PASSWORD)
+                : new CreateStudentAccountResult(created.userId(), false, "ACCOUNT_EMAIL_MISSING");
 
-        AccountNotificationStatus notificationStatus =
-                notification.emailSent() ? AccountNotificationStatus.SENT : AccountNotificationStatus.FAILED;
+        AccountNotificationStatus notificationStatus = !created.hasEmail()
+                ? AccountNotificationStatus.SKIPPED
+                : notification.emailSent() ? AccountNotificationStatus.SENT : AccountNotificationStatus.FAILED;
 
         recordNotificationResult(created.studentId(), notificationStatus, notification.emailError());
 
@@ -80,37 +82,15 @@ public class StudentApplicationService {
                 student, created.warnings(), notificationStatus.name(), notification.emailError());
     }
 
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public AccountNotificationResponse resendAccountNotification(Long studentId) {
-        // TODO(AUTHORIZATION): Bổ sung phân quyền gửi lại thông báo tài khoản bằng Spring Security sau.
-        Student student = studentRepository
-                .findByIdAndDeletedFalse(studentId)
-                .orElseThrow(() -> new BaseException(ErrorCode.STUDENT_NOT_FOUND));
-        if (student.getUserId() == null) {
-            throw new BaseException(ErrorCode.USER_NOT_FOUND);
-        }
-
-        CreateStudentAccountResult notification =
-                identityFacade.sendStudentAccountNotification(student.getUserId(), INITIAL_PASSWORD);
-        AccountNotificationStatus notificationStatus =
-                notification.emailSent() ? AccountNotificationStatus.SENT : AccountNotificationStatus.FAILED;
-        recordNotificationResult(studentId, notificationStatus, notification.emailError());
-        return new AccountNotificationResponse(
-                studentId, student.getStudentCode(), notificationStatus.name(), notification.emailError());
-    }
-
     private CreatedStudent createInTransaction(CreateStudentRequest request) {
         String fullName = request.getFullName().trim();
-        String email = request.getEmail().trim().toLowerCase(Locale.ROOT);
+        String email = com.eduhub.edu_hub.people.application.admission.AdmissionText.email(request.getEmail());
         String citizenId = normalizeCitizenId(request.getCitizenId());
         String reason = request.getReason().trim();
         if (reason.isEmpty() || reason.length() > 500) {
             throw new BaseException(ErrorCode.VALIDATION_ERROR);
         }
 
-        if (studentRepository.existsByEmailIgnoreCaseAndDeletedFalse(email)) {
-            throw new BaseException(ErrorCode.DUPLICATE_STUDENT_EMAIL);
-        }
         if (citizenId != null && studentRepository.existsByCitizenIdAndDeletedFalse(citizenId)) {
             throw new BaseException(ErrorCode.DUPLICATE_STUDENT_CITIZEN_ID);
         }
@@ -157,7 +137,7 @@ public class StudentApplicationService {
             warnings.add("Có hồ sơ khác trùng họ tên và ngày sinh; cần kiểm tra thủ công");
         }
         // TODO(AUDIT_LOG): Bổ sung lại nhật ký tạo sinh viên sau.
-        return new CreatedStudent(saved.getId(), userId, List.copyOf(warnings));
+        return new CreatedStudent(saved.getId(), userId, List.copyOf(warnings), email != null);
     }
 
     private void validateClassScope(CreateStudentRequest request, AdministrativeClass administrativeClass) {
@@ -172,9 +152,10 @@ public class StudentApplicationService {
     }
 
     private String normalizeCitizenId(String citizenId) {
-        if (citizenId == null) return null;
+        if (citizenId == null) throw new BaseException(ErrorCode.VALIDATION_ERROR);
         String normalized = citizenId.replaceAll("\\s+", "");
-        return normalized.isBlank() ? null : normalized;
+        if (!normalized.matches("[0-9]{12}")) throw new BaseException(ErrorCode.VALIDATION_ERROR);
+        return normalized;
     }
 
     private void recordNotificationResult(Long studentId, AccountNotificationStatus status, String error) {
@@ -192,11 +173,11 @@ public class StudentApplicationService {
             student.setAccountNotificationError(error);
             studentRepository.save(student);
 
-            // TODO(AUDIT_LOG): Bổ sung lại nhật ký gửi/gửi lại thông báo tài khoản sinh viên sau.
+            // TODO(AUDIT_LOG): Bổ sung nhật ký gửi lần đầu; retry sẽ qua hàng đợi dùng chung sau.
         });
     }
 
-    private record CreatedStudent(Long studentId, Long userId, List<String> warnings) {}
+    private record CreatedStudent(Long studentId, Long userId, List<String> warnings, boolean hasEmail) {}
 
     @Transactional
     public StudentResponse update(Long id, UpdateStudentRequest request) {

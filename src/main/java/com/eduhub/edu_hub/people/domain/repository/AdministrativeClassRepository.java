@@ -12,6 +12,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface AdministrativeClassRepository extends JpaRepository<AdministrativeClass, Long> {
+    List<AdministrativeClass> findByMajor_IdAndCohort_IdOrderById(Long majorId, Long cohortId);
+
     @EntityGraph(attributePaths = "cohort")
     List<AdministrativeClass> findByMajor_IdAndCohort_CohortCodeIgnoreCaseAndTrainingTypeAndDeletedFalse(
             Long majorId, String cohortCode, TrainingType trainingType);

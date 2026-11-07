@@ -18,40 +18,40 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-class OfficialStudentCodeGeneratorTest {
+class StudentCodeGeneratorTest {
     @Mock
     StudentRepository students;
 
     @Mock
     CurriculumFacade.Majors majors;
 
-    private OfficialStudentCodeGenerator generator;
+    private StudentCodeGenerator generator;
 
     @BeforeEach
     void setUp() {
-        generator = new OfficialStudentCodeGenerator(students, majors);
+        generator = new StudentCodeGenerator(students, majors);
     }
 
     @Test
-    void generatesConfirmedOfficialExamples() {
+    void generatesCodesWithCanonicalMajorAndPaddedComponents() {
         assertThat(generator.generate(administrativeClass(1L, "CT", "CT8", "L01"), 28))
-                .isEqualTo("CT080128");
+                .isEqualTo("CNTT080128");
         assertThat(generator.generate(administrativeClass(2L, "AT", "AT20", "L02"), 5))
-                .isEqualTo("AT200205");
+                .isEqualTo("ATTT200205");
         assertThat(generator.generate(administrativeClass(3L, "DT", "DT7", "L01"), 17))
-                .isEqualTo("DT070117");
+                .isEqualTo("DTVT070117");
     }
 
     @Test
     void padsCohortAndSequenceWithZero() {
         assertThat(generator.generate(administrativeClass(1L, "dt", "DT7", "L01"), 1))
-                .isEqualTo("DT070101");
+                .isEqualTo("DTVT070101");
     }
 
     @Test
-    void usesCurriculumArtificialIntelligencePrefixInsteadOfLocalCode() {
+    void usesCanonicalMajorCodeWithoutLocalPrefixMapping() {
         AdministrativeClass value = administrativeClass(4L, "AI", "AI8", "L01");
-        assertThat(generator.generate(value, 1)).isEqualTo("AI080101");
+        assertThat(generator.generate(value, 1)).isEqualTo("TTNT080101");
     }
 
     @Test
@@ -85,9 +85,36 @@ class OfficialStudentCodeGeneratorTest {
         assertThatThrownBy(() -> generator.nextSequence(value)).isInstanceOf(BaseException.class);
     }
 
+    @Test
+    void supportsConfiguredFormulaAndKeepsPersistedSequenceIndependentOfRosterOrder() {
+        AdministrativeClass value = administrativeClass(1L, "CT", "CT8", "L01");
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                generator, "format", "[MaNganh]-[SttKhoa]-[SttLop]-[SttSVTrongLop]");
+        assertThat(generator.generate(value, 1)).isEqualTo("CNTT-08-01-01");
+        value.setLastStudentSequence(28);
+        assertThat(generator.nextSequence(value)).isEqualTo(29);
+        assertThat(generator.nextSequence(value)).isEqualTo(30);
+    }
+
+    @Test
+    void rejectsFormulaThatOmitsAnIdentityComponent() {
+        AdministrativeClass value = administrativeClass(1L, "CT", "CT8", "L01");
+        org.springframework.test.util.ReflectionTestUtils.setField(generator, "format", "[MaNganh][SttSVTrongLop]");
+        assertThatThrownBy(() -> generator.generate(value, 1)).isInstanceOf(BaseException.class);
+    }
+
+    @Test
+    void readsAlphabeticClassSuffixForStudentCodeWithoutUsingEntityId() {
+        assertThat(generator.generate(administrativeClass(777L, "CT", "CT8", "CT8A"), 1))
+                .isEqualTo("CNTT080101");
+        assertThat(generator.generate(administrativeClass(999L, "CT", "CT8", "CT8AA"), 3))
+                .isEqualTo("CNTT082703");
+    }
+
     private AdministrativeClass administrativeClass(Long id, String majorCode, String cohortCode, String className) {
         Cohort cohort = new Cohort();
         cohort.setCohortCode(cohortCode);
+        cohort.setCodeSequence(Integer.parseInt(cohortCode.replaceAll("[^0-9]", "")));
         AdministrativeClass value = new AdministrativeClass();
         value.setId(id);
         String canonical = java.util.Map.of("CT", "CNTT", "AT", "ATTT", "DT", "DTVT", "AI", "TTNT")

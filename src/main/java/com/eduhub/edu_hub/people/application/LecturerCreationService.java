@@ -37,8 +37,6 @@ public class LecturerCreationService {
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CreateLecturerResponse create(CreateLecturerRequest request) {
-        // TODO(AUTHORIZATION): Bổ sung phân quyền tạo giảng viên bằng Spring Security sau.
-
         CreatedLecturer created = transactionTemplate.execute(status -> createInTransaction(request));
         if (created == null) {
             throw new BaseException(ErrorCode.UNEXPECTED_ERROR);
@@ -55,7 +53,6 @@ public class LecturerCreationService {
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public LecturerNotificationResponse resend(Long id) {
-        // TODO(AUTHORIZATION): Bổ sung phân quyền gửi lại thông báo tài khoản bằng Spring Security sau.
         return accountNotificationService.send(id, INITIAL_PASSWORD);
     }
 

@@ -31,6 +31,7 @@ public class LecturerApplicationService {
     private final LecturerRepository lecturerRepository;
 
     public PageResponse<LecturerResponse> search(LecturerSearchRequest request, int page, int size) {
+
         LecturerStatus status = null;
         if (request.getStatus() != null && !request.getStatus().isBlank()) {
             try {
@@ -39,7 +40,9 @@ public class LecturerApplicationService {
                 throw new BaseException(ErrorCode.VALIDATION_ERROR);
             }
         }
+
         LecturerStatus selectedStatus = status;
+
         Specification<Lecturer> filters = (root, query, builder) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(builder.isFalse(root.get("deleted")));
@@ -67,6 +70,7 @@ public class LecturerApplicationService {
             }
             return builder.and(predicates.toArray(new Predicate[0]));
         };
+
         return PageMapper.toPageResponse(lecturerRepository
                 .findAll(filters, PageRequest.of(page, size, Sort.by("id").ascending()))
                 .map(this::toResponse));

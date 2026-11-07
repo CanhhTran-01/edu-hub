@@ -15,4 +15,7 @@ public class AdministrativeClassResponse {
     private TrainingType trainingType;
     private Integer currentSize; // sĩ số hiện tại (nếu cần)
     private Integer maxCapacity; // sức chứa tối đa (nếu có cấu hình)
+    private Integer minCapacity;
+    private Integer reserveCapacity;
+    private boolean availableForAdmission;
 }

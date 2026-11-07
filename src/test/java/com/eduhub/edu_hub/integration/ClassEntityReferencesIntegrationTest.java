@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.eduhub.edu_hub.curriculum.domain.model.Subject;
 import com.eduhub.edu_hub.people.api.dto.request.StudentSearchRequest;
 import com.eduhub.edu_hub.people.application.StudentApplicationService;
-import com.eduhub.edu_hub.people.application.code.OfficialStudentCodeGenerator;
+import com.eduhub.edu_hub.people.application.code.StudentCodeGenerator;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.domain.enums.LecturerStatus;
 import com.eduhub.edu_hub.people.domain.model.Lecturer;
@@ -58,7 +58,7 @@ class ClassEntityReferencesIntegrationTest extends PostgresIntegrationTest {
     private ModuleClassApplicationService moduleClassService;
 
     @Autowired
-    private OfficialStudentCodeGenerator studentCodes;
+    private StudentCodeGenerator studentCodes;
 
     @Autowired
     private PeopleFacade.Scheduling people;
@@ -89,7 +89,7 @@ class ClassEntityReferencesIntegrationTest extends PostgresIntegrationTest {
                                 .findFirst()
                                 .orElseThrow(),
                         1))
-                .isEqualTo("CT080101");
+                .isEqualTo("CNTT080101");
         assertThat(jdbc.queryForObject(
                         "select count(*) from information_schema.columns where table_schema = current_schema() "
                                 + "and table_name = 'administrative_classes' and column_name = 'major_code'",

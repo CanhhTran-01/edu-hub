@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface MajorRepository extends JpaRepository<Major, Long> {
+    List<Major> findByDeletedFalseOrderById();
 
     Optional<Major> findByIdAndDeletedFalse(Long id);
 

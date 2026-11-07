@@ -23,6 +23,24 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 @Slf4j
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler({
+        org.springframework.web.servlet.NoHandlerFoundException.class,
+        org.springframework.web.servlet.resource.NoResourceFoundException.class
+    })
+    public ResponseEntity<ApiResponse<Void>> handleEndpointNotFound(Exception exception, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error(ErrorCode.ENDPOINT_NOT_FOUND, request.getRequestURI()));
+    }
+
+    @ExceptionHandler({
+        org.springframework.web.multipart.MultipartException.class,
+        org.springframework.web.multipart.support.MissingServletRequestPartException.class
+    })
+    public ResponseEntity<ApiResponse<Void>> handleInvalidUpload(Exception exception, HttpServletRequest request) {
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error(ErrorCode.ADMISSION_IMPORT_INVALID, request.getRequestURI()));
+    }
+
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ApiResponse<Void>> handleMethodNotAllowed(
             HttpRequestMethodNotSupportedException exception, HttpServletRequest request) {

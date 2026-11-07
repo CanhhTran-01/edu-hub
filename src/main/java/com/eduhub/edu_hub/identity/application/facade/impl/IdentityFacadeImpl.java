@@ -6,6 +6,7 @@ import com.eduhub.edu_hub.identity.application.command.CreateLecturerAccountComm
 import com.eduhub.edu_hub.identity.application.command.CreateStudentAccountCommand;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.identity.application.result.CreateStudentAccountResult;
+import com.eduhub.edu_hub.identity.application.result.StudentAccountInfo;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.model.Role;
 import com.eduhub.edu_hub.identity.domain.model.User;
@@ -86,6 +87,15 @@ public class IdentityFacadeImpl implements IdentityFacade {
         if (!user.isFirstLogin()) {
             return new CreateStudentAccountResult(userId, false, "ACCOUNT_ALREADY_ACTIVATED");
         }
+        if (user.isDeleted()
+                || user.getStatus() != UserStatus.ACTIVE
+                || (user.getLockedUntil() != null
+                        && user.getLockedUntil().isAfter(LocalDateTime.now(java.time.ZoneOffset.UTC)))) {
+            return new CreateStudentAccountResult(userId, false, "ACCOUNT_NOT_AVAILABLE");
+        }
+        if (!encoder.matches(initialPassword, user.getPasswordHash())) {
+            return new CreateStudentAccountResult(userId, false, "INITIAL_PASSWORD_NO_LONGER_VALID");
+        }
         if (user.getEmail() == null || user.getEmail().isBlank()) {
             return new CreateStudentAccountResult(userId, false, "ACCOUNT_EMAIL_MISSING");
         }
@@ -123,6 +133,41 @@ public class IdentityFacadeImpl implements IdentityFacade {
         }
 
         return response(current);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public StudentAccountInfo getStudentAccount(Long userId) {
+        User account = user(userId);
+        if (account.isDeleted()
+                || !RoleName.STUDENT.name().equals(account.getRole().getRoleName())) {
+            throw new BaseException(ErrorCode.USER_NOT_FOUND);
+        }
+        boolean locked = account.getStatus() != UserStatus.ACTIVE
+                || (account.getLockedUntil() != null
+                        && account.getLockedUntil().isAfter(LocalDateTime.now(java.time.ZoneOffset.UTC)));
+        return new StudentAccountInfo(
+                account.getId(),
+                account.getUsername(),
+                account.getEmail(),
+                account.getStatus().name(),
+                account.isFirstLogin(),
+                locked);
+    }
+
+    @Override
+    public CreateStudentAccountResult sendStudentAdmissionNotification(Long userId, String recipient) {
+        var account = getStudentAccount(userId);
+        if (recipient == null || recipient.isBlank()) {
+            return new CreateStudentAccountResult(userId, false, "ACCOUNT_EMAIL_MISSING");
+        }
+        try {
+            mailService.sendAdmissionConfirmation(recipient, account.username());
+            return new CreateStudentAccountResult(userId, true, null);
+        } catch (MailException exception) {
+            log.error("Admission confirmation email failed for user {}", userId);
+            return new CreateStudentAccountResult(userId, false, "EMAIL_SEND_FAILED");
+        }
     }
 
     private Long createStudentAccountRecord(CreateStudentAccountCommand command) {

@@ -19,6 +19,17 @@ public class TemporaryPasswordMailService {
         sendAccount(recipient, null, temporaryPassword);
     }
 
+    public void sendAdmissionConfirmation(String recipient, String username) {
+        if (from.isBlank()) throw new MailSendException("Gmail sender is not configured");
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(from);
+        message.setTo(recipient);
+        message.setSubject("EduHub - Xác nhận nhập học");
+        message.setText("Hồ sơ nhập học của bạn đã được tiếp nhận. Tài khoản hiện có: " + username
+                + ". Vui lòng sử dụng mật khẩu hiện tại; mật khẩu không bị đặt lại.");
+        sender.send(message);
+    }
+
     public void sendAccount(String recipient, String username, String temporaryPassword) {
 
         if (from.isBlank()) {

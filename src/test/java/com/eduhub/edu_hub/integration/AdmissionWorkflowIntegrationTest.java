@@ -1,0 +1,578 @@
+package com.eduhub.edu_hub.integration;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+import com.eduhub.edu_hub.identity.infrastructure.mail.TemporaryPasswordMailService;
+import com.eduhub.edu_hub.people.api.dto.request.AdmissionRequests.*;
+import com.eduhub.edu_hub.people.api.dto.response.AdmissionResponses.*;
+import com.eduhub.edu_hub.people.application.admission.*;
+import com.eduhub.edu_hub.shared.exception.BaseException;
+import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import com.eduhub.edu_hub.support.PostgresIntegrationTest;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.util.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mail.MailSendException;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
+@TestPropertySource(
+        properties = {
+            "admission.notifications-enabled=false",
+            "spring.flyway.default-schema=admission_workflow",
+            "spring.flyway.schemas=admission_workflow",
+            "spring.jpa.properties.hibernate.default_schema=admission_workflow",
+            "spring.datasource.hikari.schema=admission_workflow"
+        })
+class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
+    @Autowired
+    AdmissionPlanningService planning;
+
+    @Autowired
+    AdministrativeClassService classes;
+
+    @Autowired
+    AdmissionImportService imports;
+
+    @Autowired
+    AdmissionAllocationService allocation;
+
+    @Autowired
+    AdmissionConfirmationService confirmation;
+
+    @Autowired
+    AdmissionNotificationSender sender;
+
+    @Autowired
+    com.eduhub.edu_hub.people.infrastructure.admission.AdmissionMailDispatcher dispatcher;
+
+    @Autowired
+    JdbcTemplate jdbc;
+
+    @Autowired
+    com.eduhub.edu_hub.people.application.code.StudentCodeGenerator studentCodes;
+
+    @MockitoBean
+    TemporaryPasswordMailService mail;
+
+    private Long majorId;
+    private Long cohortId;
+
+    @BeforeEach
+    void scope() {
+        majorId = jdbc.queryForObject("select id from majors where major_code='CNTT' and not is_deleted", Long.class);
+        cohortId = jdbc.queryForObject("select id from cohorts where cohort_code='CT8' and not is_deleted", Long.class);
+    }
+
+    @Test
+    void separatesPlanningClassCreationAndConfirmationAndAllocatesCodesByGivenName() throws Exception {
+        long before = count("students");
+        PlanResponse plan = imported(
+                2,
+                3,
+                1,
+                candidate("FLOW-A", "910000000001", "Trần Văn Bình", "30", null),
+                candidate("FLOW-B", "910000000002", "Nguyễn Văn An", "29", null),
+                candidate("FLOW-C", "910000000003", "Lê Văn Cường", "28", null),
+                candidate("FLOW-D", "910000000004", "Phạm Văn Dũng", "27", null));
+        assertThat(plan.state()).isEqualTo("DRAFT");
+        assertThat(plan.scenarios().getFirst().classCount()).isEqualTo(2);
+        assertThat(plan.classes()).isEmpty();
+        assertThat(count("students")).isEqualTo(before);
+        plan = prepared(plan, 2);
+        assertThat(plan.classes()).hasSize(2);
+        assertThat(count("students")).isEqualTo(before);
+        plan = allocation.preview(plan.id(), new PreviewRequest(plan.revision()));
+        assertThat(plan.averageScoreDifference()).isEqualByComparingTo("0");
+        assertThat(count("students")).isEqualTo(before);
+        var result = confirmation.confirm(plan.id(), new ConfirmRequest(plan.revision(), false, false, null));
+        assertThat(result.state()).isEqualTo("CONFIRMED");
+        assertThat(result.enrolled()).isEqualTo(4);
+        assertThat(result.failed()).isZero();
+        for (ClassPreview target : plan.classes()) {
+            var assigned = new ArrayList<>(result.applicants().stream()
+                    .filter(row -> target.id().equals(row.assignedClassId()))
+                    .toList());
+            assigned.sort(Comparator.comparing(ApplicantResponse::fullName, AdmissionText.nameOrder()));
+            assertThat(assigned.getFirst().studentCode()).endsWith("01").startsWith("CNTT08");
+            assertThat(assigned.getLast().studentCode()).endsWith("02");
+        }
+        Long userId = jdbc.queryForObject("select user_id from students where citizen_id='910000000001'", Long.class);
+        String hash = jdbc.queryForObject("select password_hash from users where id=?", String.class, userId);
+        assertThat(new BCryptPasswordEncoder().matches("12345", hash)).isTrue();
+        assertThat(jdbc.queryForObject("select is_first_login from users where id=?", Boolean.class, userId))
+                .isTrue();
+        assertThat(jdbc.queryForObject("select status from users where id=?", String.class, userId))
+                .isEqualTo("ACTIVE");
+        assertThat(sender.list(plan.id())).allMatch(row -> row.state().equals("SKIPPED") && row.failureCount() == 0);
+        assertThat(confirmation
+                        .confirm(plan.id(), new ConfirmRequest(0, false, false, null))
+                        .enrolled())
+                .isEqualTo(4);
+        assertThat(count("students")).isEqualTo(before + 4);
+        verifyNoInteractions(mail);
+    }
+
+    @Test
+    void acceptsANonRecommendedNormalScenarioWithoutAutoSelectingFewestClasses() {
+        var plan = planning.create(new PlanRequest(majorId, cohortId, 200, 40, 50, 15));
+        plan = prepared(plan, 5);
+        assertThat(plan.selectedClassCount()).isEqualTo(5);
+        assertThat(plan.classes()).extracting(ClassPreview::targetSize).containsExactly(40, 40, 40, 40, 40);
+    }
+
+    @Test
+    void persistsInvalidAndConflictingRowsWhileContinuingWithValidRows() throws Exception {
+        var plan = imported(
+                1,
+                5,
+                0,
+                candidate("VALID-A", "920000000001", "Nguyễn Văn An", "25", null),
+                candidate("INVALID-A", "123", "Trần Văn Bình", "24", null),
+                candidate("CONFLICT-A", "920000000003", "Lê Văn Cường", "23", null),
+                candidate("CONFLICT-A", "920000000004", "Phạm Văn Dũng", "22", null));
+        assertThat(plan.totalStudents()).isEqualTo(1);
+        assertThat(plan.applicants())
+                .extracting(ApplicantResponse::state)
+                .containsExactly("VALID", "INVALID", "CONFLICT", "CONFLICT");
+        plan = allocation.preview(prepared(plan, 1).id(), new PreviewRequest(plan.revision() + 1));
+        assertThat(confirmation
+                        .confirm(plan.id(), new ConfirmRequest(plan.revision(), false, false, null))
+                        .enrolled())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void reusesLockedAccountAndDistinguishesIdenticalImportFromChangedApplication() throws Exception {
+        var original = ready(1, 4, 0, candidate("REUSE-OLD", "930000000001", "Nguyễn Văn An", "25", null));
+        var originalResult =
+                confirmation.confirm(original.id(), new ConfirmRequest(original.revision(), false, false, null));
+        var person = originalResult.applicants().getFirst();
+        Long userId = jdbc.queryForObject("select user_id from students where id=?", Long.class, person.studentId());
+        String changedPassword = new BCryptPasswordEncoder().encode("existing-password");
+        jdbc.update(
+                "update users set password_hash=?, is_first_login=false, status='LOCKED' where id=?",
+                changedPassword,
+                userId);
+        var repeat = imported(1, 4, 0, candidate("REUSE-OLD", "930000000001", "Nguyễn Văn An", "25", null));
+        assertThat(repeat.totalStudents()).isZero();
+        assertThat(repeat.applicants().getFirst().state()).isEqualTo("EXISTING");
+        var conflict = imported(1, 4, 0, candidate("REUSE-OLD", "930000000001", "Nguyễn Văn An", "26", null));
+        assertThat(conflict.applicants().getFirst().state()).isEqualTo("CONFLICT");
+        var differentPerson = imported(1, 4, 0, candidate("REUSE-OLD", "930000000002", "Nguyễn Văn An", "25", null));
+        assertThat(differentPerson.applicants().getFirst().state()).isEqualTo("CONFLICT");
+
+        long before = count("students");
+        var next = ready(1, 4, 0, candidate("REUSE-NEW", "930000000001", "Nguyễn Văn An", "27", "reuse@example.com"));
+        assertThat(next.totalStudents()).isEqualTo(1);
+        assertThat(next.applicants().getFirst().warnings()).isNotEmpty();
+        var result = confirmation.confirm(next.id(), new ConfirmRequest(next.revision(), false, false, null));
+        assertThat(result.enrolled()).isEqualTo(1);
+        assertThat(result.applicants().getFirst().studentId()).isEqualTo(person.studentId());
+        assertThat(result.applicants().getFirst().studentCode()).isEqualTo(person.studentCode());
+        assertThat(count("students")).isEqualTo(before);
+        assertThat(jdbc.queryForObject("select password_hash from users where id=?", String.class, userId))
+                .isEqualTo(changedPassword);
+        assertThat(jdbc.queryForObject("select status from users where id=?", String.class, userId))
+                .isEqualTo("LOCKED");
+        assertThat(jdbc.queryForObject("select is_first_login from users where id=?", Boolean.class, userId))
+                .isFalse();
+        assertThat(jdbc.queryForObject(
+                        "select count(*) from student_admissions where student_id=?",
+                        Integer.class,
+                        person.studentId()))
+                .isEqualTo(2);
+        var notice = sender.list(next.id()).getFirst();
+        sender.send(notice.id());
+        verify(mail).sendAdmissionConfirmation("reuse@example.com", person.studentCode());
+        verify(mail, never()).sendAccount(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void allowsTwoSameNamesWithoutWarningAndRequiresReasonForUnderMinimum() throws Exception {
+        var plan = imported(
+                3,
+                4,
+                0,
+                candidate("NAME-A", "940000000001", "Nguyễn Văn An", "25", null),
+                candidate("NAME-B", "940000000002", "Nguyễn Văn An", "24", null));
+        assertThatThrownBy(() -> classes.createFromPlan(
+                        new CreateClassesRequest(plan.id(), plan.revision(), 1, List.of(), false, true, null)))
+                .isInstanceOf(com.eduhub.edu_hub.shared.exception.BaseException.class);
+        var selected = classes.createFromPlan(
+                new CreateClassesRequest(plan.id(), plan.revision(), 1, List.of(), false, true, "Nhóm tuyển sinh nhỏ"));
+        selected = allocation.preview(selected.id(), new PreviewRequest(selected.revision()));
+        assertThat(selected.warnings()).noneMatch(value -> value.contains("trùng họ tên"));
+        var response = confirmation.confirm(
+                selected.id(), new ConfirmRequest(selected.revision(), false, true, "Nhóm tuyển sinh nhỏ"));
+        assertThat(response.enrolled()).isEqualTo(2);
+        assertThat(response.state()).isEqualTo("CONFIRMED");
+    }
+
+    @Test
+    void warnsOnceForFourSameNamesButStillAllowsConfirmation() throws Exception {
+        var plan = ready(
+                1,
+                5,
+                0,
+                candidate("NAME-C", "940000000003", "Nguyễn Văn An", "25", null),
+                candidate("NAME-D", "940000000004", "Nguyễn Văn An", "24", null),
+                candidate("NAME-E", "940000000005", "Nguyễn Văn An", "23", null),
+                candidate("NAME-F", "940000000006", "Nguyễn Văn An", "22", null));
+        assertThat(plan.warnings().stream()
+                        .filter(value -> value.contains("trùng họ tên"))
+                        .toList())
+                .singleElement()
+                .satisfies(value -> assertThat(value).contains("4 sinh viên", "(tối đa 3)"));
+        var result = confirmation.confirm(plan.id(), new ConfirmRequest(plan.revision(), false, false, null));
+        assertThat(result.state()).isEqualTo("CONFIRMED");
+        assertThat(result.enrolled()).isEqualTo(4);
+        assertThat(result.failed()).isZero();
+    }
+
+    @Test
+    void retriesFailedRowsWithoutRollingBackSuccessfulRowsOrDuplicatingIdentity() throws Exception {
+        var old = ready(1, 3, 0, candidate("PARTIAL-OLD", "950000000001", "Nguyễn Văn An", "25", null));
+        var first = confirmation.confirm(old.id(), new ConfirmRequest(old.revision(), false, false, null));
+        var plan = ready(
+                1,
+                3,
+                0,
+                candidate("PARTIAL-REUSE", "950000000001", "Nguyễn Văn An", "25", null),
+                candidate("PARTIAL-NEW", "950000000002", "Trần Văn Bình", "24", null));
+        try {
+            jdbc.update("update roles set is_deleted=true where role_name='STUDENT'");
+            var partial = confirmation.confirm(plan.id(), new ConfirmRequest(plan.revision(), false, false, null));
+            assertThat(partial.enrolled()).isEqualTo(1);
+            assertThat(partial.failed()).isEqualTo(1);
+            assertThat(partial.state()).isEqualTo("PARTIALLY_CONFIRMED");
+            assertThat(partial.applicants().stream()
+                            .filter(row -> row.applicationCode().equals("PARTIAL-REUSE"))
+                            .findFirst()
+                            .orElseThrow()
+                            .studentId())
+                    .isEqualTo(first.applicants().getFirst().studentId());
+            assertThat(jdbc.queryForObject(
+                            "select count(*) from students where citizen_id='950000000002'", Integer.class))
+                    .isZero();
+            jdbc.update("update roles set is_deleted=false where role_name='STUDENT'");
+            var completed = confirmation.confirm(plan.id(), new ConfirmRequest(partial.revision(), false, false, null));
+            assertThat(completed.enrolled()).isEqualTo(2);
+            assertThat(completed.failed()).isZero();
+            assertThat(completed.state()).isEqualTo("CONFIRMED");
+            assertThat(jdbc.queryForObject(
+                            "select count(*) from students where citizen_id='950000000002'", Integer.class))
+                    .isEqualTo(1);
+        } finally {
+            jdbc.update("update roles set is_deleted=false where role_name='STUDENT'");
+        }
+    }
+
+    @Test
+    void stopsAfterInitialFailureAndThreeScheduledRetriesWithoutManualReset() throws Exception {
+        var plan = ready(1, 3, 0, candidate("MAIL-FAIL", "960000000001", "Nguyễn Văn An", "25", "failed@example.com"));
+        confirmation.confirm(plan.id(), new ConfirmRequest(plan.revision(), false, false, null));
+        var notification = sender.list(plan.id()).getFirst();
+        doThrow(new MailSendException("unavailable"))
+                .when(mail)
+                .sendAccount(eq("failed@example.com"), anyString(), anyString());
+        sender.sendInitial(notification.id());
+        assertThat(sender.list(plan.id()).getFirst().failureCount()).isEqualTo(1);
+        jdbc.update(
+                "update admission_notifications set next_attempt_at=timestamp '2000-01-01' where id=?",
+                notification.id());
+        sender.sendInitial(notification.id()); // A delayed async kickoff must not become a retry.
+        assertThat(sender.list(plan.id()).getFirst().failureCount()).isEqualTo(1);
+        org.springframework.test.util.ReflectionTestUtils.setField(dispatcher, "enabled", true);
+        try {
+            for (int i = 0; i < 4; i++) {
+                jdbc.update(
+                        "update admission_notifications set next_attempt_at=timestamp '2000-01-01' where id=?",
+                        notification.id());
+                dispatcher.retryDue(); // The fourth poll must leave the terminal notification untouched.
+            }
+        } finally {
+            org.springframework.test.util.ReflectionTestUtils.setField(dispatcher, "enabled", false);
+        }
+        var failed = sender.list(plan.id()).getFirst();
+        assertThat(failed.state()).isEqualTo("FAILED");
+        assertThat(failed.failureCount()).isEqualTo(4);
+        sender.send(notification.id());
+        sender.sendInitial(notification.id());
+        verify(mail, times(4)).sendAccount(eq("failed@example.com"), anyString(), eq("12345"));
+        assertThat(jdbc.queryForObject("select count(*) from students where citizen_id='960000000001'", Integer.class))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void rejectsStaleRequestsAndManualMovesBeyondHardCapacity() throws Exception {
+        var plan = ready(
+                1,
+                2,
+                0,
+                candidate("HARD-A", "970000000001", "Nguyễn Văn An", "30", null),
+                candidate("HARD-B", "970000000002", "Trần Văn Bình", "29", null),
+                candidate("HARD-C", "970000000003", "Lê Văn Cường", "28", null),
+                candidate("HARD-D", "970000000004", "Phạm Văn Dũng", "27", null));
+        var target = plan.classes().getFirst();
+        var other = plan.applicants().stream()
+                .filter(row -> !target.id().equals(row.assignedClassId()))
+                .findFirst()
+                .orElseThrow();
+        assertThatThrownBy(() -> allocation.adjust(
+                        plan.id(),
+                        new AdjustAssignmentsRequest(
+                                plan.revision(), List.of(new Assignment(other.id(), target.id())))))
+                .isInstanceOf(com.eduhub.edu_hub.shared.exception.BaseException.class);
+        assertThatThrownBy(() -> allocation.adjust(
+                        plan.id(), new AdjustAssignmentsRequest(0, List.of(new Assignment(other.id(), target.id())))))
+                .isInstanceOf(com.eduhub.edu_hub.shared.exception.BaseException.class);
+    }
+
+    @Test
+    void importsCorrectedErrorsAfterCompletionWithoutMovingOrRenumberingEnrolledStudents() throws Exception {
+        var plan = ready(
+                1,
+                3,
+                1,
+                candidate("CORRECT-A", "980000000001", "Nguyễn Văn An", "30", null),
+                candidate("CORRECT-B", "980000000002", "Trần Văn Bình", "29", null),
+                candidate("CORRECT-C", "1", "Lê Văn Cường", "28", null),
+                candidate("CORRECT-D", "2", "Phạm Văn Dũng", "27", null));
+        var first = confirmation.confirm(plan.id(), new ConfirmRequest(plan.revision(), false, false, null));
+        assertThat(first.enrolled()).isEqualTo(2);
+        var unchanged = first.applicants().stream()
+                .filter(row -> row.state().equals("ENROLLED"))
+                .collect(java.util.stream.Collectors.toMap(
+                        ApplicantResponse::applicationCode, ApplicantResponse::studentCode));
+        plan = imports.upload(plan.id(), first.revision(), spreadsheet(new String[][] {
+            candidate("CORRECT-C", "980000000003", "Lê Văn Cường", "28", null),
+            candidate("CORRECT-C", "980000000003", "Lê Văn Cường", "28", null),
+            candidate("CORRECT-D", "980000000004", "Phạm Văn Dũng", "27", null)
+        }));
+        assertThat(plan.totalStudents()).isEqualTo(4);
+        plan = allocation.preview(plan.id(), new PreviewRequest(plan.revision()));
+        assertThat(plan.classes()).hasSize(1);
+        assertThat(plan.classes().getFirst().reserveUsed()).isEqualTo(1);
+        final var preview = plan;
+        assertThatThrownBy(() ->
+                        confirmation.confirm(preview.id(), new ConfirmRequest(preview.revision(), false, false, null)))
+                .isInstanceOf(com.eduhub.edu_hub.shared.exception.BaseException.class);
+        var completed = confirmation.confirm(plan.id(), new ConfirmRequest(plan.revision(), true, false, null));
+        assertThat(completed.enrolled()).isEqualTo(4);
+        for (var row : completed.applicants()) {
+            if (unchanged.containsKey(row.applicationCode()))
+                assertThat(row.studentCode()).isEqualTo(unchanged.get(row.applicationCode()));
+        }
+    }
+
+    @Test
+    void emailIsOptionalAndNotAnIdentityKeyAndOversizedInvalidRowsRemainReviewable() throws Exception {
+        var plan = ready(
+                1,
+                3,
+                0,
+                candidate("EMAIL-A", "990000000001", "Nguyễn Văn An", "25", "shared@example.com"),
+                candidate("EMAIL-B", "990000000002", "Trần Văn Bình", "24", "shared@example.com"),
+                candidate("INVALID-LONG", "9900000000003", "X".repeat(300), "23", null));
+        assertThat(plan.totalStudents()).isEqualTo(2);
+        assertThat(plan.applicants().getLast().state()).isEqualTo("INVALID");
+        var result = confirmation.confirm(plan.id(), new ConfirmRequest(plan.revision(), false, false, null));
+        assertThat(result.enrolled()).isEqualTo(2);
+        assertThat(result.failed()).isZero();
+    }
+
+    @Test
+    void createsClassNamesThroughZAndAAAndUsesSuffixForStudentCode() {
+        Long freshCohort = jdbc.queryForObject(
+                "insert into cohorts(cohort_code, code_sequence, is_deleted) values ('K9',9,false) returning id",
+                Long.class);
+        var plan = planning.create(new PlanRequest(majorId, freshCohort, 27, 1, 1, 0));
+        plan = prepared(plan, 27);
+        assertThat(plan.classes().getFirst().className()).isEqualTo("CT9A");
+        assertThat(plan.classes().get(25).className()).isEqualTo("CT9Z");
+        assertThat(plan.classes().get(26).className()).isEqualTo("CT9AA");
+        assertThat(plan.classes().stream().map(ClassPreview::className).toList())
+                .doesNotHaveDuplicates();
+        assertThat(jdbc.queryForObject(
+                        "select count(*) from students s join administrative_classes c "
+                                + "on s.class_id=c.id where c.cohort_id=?",
+                        Integer.class,
+                        freshCohort))
+                .isZero();
+        var target = new com.eduhub.edu_hub.people.domain.model.AdministrativeClass();
+        target.setId(plan.classes().get(26).id());
+        target.setClassName(plan.classes().get(26).className());
+        var major = com.eduhub.edu_hub.curriculum.domain.model.Major.builder().build();
+        major.setId(majorId);
+        target.setMajor(major);
+        var cohort = new com.eduhub.edu_hub.people.domain.model.Cohort();
+        cohort.setCodeSequence(9);
+        target.setCohort(cohort);
+        assertThat(studentCodes.generate(target, 1)).isEqualTo("CNTT092701");
+    }
+
+    @Test
+    void allowsSameClassNameAcrossMajorsAndReportsPrefixCollision() {
+        Long firstMajor = jdbc.queryForObject(
+                "insert into majors(major_code,major_name,status,is_deleted) "
+                        + "values ('COLLISIONA','Cơ điện tử','ACTIVE',false) returning id",
+                Long.class);
+        Long secondMajor = jdbc.queryForObject(
+                "insert into majors(major_code,major_name,status,is_deleted) "
+                        + "values ('COLLISIONB','Công tác','ACTIVE',false) returning id",
+                Long.class);
+        var first = planning.create(new PlanRequest(firstMajor, cohortId, 1, 1, 5, 0));
+        first = prepared(first, 1);
+        var second = planning.create(new PlanRequest(secondMajor, cohortId, 1, 1, 5, 0));
+        second = prepared(second, 1);
+        assertThat(first.classes().getFirst().className()).isEqualTo("CT8A");
+        assertThat(second.classes().getFirst().className()).isEqualTo("CT8A");
+        assertThat(first.classes().getFirst().id())
+                .isNotEqualTo(second.classes().getFirst().id());
+        assertThat(first.warnings())
+                .anyMatch(value -> value.contains("Tiền tố lớp CT") && value.contains("COLLISIONB"));
+        assertThat(second.warnings())
+                .anyMatch(value -> value.contains("Tiền tố lớp CT") && value.contains("COLLISIONA"));
+    }
+
+    @Test
+    void rejectsWrongMajorWithoutReplacingApplicantsOrTheirPreviewAssignments() throws Exception {
+        var plan = ready(1, 3, 0, candidate("SCOPE-KEEP", "911000000001", "Nguyễn Văn An", "25", null));
+        Long otherMajor = jdbc.queryForObject("select id from majors where major_code='ATTT'", Long.class);
+        var wrongFile = spreadsheet(otherMajor, cohortId, new String[][] {
+            candidate("SCOPE-WRONG", "911000000002", "Trần Văn Bình", "24", null)
+        });
+        assertThatThrownBy(() -> imports.upload(plan.id(), plan.revision(), wrongFile))
+                .isInstanceOfSatisfying(AdmissionImportScopeException.class, error -> assertThat(error.getErrors())
+                        .singleElement()
+                        .satisfies(detail -> assertThat(detail.getMessage()).contains("ATTT", "CNTT")));
+        var unchanged = planning.get(plan.id());
+        assertThat(unchanged.revision()).isEqualTo(plan.revision());
+        assertThat(unchanged.state()).isEqualTo("PREVIEWED");
+        assertThat(unchanged.totalStudents()).isEqualTo(plan.totalStudents());
+        assertThat(unchanged.majorId()).isEqualTo(majorId);
+        assertThat(unchanged.applicants()).isEqualTo(plan.applicants());
+        assertThat(unchanged.classes()).isEqualTo(plan.classes());
+    }
+
+    @Test
+    void rejectsWrongCohortWithoutMergingIntoAnAlreadyConfirmedPlan() throws Exception {
+        var ready = ready(1, 3, 0, candidate("SCOPE-DONE", "911000000003", "Nguyễn Văn An", "25", null));
+        confirmation.confirm(ready.id(), new ConfirmRequest(ready.revision(), false, false, null));
+        var plan = planning.get(ready.id());
+        long admissionsBefore = count("student_admissions");
+        Long otherCohort = jdbc.queryForObject(
+                "insert into cohorts(cohort_code,code_sequence,is_deleted) values ('K10',10,false) returning id",
+                Long.class);
+        var wrongFile = spreadsheet(majorId, otherCohort, new String[][] {
+            candidate("SCOPE-WRONG-COHORT", "911000000004", "Trần Văn Bình", "24", null)
+        });
+        assertThatThrownBy(() -> imports.upload(plan.id(), plan.revision(), wrongFile))
+                .isInstanceOfSatisfying(AdmissionImportScopeException.class, error -> assertThat(error.getErrors())
+                        .singleElement()
+                        .satisfies(detail -> assertThat(detail.getMessage()).contains("K10", "CT8")));
+        var unchanged = planning.get(plan.id());
+        assertThat(unchanged.revision()).isEqualTo(plan.revision());
+        assertThat(unchanged.state()).isEqualTo("CONFIRMED");
+        assertThat(unchanged.cohortId()).isEqualTo(cohortId);
+        assertThat(unchanged.applicants()).isEqualTo(plan.applicants());
+        assertThat(count("student_admissions")).isEqualTo(admissionsBefore);
+    }
+
+    @Test
+    void rejectsMissingMetadataWithoutDeletingPreviouslyImportedRows() throws Exception {
+        var plan = imported(1, 3, 0, candidate("SCOPE-MISSING", "911000000005", "Nguyễn Văn An", "25", null));
+        try (var workbook = new XSSFWorkbook(new ByteArrayInputStream(planning.template(majorId, cohortId)))) {
+            workbook.getSheetAt(0).getRow(0).getCell(1).setBlank();
+            var wrongFile = file(workbook);
+            assertThatThrownBy(() -> imports.upload(plan.id(), plan.revision(), wrongFile))
+                    .isInstanceOfSatisfying(BaseException.class, error -> assertThat(error.getErrorCode())
+                            .isEqualTo(ErrorCode.ADMISSION_IMPORT_METADATA_REQUIRED));
+        }
+        var unchanged = planning.get(plan.id());
+        assertThat(unchanged.revision()).isEqualTo(plan.revision());
+        assertThat(unchanged.applicants()).isEqualTo(plan.applicants());
+        assertThat(unchanged.totalStudents()).isEqualTo(1);
+    }
+
+    @Test
+    void rollsBackNewPlanWhenTheFileDoesNotMatchTheSelectedMajor() throws Exception {
+        long plansBefore = count("admission_plans");
+        long applicantsBefore = count("admission_applicants");
+        Long otherMajor = jdbc.queryForObject("select id from majors where major_code='ATTT'", Long.class);
+        var wrongFile =
+                spreadsheet(new String[][] {candidate("SCOPE-ROLLBACK", "911000000006", "Nguyễn Văn An", "25", null)});
+        assertThatThrownBy(() -> planning.createWithFile(new PlanRequest(otherMajor, cohortId, 0, 1, 3, 0), wrongFile))
+                .isInstanceOf(AdmissionImportScopeException.class);
+        assertThat(count("admission_plans")).isEqualTo(plansBefore);
+        assertThat(count("admission_applicants")).isEqualTo(applicantsBefore);
+    }
+
+    @Test
+    void templateRequiresAnExistingMajorAndCohortFromTheCatalog() {
+        assertThatThrownBy(() -> planning.template(Long.MAX_VALUE, cohortId))
+                .isInstanceOfSatisfying(BaseException.class, error -> assertThat(error.getErrorCode())
+                        .isEqualTo(ErrorCode.INVALID_STUDENT_CODE_MAJOR));
+        assertThatThrownBy(() -> planning.template(majorId, Long.MAX_VALUE))
+                .isInstanceOfSatisfying(BaseException.class, error -> assertThat(error.getErrorCode())
+                        .isEqualTo(ErrorCode.INVALID_STUDENT_CODE_COHORT));
+    }
+
+    private PlanResponse imported(int minimum, int maximum, int reserve, String[]... rows) throws Exception {
+        return planning.createWithFile(
+                new PlanRequest(majorId, cohortId, 0, minimum, maximum, reserve), spreadsheet(rows));
+    }
+
+    private PlanResponse prepared(PlanResponse plan, int count) {
+        return classes.createFromPlan(
+                new CreateClassesRequest(plan.id(), plan.revision(), count, List.of(), false, false, null));
+    }
+
+    private PlanResponse ready(int minimum, int maximum, int reserve, String[]... rows) throws Exception {
+        var plan = imported(minimum, maximum, reserve, rows);
+        plan = prepared(plan, plan.scenarios().getFirst().classCount());
+        return allocation.preview(plan.id(), new PreviewRequest(plan.revision()));
+    }
+
+    private String[] candidate(String code, String citizen, String name, String score, String email) {
+        return new String[] {code, citizen, name, score, null, null, email, null};
+    }
+
+    private MockMultipartFile spreadsheet(String[][] data) throws Exception {
+        return spreadsheet(majorId, cohortId, data);
+    }
+
+    private MockMultipartFile spreadsheet(Long templateMajor, Long templateCohort, String[][] data) throws Exception {
+        try (var workbook =
+                new XSSFWorkbook(new ByteArrayInputStream(planning.template(templateMajor, templateCohort)))) {
+            var sheet = workbook.getSheetAt(0);
+            for (int i = 0; i < data.length; i++) {
+                var row = sheet.createRow(AdmissionSpreadsheet.HEADER_ROW_INDEX + i + 1);
+                for (int j = 0; j < data[i].length; j++)
+                    if (data[i][j] != null) row.createCell(j).setCellValue(data[i][j]);
+            }
+            return file(workbook);
+        }
+    }
+
+    private MockMultipartFile file(XSSFWorkbook workbook) throws Exception {
+        try (var output = new ByteArrayOutputStream()) {
+            workbook.write(output);
+            return new MockMultipartFile("file", "admission.xlsx", "application/octet-stream", output.toByteArray());
+        }
+    }
+
+    private long count(String table) {
+        return jdbc.queryForObject("select count(*) from " + table, Long.class);
+    }
+}

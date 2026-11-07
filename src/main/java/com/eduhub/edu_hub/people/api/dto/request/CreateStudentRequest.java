@@ -16,10 +16,11 @@ public class CreateStudentRequest {
     @Size(max = 255)
     private String fullName;
 
+    @jakarta.validation.constraints.Past
     private LocalDate dateOfBirth;
+
     private String gender;
 
-    @NotBlank
     @Email
     @Size(max = 255)
     private String email;
@@ -27,7 +28,8 @@ public class CreateStudentRequest {
     @Size(max = 255)
     private String phone;
 
-    @Size(max = 255)
+    @NotBlank
+    @Size(max = 32)
     private String citizenId;
 
     @NotNull
@@ -39,8 +41,7 @@ public class CreateStudentRequest {
     @NotNull
     private Long administrativeClassId;
 
-    @NotNull
-    private TrainingType trainingType;
+    private TrainingType trainingType = TrainingType.CHINH_QUY;
 
     @DecimalMin("0.0")
     private BigDecimal entranceScore;

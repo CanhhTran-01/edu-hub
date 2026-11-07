@@ -14,6 +14,10 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface StudentRepository extends JpaRepository<Student, Long>, JpaSpecificationExecutor<Student> {
+    List<Student> findByCitizenIdIn(List<String> citizenIds);
+
+    Optional<Student> findByCitizenIdAndDeletedFalse(String citizenId);
+
     @EntityGraph(attributePaths = {"administrativeClass", "administrativeClass.cohort"})
     Optional<Student> findByUserIdAndDeletedFalse(Long userId);
 
