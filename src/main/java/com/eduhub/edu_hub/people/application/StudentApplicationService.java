@@ -60,14 +60,16 @@ public class StudentApplicationService {
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CreateStudentResponse create(CreateStudentRequest request) {
+
         CreatedStudent created = transactionTemplate.execute(status -> createInTransaction(request));
         if (created == null) {
             throw new BaseException(ErrorCode.UNEXPECTED_ERROR);
         }
 
         // TODO(SINGLE_STUDENT_NOTIFICATION_QUEUE): UC thêm đơn lẻ hiện chỉ gửi lần đầu ở đây.
-        // Khi tích hợp hàng đợi thông báo dùng chung, đưa cả luồng này vào scheduler với 3 retry.
-        // Không khôi phục endpoint resend hoặc reset bộ đếm để vượt giới hạn của luồng nhập học.
+        //  Khi tích hợp hàng đợi thông báo dùng chung, đưa cả luồng này vào scheduler với 3 retry.
+        //  Không khôi phục endpoint resend hoặc reset bộ đếm để vượt giới hạn của luồng nhập học.
+
         CreateStudentAccountResult notification = created.hasEmail()
                 ? identityFacade.sendStudentAccountNotification(created.userId(), INITIAL_PASSWORD)
                 : new CreateStudentAccountResult(created.userId(), false, "ACCOUNT_EMAIL_MISSING");
@@ -84,9 +86,11 @@ public class StudentApplicationService {
     }
 
     private CreatedStudent createInTransaction(CreateStudentRequest request) {
+
         String fullName = request.getFullName().trim();
         String email = PersonText.email(request.getEmail());
         String citizenId = normalizeCitizenId(request.getCitizenId());
+
         String reason = request.getReason().trim();
         if (reason.isEmpty() || reason.length() > 500) {
             throw new BaseException(ErrorCode.VALIDATION_ERROR);
@@ -153,9 +157,17 @@ public class StudentApplicationService {
     }
 
     private String normalizeCitizenId(String citizenId) {
-        if (citizenId == null) throw new BaseException(ErrorCode.VALIDATION_ERROR);
+
+        if (citizenId == null) {
+            throw new BaseException(ErrorCode.VALIDATION_ERROR);
+        }
+
         String normalized = citizenId.replaceAll("\\s+", "");
-        if (!normalized.matches("[0-9]{12}")) throw new BaseException(ErrorCode.VALIDATION_ERROR);
+
+        if (!normalized.matches("[0-9]{12}")) {
+            throw new BaseException(ErrorCode.VALIDATION_ERROR);
+        }
+
         return normalized;
     }
 
