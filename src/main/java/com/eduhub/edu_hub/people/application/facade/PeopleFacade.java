@@ -1,11 +1,39 @@
 package com.eduhub.edu_hub.people.application.facade;
 
 import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
-import com.eduhub.edu_hub.people.application.facade.dto.StudentPlanningResponse;
+import com.eduhub.edu_hub.people.application.facade.dto.*;
+import com.eduhub.edu_hub.people.domain.enums.AccountNotificationStatus;
 import java.util.List;
 import java.util.Set;
 
 public interface PeopleFacade {
+    /** Hợp đồng dữ liệu nhập học; không đưa entity/repository của people ra module khác. */
+    interface Admission {
+        AdmissionCohortInfo requireCohort(Long cohortId);
+
+        void lockCohort(Long cohortId);
+
+        List<AdmissionClassInfo> findClasses(Long majorId, Long cohortId);
+
+        List<AdmissionClassInfo> findClassesByIds(Set<Long> ids);
+
+        AdmissionClassInfo lockClass(Long classId);
+
+        AdmissionClassInfo createClass(AdmissionClassRequest request);
+
+        AdmissionClassInfo configureClass(Long classId, int minimum, int maximum, int reserve);
+
+        List<AdmissionClassPrefix> findClassPrefixes();
+
+        List<AdmissionStudentInfo> findStudentsByCitizenIds(List<String> citizenIds);
+
+        List<AdmissionStudentInfo> findStudentsByIds(Set<Long> studentIds);
+
+        AdmissionStudentRegistrationResult registerStudent(AdmissionStudentRegistration request);
+
+        void updateNotificationStatus(Long studentId, AccountNotificationStatus status, String error);
+    }
+
     interface Scheduling {
         List<StudentPlanningResponse> findStudentsForPlanning();
 

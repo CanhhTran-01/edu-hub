@@ -4,12 +4,17 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import com.eduhub.edu_hub.admission.application.command.AdmissionCommands.*;
+import com.eduhub.edu_hub.admission.application.exception.*;
+import com.eduhub.edu_hub.admission.application.result.AdmissionResults.*;
+import com.eduhub.edu_hub.admission.application.service.*;
+import com.eduhub.edu_hub.admission.domain.policy.*;
+import com.eduhub.edu_hub.admission.infrastructure.config.*;
+import com.eduhub.edu_hub.admission.infrastructure.spreadsheet.*;
 import com.eduhub.edu_hub.identity.infrastructure.mail.TemporaryPasswordMailService;
-import com.eduhub.edu_hub.people.api.dto.request.AdmissionRequests.*;
-import com.eduhub.edu_hub.people.api.dto.response.AdmissionResponses.*;
-import com.eduhub.edu_hub.people.application.admission.*;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import com.eduhub.edu_hub.shared.text.PersonText;
 import com.eduhub.edu_hub.support.PostgresIntegrationTest;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -38,7 +43,7 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
     AdmissionPlanningService planning;
 
     @Autowired
-    AdministrativeClassService classes;
+    AdmissionClassPreparationService classes;
 
     @Autowired
     AdmissionImportService imports;
@@ -53,7 +58,10 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
     AdmissionNotificationSender sender;
 
     @Autowired
-    com.eduhub.edu_hub.people.infrastructure.admission.AdmissionMailDispatcher dispatcher;
+    AdmissionNotificationQueryService notices;
+
+    @Autowired
+    com.eduhub.edu_hub.admission.infrastructure.notification.AdmissionMailDispatcher dispatcher;
 
     @Autowired
     JdbcTemplate jdbc;
@@ -76,7 +84,7 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
     @Test
     void separatesPlanningClassCreationAndConfirmationAndAllocatesCodesByGivenName() throws Exception {
         long before = count("students");
-        PlanResponse plan = imported(
+        PlanResult plan = imported(
                 2,
                 3,
                 1,
@@ -91,18 +99,18 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
         plan = prepared(plan, 2);
         assertThat(plan.classes()).hasSize(2);
         assertThat(count("students")).isEqualTo(before);
-        plan = allocation.preview(plan.id(), new PreviewRequest(plan.revision()));
+        plan = allocation.preview(plan.id(), new PreviewCommand(plan.revision()));
         assertThat(plan.averageScoreDifference()).isEqualByComparingTo("0");
         assertThat(count("students")).isEqualTo(before);
-        var result = confirmation.confirm(plan.id(), new ConfirmRequest(plan.revision(), false, false, null));
+        var result = confirmation.confirm(plan.id(), new ConfirmCommand(plan.revision(), false, false, null));
         assertThat(result.state()).isEqualTo("CONFIRMED");
         assertThat(result.enrolled()).isEqualTo(4);
         assertThat(result.failed()).isZero();
-        for (ClassPreview target : plan.classes()) {
+        for (ClassResult target : plan.classes()) {
             var assigned = new ArrayList<>(result.applicants().stream()
                     .filter(row -> target.id().equals(row.assignedClassId()))
                     .toList());
-            assigned.sort(Comparator.comparing(ApplicantResponse::fullName, AdmissionText.nameOrder()));
+            assigned.sort(Comparator.comparing(ApplicantResult::fullName, PersonText.nameOrder()));
             assertThat(assigned.getFirst().studentCode()).endsWith("01").startsWith("CNTT08");
             assertThat(assigned.getLast().studentCode()).endsWith("02");
         }
@@ -113,9 +121,9 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
                 .isTrue();
         assertThat(jdbc.queryForObject("select status from users where id=?", String.class, userId))
                 .isEqualTo("ACTIVE");
-        assertThat(sender.list(plan.id())).allMatch(row -> row.state().equals("SKIPPED") && row.failureCount() == 0);
+        assertThat(notices.list(plan.id())).allMatch(row -> row.state().equals("SKIPPED") && row.failureCount() == 0);
         assertThat(confirmation
-                        .confirm(plan.id(), new ConfirmRequest(0, false, false, null))
+                        .confirm(plan.id(), new ConfirmCommand(0, false, false, null))
                         .enrolled())
                 .isEqualTo(4);
         assertThat(count("students")).isEqualTo(before + 4);
@@ -124,10 +132,10 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
 
     @Test
     void acceptsANonRecommendedNormalScenarioWithoutAutoSelectingFewestClasses() {
-        var plan = planning.create(new PlanRequest(majorId, cohortId, 200, 40, 50, 15));
+        var plan = planning.create(new PlanCommand(majorId, cohortId, 200, 40, 50, 15));
         plan = prepared(plan, 5);
         assertThat(plan.selectedClassCount()).isEqualTo(5);
-        assertThat(plan.classes()).extracting(ClassPreview::targetSize).containsExactly(40, 40, 40, 40, 40);
+        assertThat(plan.classes()).extracting(ClassResult::targetSize).containsExactly(40, 40, 40, 40, 40);
     }
 
     @Test
@@ -142,11 +150,11 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
                 candidate("CONFLICT-A", "920000000004", "Phạm Văn Dũng", "22", null));
         assertThat(plan.totalStudents()).isEqualTo(1);
         assertThat(plan.applicants())
-                .extracting(ApplicantResponse::state)
+                .extracting(ApplicantResult::state)
                 .containsExactly("VALID", "INVALID", "CONFLICT", "CONFLICT");
-        plan = allocation.preview(prepared(plan, 1).id(), new PreviewRequest(plan.revision() + 1));
+        plan = allocation.preview(prepared(plan, 1).id(), new PreviewCommand(plan.revision() + 1));
         assertThat(confirmation
-                        .confirm(plan.id(), new ConfirmRequest(plan.revision(), false, false, null))
+                        .confirm(plan.id(), new ConfirmCommand(plan.revision(), false, false, null))
                         .enrolled())
                 .isEqualTo(1);
     }
@@ -155,7 +163,7 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
     void reusesLockedAccountAndDistinguishesIdenticalImportFromChangedApplication() throws Exception {
         var original = ready(1, 4, 0, candidate("REUSE-OLD", "930000000001", "Nguyễn Văn An", "25", null));
         var originalResult =
-                confirmation.confirm(original.id(), new ConfirmRequest(original.revision(), false, false, null));
+                confirmation.confirm(original.id(), new ConfirmCommand(original.revision(), false, false, null));
         var person = originalResult.applicants().getFirst();
         Long userId = jdbc.queryForObject("select user_id from students where id=?", Long.class, person.studentId());
         String changedPassword = new BCryptPasswordEncoder().encode("existing-password");
@@ -175,7 +183,7 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
         var next = ready(1, 4, 0, candidate("REUSE-NEW", "930000000001", "Nguyễn Văn An", "27", "reuse@example.com"));
         assertThat(next.totalStudents()).isEqualTo(1);
         assertThat(next.applicants().getFirst().warnings()).isNotEmpty();
-        var result = confirmation.confirm(next.id(), new ConfirmRequest(next.revision(), false, false, null));
+        var result = confirmation.confirm(next.id(), new ConfirmCommand(next.revision(), false, false, null));
         assertThat(result.enrolled()).isEqualTo(1);
         assertThat(result.applicants().getFirst().studentId()).isEqualTo(person.studentId());
         assertThat(result.applicants().getFirst().studentCode()).isEqualTo(person.studentCode());
@@ -191,7 +199,7 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
                         Integer.class,
                         person.studentId()))
                 .isEqualTo(2);
-        var notice = sender.list(next.id()).getFirst();
+        var notice = notices.list(next.id()).getFirst();
         sender.send(notice.id());
         verify(mail).sendAdmissionConfirmation("reuse@example.com", person.studentCode());
         verify(mail, never()).sendAccount(anyString(), anyString(), anyString());
@@ -206,14 +214,14 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
                 candidate("NAME-A", "940000000001", "Nguyễn Văn An", "25", null),
                 candidate("NAME-B", "940000000002", "Nguyễn Văn An", "24", null));
         assertThatThrownBy(() -> classes.createFromPlan(
-                        new CreateClassesRequest(plan.id(), plan.revision(), 1, List.of(), false, true, null)))
+                        new CreateClassesCommand(plan.id(), plan.revision(), 1, List.of(), false, true, null)))
                 .isInstanceOf(com.eduhub.edu_hub.shared.exception.BaseException.class);
         var selected = classes.createFromPlan(
-                new CreateClassesRequest(plan.id(), plan.revision(), 1, List.of(), false, true, "Nhóm tuyển sinh nhỏ"));
-        selected = allocation.preview(selected.id(), new PreviewRequest(selected.revision()));
+                new CreateClassesCommand(plan.id(), plan.revision(), 1, List.of(), false, true, "Nhóm tuyển sinh nhỏ"));
+        selected = allocation.preview(selected.id(), new PreviewCommand(selected.revision()));
         assertThat(selected.warnings()).noneMatch(value -> value.contains("trùng họ tên"));
         var response = confirmation.confirm(
-                selected.id(), new ConfirmRequest(selected.revision(), false, true, "Nhóm tuyển sinh nhỏ"));
+                selected.id(), new ConfirmCommand(selected.revision(), false, true, "Nhóm tuyển sinh nhỏ"));
         assertThat(response.enrolled()).isEqualTo(2);
         assertThat(response.state()).isEqualTo("CONFIRMED");
     }
@@ -233,7 +241,7 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
                         .toList())
                 .singleElement()
                 .satisfies(value -> assertThat(value).contains("4 sinh viên", "(tối đa 3)"));
-        var result = confirmation.confirm(plan.id(), new ConfirmRequest(plan.revision(), false, false, null));
+        var result = confirmation.confirm(plan.id(), new ConfirmCommand(plan.revision(), false, false, null));
         assertThat(result.state()).isEqualTo("CONFIRMED");
         assertThat(result.enrolled()).isEqualTo(4);
         assertThat(result.failed()).isZero();
@@ -242,7 +250,7 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
     @Test
     void retriesFailedRowsWithoutRollingBackSuccessfulRowsOrDuplicatingIdentity() throws Exception {
         var old = ready(1, 3, 0, candidate("PARTIAL-OLD", "950000000001", "Nguyễn Văn An", "25", null));
-        var first = confirmation.confirm(old.id(), new ConfirmRequest(old.revision(), false, false, null));
+        var first = confirmation.confirm(old.id(), new ConfirmCommand(old.revision(), false, false, null));
         var plan = ready(
                 1,
                 3,
@@ -251,7 +259,7 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
                 candidate("PARTIAL-NEW", "950000000002", "Trần Văn Bình", "24", null));
         try {
             jdbc.update("update roles set is_deleted=true where role_name='STUDENT'");
-            var partial = confirmation.confirm(plan.id(), new ConfirmRequest(plan.revision(), false, false, null));
+            var partial = confirmation.confirm(plan.id(), new ConfirmCommand(plan.revision(), false, false, null));
             assertThat(partial.enrolled()).isEqualTo(1);
             assertThat(partial.failed()).isEqualTo(1);
             assertThat(partial.state()).isEqualTo("PARTIALLY_CONFIRMED");
@@ -265,7 +273,7 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
                             "select count(*) from students where citizen_id='950000000002'", Integer.class))
                     .isZero();
             jdbc.update("update roles set is_deleted=false where role_name='STUDENT'");
-            var completed = confirmation.confirm(plan.id(), new ConfirmRequest(partial.revision(), false, false, null));
+            var completed = confirmation.confirm(plan.id(), new ConfirmCommand(partial.revision(), false, false, null));
             assertThat(completed.enrolled()).isEqualTo(2);
             assertThat(completed.failed()).isZero();
             assertThat(completed.state()).isEqualTo("CONFIRMED");
@@ -280,18 +288,18 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
     @Test
     void stopsAfterInitialFailureAndThreeScheduledRetriesWithoutManualReset() throws Exception {
         var plan = ready(1, 3, 0, candidate("MAIL-FAIL", "960000000001", "Nguyễn Văn An", "25", "failed@example.com"));
-        confirmation.confirm(plan.id(), new ConfirmRequest(plan.revision(), false, false, null));
-        var notification = sender.list(plan.id()).getFirst();
+        confirmation.confirm(plan.id(), new ConfirmCommand(plan.revision(), false, false, null));
+        var notification = notices.list(plan.id()).getFirst();
         doThrow(new MailSendException("unavailable"))
                 .when(mail)
                 .sendAccount(eq("failed@example.com"), anyString(), anyString());
         sender.sendInitial(notification.id());
-        assertThat(sender.list(plan.id()).getFirst().failureCount()).isEqualTo(1);
+        assertThat(notices.list(plan.id()).getFirst().failureCount()).isEqualTo(1);
         jdbc.update(
                 "update admission_notifications set next_attempt_at=timestamp '2000-01-01' where id=?",
                 notification.id());
         sender.sendInitial(notification.id()); // A delayed async kickoff must not become a retry.
-        assertThat(sender.list(plan.id()).getFirst().failureCount()).isEqualTo(1);
+        assertThat(notices.list(plan.id()).getFirst().failureCount()).isEqualTo(1);
         org.springframework.test.util.ReflectionTestUtils.setField(dispatcher, "enabled", true);
         try {
             for (int i = 0; i < 4; i++) {
@@ -303,7 +311,7 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
         } finally {
             org.springframework.test.util.ReflectionTestUtils.setField(dispatcher, "enabled", false);
         }
-        var failed = sender.list(plan.id()).getFirst();
+        var failed = notices.list(plan.id()).getFirst();
         assertThat(failed.state()).isEqualTo("FAILED");
         assertThat(failed.failureCount()).isEqualTo(4);
         sender.send(notification.id());
@@ -330,11 +338,12 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
                 .orElseThrow();
         assertThatThrownBy(() -> allocation.adjust(
                         plan.id(),
-                        new AdjustAssignmentsRequest(
-                                plan.revision(), List.of(new Assignment(other.id(), target.id())))))
+                        new AdjustAssignmentsCommand(
+                                plan.revision(), List.of(new AssignmentCommand(other.id(), target.id())))))
                 .isInstanceOf(com.eduhub.edu_hub.shared.exception.BaseException.class);
         assertThatThrownBy(() -> allocation.adjust(
-                        plan.id(), new AdjustAssignmentsRequest(0, List.of(new Assignment(other.id(), target.id())))))
+                        plan.id(),
+                        new AdjustAssignmentsCommand(0, List.of(new AssignmentCommand(other.id(), target.id())))))
                 .isInstanceOf(com.eduhub.edu_hub.shared.exception.BaseException.class);
     }
 
@@ -348,26 +357,26 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
                 candidate("CORRECT-B", "980000000002", "Trần Văn Bình", "29", null),
                 candidate("CORRECT-C", "1", "Lê Văn Cường", "28", null),
                 candidate("CORRECT-D", "2", "Phạm Văn Dũng", "27", null));
-        var first = confirmation.confirm(plan.id(), new ConfirmRequest(plan.revision(), false, false, null));
+        var first = confirmation.confirm(plan.id(), new ConfirmCommand(plan.revision(), false, false, null));
         assertThat(first.enrolled()).isEqualTo(2);
         var unchanged = first.applicants().stream()
                 .filter(row -> row.state().equals("ENROLLED"))
                 .collect(java.util.stream.Collectors.toMap(
-                        ApplicantResponse::applicationCode, ApplicantResponse::studentCode));
+                        ApplicantResult::applicationCode, ApplicantResult::studentCode));
         plan = imports.upload(plan.id(), first.revision(), spreadsheet(new String[][] {
             candidate("CORRECT-C", "980000000003", "Lê Văn Cường", "28", null),
             candidate("CORRECT-C", "980000000003", "Lê Văn Cường", "28", null),
             candidate("CORRECT-D", "980000000004", "Phạm Văn Dũng", "27", null)
         }));
         assertThat(plan.totalStudents()).isEqualTo(4);
-        plan = allocation.preview(plan.id(), new PreviewRequest(plan.revision()));
+        plan = allocation.preview(plan.id(), new PreviewCommand(plan.revision()));
         assertThat(plan.classes()).hasSize(1);
         assertThat(plan.classes().getFirst().reserveUsed()).isEqualTo(1);
         final var preview = plan;
         assertThatThrownBy(() ->
-                        confirmation.confirm(preview.id(), new ConfirmRequest(preview.revision(), false, false, null)))
+                        confirmation.confirm(preview.id(), new ConfirmCommand(preview.revision(), false, false, null)))
                 .isInstanceOf(com.eduhub.edu_hub.shared.exception.BaseException.class);
-        var completed = confirmation.confirm(plan.id(), new ConfirmRequest(plan.revision(), true, false, null));
+        var completed = confirmation.confirm(plan.id(), new ConfirmCommand(plan.revision(), true, false, null));
         assertThat(completed.enrolled()).isEqualTo(4);
         for (var row : completed.applicants()) {
             if (unchanged.containsKey(row.applicationCode()))
@@ -386,7 +395,7 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
                 candidate("INVALID-LONG", "9900000000003", "X".repeat(300), "23", null));
         assertThat(plan.totalStudents()).isEqualTo(2);
         assertThat(plan.applicants().getLast().state()).isEqualTo("INVALID");
-        var result = confirmation.confirm(plan.id(), new ConfirmRequest(plan.revision(), false, false, null));
+        var result = confirmation.confirm(plan.id(), new ConfirmCommand(plan.revision(), false, false, null));
         assertThat(result.enrolled()).isEqualTo(2);
         assertThat(result.failed()).isZero();
     }
@@ -396,13 +405,12 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
         Long freshCohort = jdbc.queryForObject(
                 "insert into cohorts(cohort_code, code_sequence, is_deleted) values ('K9',9,false) returning id",
                 Long.class);
-        var plan = planning.create(new PlanRequest(majorId, freshCohort, 27, 1, 1, 0));
+        var plan = planning.create(new PlanCommand(majorId, freshCohort, 27, 1, 1, 0));
         plan = prepared(plan, 27);
         assertThat(plan.classes().getFirst().className()).isEqualTo("CT9A");
         assertThat(plan.classes().get(25).className()).isEqualTo("CT9Z");
         assertThat(plan.classes().get(26).className()).isEqualTo("CT9AA");
-        assertThat(plan.classes().stream().map(ClassPreview::className).toList())
-                .doesNotHaveDuplicates();
+        assertThat(plan.classes().stream().map(ClassResult::className).toList()).doesNotHaveDuplicates();
         assertThat(jdbc.queryForObject(
                         "select count(*) from students s join administrative_classes c "
                                 + "on s.class_id=c.id where c.cohort_id=?",
@@ -431,9 +439,9 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
                 "insert into majors(major_code,major_name,status,is_deleted) "
                         + "values ('COLLISIONB','Công tác','ACTIVE',false) returning id",
                 Long.class);
-        var first = planning.create(new PlanRequest(firstMajor, cohortId, 1, 1, 5, 0));
+        var first = planning.create(new PlanCommand(firstMajor, cohortId, 1, 1, 5, 0));
         first = prepared(first, 1);
-        var second = planning.create(new PlanRequest(secondMajor, cohortId, 1, 1, 5, 0));
+        var second = planning.create(new PlanCommand(secondMajor, cohortId, 1, 1, 5, 0));
         second = prepared(second, 1);
         assertThat(first.classes().getFirst().className()).isEqualTo("CT8A");
         assertThat(second.classes().getFirst().className()).isEqualTo("CT8A");
@@ -468,7 +476,7 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
     @Test
     void rejectsWrongCohortWithoutMergingIntoAnAlreadyConfirmedPlan() throws Exception {
         var ready = ready(1, 3, 0, candidate("SCOPE-DONE", "911000000003", "Nguyễn Văn An", "25", null));
-        confirmation.confirm(ready.id(), new ConfirmRequest(ready.revision(), false, false, null));
+        confirmation.confirm(ready.id(), new ConfirmCommand(ready.revision(), false, false, null));
         var plan = planning.get(ready.id());
         long admissionsBefore = count("student_admissions");
         Long otherCohort = jdbc.queryForObject(
@@ -512,7 +520,7 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
         Long otherMajor = jdbc.queryForObject("select id from majors where major_code='ATTT'", Long.class);
         var wrongFile =
                 spreadsheet(new String[][] {candidate("SCOPE-ROLLBACK", "911000000006", "Nguyễn Văn An", "25", null)});
-        assertThatThrownBy(() -> planning.createWithFile(new PlanRequest(otherMajor, cohortId, 0, 1, 3, 0), wrongFile))
+        assertThatThrownBy(() -> planning.createWithFile(new PlanCommand(otherMajor, cohortId, 0, 1, 3, 0), wrongFile))
                 .isInstanceOf(AdmissionImportScopeException.class);
         assertThat(count("admission_plans")).isEqualTo(plansBefore);
         assertThat(count("admission_applicants")).isEqualTo(applicantsBefore);
@@ -528,20 +536,123 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
                         .isEqualTo(ErrorCode.INVALID_STUDENT_CODE_COHORT));
     }
 
-    private PlanResponse imported(int minimum, int maximum, int reserve, String[]... rows) throws Exception {
+    @Test
+    void reusesExistingStudentThroughFacadeWithoutResettingAccount() throws Exception {
+        var original = ready(1, 3, 0, candidate("BOUNDARY-REUSE-OLD", "912000000003", "Nguyễn Văn An", "25", null));
+        var first = confirmation.confirm(original.id(), new ConfirmCommand(original.revision(), false, false, null));
+        var student = first.applicants().getFirst();
+        Long userId = jdbc.queryForObject("select user_id from students where id=?", Long.class, student.studentId());
+        String password = new BCryptPasswordEncoder().encode("existing-facade-password");
+        jdbc.update(
+                "update users set password_hash=?,is_first_login=false,status='LOCKED' where id=?", password, userId);
+        long studentsBefore = count("students");
+        long usersBefore = count("users");
+        var next = ready(
+                1,
+                3,
+                0,
+                candidate("BOUNDARY-REUSE-NEW", "912000000003", "Nguyễn Văn An", "26", "facade-reuse@example.com"));
+        var result = confirmation.confirm(next.id(), new ConfirmCommand(next.revision(), false, false, null));
+        assertThat(result.enrolled()).isEqualTo(1);
+        assertThat(result.applicants()).singleElement().satisfies(row -> {
+            assertThat(row.studentId()).isEqualTo(student.studentId());
+            assertThat(row.studentCode()).isEqualTo(student.studentCode());
+            assertThat(row.reusingAccount()).isTrue();
+            assertThat(row.warnings()).anyMatch(message -> message.contains("khóa"));
+        });
+        assertThat(count("students")).isEqualTo(studentsBefore);
+        assertThat(count("users")).isEqualTo(usersBefore);
+        assertThat(jdbc.queryForObject("select password_hash from users where id=?", String.class, userId))
+                .isEqualTo(password);
+        assertThat(jdbc.queryForObject("select status from users where id=?", String.class, userId))
+                .isEqualTo("LOCKED");
+        assertThat(jdbc.queryForObject("select is_first_login from users where id=?", Boolean.class, userId))
+                .isFalse();
+        assertThat(jdbc.queryForObject(
+                        "select count(*) from student_admissions where student_id=?",
+                        Integer.class,
+                        student.studentId()))
+                .isEqualTo(2);
+        sender.send(notices.list(next.id()).getFirst().id());
+        verify(mail).sendAdmissionConfirmation("facade-reuse@example.com", student.studentCode());
+        verify(mail, never()).sendAccount(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void rollsBackPeopleAndIdentityChangesWhenSavingAdmissionFailsAndKeepsSuccessfulRows() throws Exception {
+        var plan = ready(
+                1,
+                3,
+                0,
+                candidate("BOUNDARY-ROLLBACK-A", "912000000001", "Nguyễn Văn An", "25", null),
+                candidate("BOUNDARY-ROLLBACK-B", "912000000002", "Trần Văn Bình", "24", null));
+        long studentsBefore = count("students");
+        long usersBefore = count("users");
+        long admissionsBefore = count("student_admissions");
+        long noticesBefore = count("admission_notifications");
+        Long classId = plan.classes().getFirst().id();
+        // Chỉ tạo lỗi trong PostgreSQL Testcontainers, sau khi facade đã lưu Student/User/MSSV.
+        jdbc.execute(
+                """
+                create function admission_workflow.reject_refactor_test_enrollment() returns trigger
+                language plpgsql as $$
+                begin
+                    if new.application_code = 'BOUNDARY-ROLLBACK-B' then
+                        raise exception 'Simulated admission persistence failure';
+                    end if;
+                    return new;
+                end;
+                $$
+                """);
+        try {
+            jdbc.execute(
+                    """
+                    create trigger reject_refactor_test_enrollment before insert on student_admissions
+                    for each row execute function admission_workflow.reject_refactor_test_enrollment()
+                    """);
+            var result = confirmation.confirm(plan.id(), new ConfirmCommand(plan.revision(), false, false, null));
+            assertThat(result.state()).isEqualTo("PARTIALLY_CONFIRMED");
+            assertThat(result.enrolled()).isEqualTo(1);
+            assertThat(result.failed()).isEqualTo(1);
+            assertThat(count("students")).isEqualTo(studentsBefore + 1);
+            assertThat(count("users")).isEqualTo(usersBefore + 1);
+            assertThat(count("student_admissions")).isEqualTo(admissionsBefore + 1);
+            assertThat(count("admission_notifications")).isEqualTo(noticesBefore + 1);
+            assertThat(jdbc.queryForObject("select count(*) from students where citizen_id='912000000002'", Long.class))
+                    .isZero();
+            assertThat(jdbc.queryForObject(
+                            "select last_student_sequence from administrative_classes where id=?",
+                            Integer.class,
+                            classId))
+                    .isEqualTo(1);
+        } finally {
+            jdbc.execute("drop trigger if exists reject_refactor_test_enrollment on student_admissions");
+            jdbc.execute("drop function admission_workflow.reject_refactor_test_enrollment()");
+        }
+        var retry = planning.get(plan.id());
+        var completed = confirmation.confirm(retry.id(), new ConfirmCommand(retry.revision(), false, false, null));
+        assertThat(completed.enrolled()).isEqualTo(2);
+        assertThat(completed.failed()).isZero();
+        assertThat(completed.applicants().getLast().studentCode()).endsWith("02");
+        assertThat(count("students")).isEqualTo(studentsBefore + 2);
+        assertThat(count("users")).isEqualTo(usersBefore + 2);
+        verifyNoInteractions(mail);
+    }
+
+    private PlanResult imported(int minimum, int maximum, int reserve, String[]... rows) throws Exception {
         return planning.createWithFile(
-                new PlanRequest(majorId, cohortId, 0, minimum, maximum, reserve), spreadsheet(rows));
+                new PlanCommand(majorId, cohortId, 0, minimum, maximum, reserve), spreadsheet(rows));
     }
 
-    private PlanResponse prepared(PlanResponse plan, int count) {
+    private PlanResult prepared(PlanResult plan, int count) {
         return classes.createFromPlan(
-                new CreateClassesRequest(plan.id(), plan.revision(), count, List.of(), false, false, null));
+                new CreateClassesCommand(plan.id(), plan.revision(), count, List.of(), false, false, null));
     }
 
-    private PlanResponse ready(int minimum, int maximum, int reserve, String[]... rows) throws Exception {
+    private PlanResult ready(int minimum, int maximum, int reserve, String[]... rows) throws Exception {
         var plan = imported(minimum, maximum, reserve, rows);
         plan = prepared(plan, plan.scenarios().getFirst().classCount());
-        return allocation.preview(plan.id(), new PreviewRequest(plan.revision()));
+        return allocation.preview(plan.id(), new PreviewCommand(plan.revision()));
     }
 
     private String[] candidate(String code, String citizen, String name, String score, String email) {
@@ -557,7 +668,7 @@ class AdmissionWorkflowIntegrationTest extends PostgresIntegrationTest {
                 new XSSFWorkbook(new ByteArrayInputStream(planning.template(templateMajor, templateCohort)))) {
             var sheet = workbook.getSheetAt(0);
             for (int i = 0; i < data.length; i++) {
-                var row = sheet.createRow(AdmissionSpreadsheet.HEADER_ROW_INDEX + i + 1);
+                var row = sheet.createRow(AdmissionSpreadsheetReader.HEADER_ROW_INDEX + i + 1);
                 for (int j = 0; j < data[i].length; j++)
                     if (data[i][j] != null) row.createCell(j).setCellValue(data[i][j]);
             }

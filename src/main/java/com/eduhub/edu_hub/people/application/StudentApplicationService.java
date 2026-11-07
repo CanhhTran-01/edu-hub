@@ -23,6 +23,7 @@ import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.mapper.PageMapper;
+import com.eduhub.edu_hub.shared.text.PersonText;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
@@ -84,7 +85,7 @@ public class StudentApplicationService {
 
     private CreatedStudent createInTransaction(CreateStudentRequest request) {
         String fullName = request.getFullName().trim();
-        String email = com.eduhub.edu_hub.people.application.admission.AdmissionText.email(request.getEmail());
+        String email = PersonText.email(request.getEmail());
         String citizenId = normalizeCitizenId(request.getCitizenId());
         String reason = request.getReason().trim();
         if (reason.isEmpty() || reason.length() > 500) {
