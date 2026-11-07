@@ -1,0 +1,27 @@
+package com.eduhub.edu_hub.notification.domain.repository;
+
+import com.eduhub.edu_hub.notification.domain.enums.NotificationStatus;
+import com.eduhub.edu_hub.notification.domain.model.QueuedNotification;
+import jakarta.persistence.LockModeType;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.*;
+import org.springframework.data.repository.query.Param;
+
+public interface QueuedNotificationRepository extends JpaRepository<QueuedNotification, Long> {
+    @Query("select n.id from QueuedNotification n where n.deleted = false "
+            + "and n.state in :states and n.failureCount < :maxFailures and n.nextAttemptAt <= :now order by n.id")
+    List<Long> findDue(
+            @Param("states") List<NotificationStatus> states,
+            @Param("now") LocalDateTime now,
+            @Param("maxFailures") int maxFailures,
+            Pageable pageable);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select n from QueuedNotification n where n.id = :id and n.deleted = false")
+    Optional<QueuedNotification> findForUpdate(@Param("id") Long id);
+
+    List<QueuedNotification> findByAdmissionIdInAndDeletedFalseOrderById(List<Long> admissionIds);
+}

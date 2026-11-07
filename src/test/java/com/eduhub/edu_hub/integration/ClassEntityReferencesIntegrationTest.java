@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.eduhub.edu_hub.curriculum.domain.model.Subject;
 import com.eduhub.edu_hub.people.api.dto.request.StudentSearchRequest;
 import com.eduhub.edu_hub.people.application.StudentApplicationService;
-import com.eduhub.edu_hub.people.application.code.OfficialStudentCodeGenerator;
+import com.eduhub.edu_hub.people.application.code.StudentCodeGenerator;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.domain.enums.LecturerStatus;
 import com.eduhub.edu_hub.people.domain.model.Lecturer;
@@ -17,12 +17,14 @@ import com.eduhub.edu_hub.scheduling.api.dto.request.CreateModuleClassRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.CreateModuleClassesRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.ModuleClassSearchRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.SubjectClassesRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.response.ModuleClassResponse;
 import com.eduhub.edu_hub.scheduling.application.ModuleClassApplicationService;
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
 import com.eduhub.edu_hub.scheduling.domain.model.ModuleClass;
 import com.eduhub.edu_hub.scheduling.domain.model.Semester;
 import com.eduhub.edu_hub.scheduling.domain.repository.ModuleClassRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.SemesterRepository;
+import com.eduhub.edu_hub.shared.common.BaseEntity;
 import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.enums.TrainingType;
 import com.eduhub.edu_hub.support.PostgresIntegrationTest;
@@ -58,7 +60,7 @@ class ClassEntityReferencesIntegrationTest extends PostgresIntegrationTest {
     private ModuleClassApplicationService moduleClassService;
 
     @Autowired
-    private OfficialStudentCodeGenerator studentCodes;
+    private StudentCodeGenerator studentCodes;
 
     @Autowired
     private PeopleFacade.Scheduling people;
@@ -80,16 +82,16 @@ class ClassEntityReferencesIntegrationTest extends PostgresIntegrationTest {
         assertThat(major.getMajorCode()).isEqualTo("CNTT");
         assertThat(administrativeClasses.findByMajor_IdAndCohort_CohortCodeIgnoreCaseAndTrainingTypeAndDeletedFalse(
                         major.getId(), "CT8", TrainingType.CHINH_QUY))
-                .extracting(value -> value.getId())
+                .extracting(BaseEntity::getId)
                 .containsExactlyInAnyOrderElementsOf(
-                        byCode.stream().map(value -> value.getId()).toList());
+                        byCode.stream().map(BaseEntity::getId).toList());
         assertThat(studentCodes.generate(
                         byCode.stream()
                                 .filter(value -> value.getClassName().equals("L01"))
                                 .findFirst()
                                 .orElseThrow(),
                         1))
-                .isEqualTo("CT080101");
+                .isEqualTo("CNTT080101");
         assertThat(jdbc.queryForObject(
                         "select count(*) from information_schema.columns where table_schema = current_schema() "
                                 + "and table_name = 'administrative_classes' and column_name = 'major_code'",
@@ -178,7 +180,7 @@ class ClassEntityReferencesIntegrationTest extends PostgresIntegrationTest {
         request.setSemesterId(semester.getId());
         request.setSubjectId(subject.getId());
         assertThat(moduleClassService.search(request).getContent())
-                .extracting(value -> value.getId())
+                .extracting(ModuleClassResponse::getId)
                 .containsExactly(unassigned.getId(), assigned.getId());
         request.setLecturerId(lecturer.getId());
         assertThat(moduleClassService.search(request).getContent())

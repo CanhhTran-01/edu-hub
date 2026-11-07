@@ -115,7 +115,7 @@ class ModuleClassApplicationServiceTest {
     void warningForAnySubjectPreventsSavingTheEntireBatchAndGivesItsField() {
         var semester = semester();
         prepare(semester);
-        var existing = historical(semester, 1, 4, ModuleClassStatus.UNSCHEDULED, true);
+        var existing = historical(semester, 4, ModuleClassStatus.UNSCHEDULED, true);
         when(classes.findAllBySemester_IdOrderByIdAsc(7L)).thenReturn(List.of(existing));
 
         assertThatThrownBy(() -> service.createBatch(7L, batch(subjectRequest(2, 80), subjectRequest(1, 80))))
@@ -135,8 +135,8 @@ class ModuleClassApplicationServiceTest {
         prepare(semester);
         when(classes.findAllBySemester_IdOrderByIdAsc(7L))
                 .thenReturn(List.of(
-                        historical(semester, 1, 2, ModuleClassStatus.OPEN, false),
-                        historical(semester, 1, 9, ModuleClassStatus.CANCELLED, true)));
+                        historical(semester, 2, ModuleClassStatus.OPEN, false),
+                        historical(semester, 9, ModuleClassStatus.CANCELLED, true)));
         when(classes.saveAllAndFlush(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
         var request = subjectRequest(1, 80);
         request.setConfirmAdditionalClasses(true);
@@ -152,7 +152,7 @@ class ModuleClassApplicationServiceTest {
         var semester = semester();
         prepare(semester);
         when(classes.findAllBySemester_IdOrderByIdAsc(7L))
-                .thenReturn(List.of(historical(semester, 1, 3, ModuleClassStatus.CANCELLED, false)));
+                .thenReturn(List.of(historical(semester, 3, ModuleClassStatus.CANCELLED, false)));
         when(classes.saveAllAndFlush(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
         assertThat(service.createBatch(7L, batch(subjectRequest(1, 80))))
                 .singleElement()
@@ -234,9 +234,9 @@ class ModuleClassApplicationServiceTest {
     }
 
     private ModuleClass historical(
-            Semester semester, long subjectId, int sequence, ModuleClassStatus status, boolean deleted) {
+            Semester semester, int sequence, ModuleClassStatus status, boolean deleted) {
         var subject = Subject.builder().build();
-        subject.setId(subjectId);
+        subject.setId((long) 1);
         var lecturer = new Lecturer();
         lecturer.setId(5001L);
         var item = ModuleClass.builder()

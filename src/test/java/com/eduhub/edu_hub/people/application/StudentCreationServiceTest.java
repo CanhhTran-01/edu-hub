@@ -117,7 +117,6 @@ class StudentCreationServiceTest {
         assertThat(response.student().getMajorName()).isEqualTo("Công nghệ thông tin");
         verify(identity).createStudentAccountWithoutNotification(any());
         verify(identity).sendStudentAccountNotification(20L, "12345");
-        verify(students).existsByEmailIgnoreCaseAndDeletedFalse("student@test.com");
         verify(students).existsByCitizenIdAndDeletedFalse("012345678901");
     }
 
@@ -152,22 +151,6 @@ class StudentCreationServiceTest {
         assertThat(response.notificationStatus()).isEqualTo("FAILED");
         assertThat(response.notificationError()).isEqualTo("EMAIL_SEND_FAILED");
         verify(students, times(2)).save(any(Student.class));
-    }
-
-    @Test
-    void resendUsesExistingAccountWithoutCreatingStudentOrUserAgain() {
-        Student student = savedStudent();
-        student.setAccountNotificationStatus(AccountNotificationStatus.FAILED);
-        when(students.findByIdAndDeletedFalse(30L)).thenReturn(Optional.of(student));
-        when(identity.sendStudentAccountNotification(20L, "12345"))
-                .thenReturn(new CreateStudentAccountResult(20L, true, null));
-        when(students.save(any(Student.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        var response = service.resendAccountNotification(30L);
-
-        assertThat(response.notificationStatus()).isEqualTo("SENT");
-        verify(identity, never()).createStudentAccountWithoutNotification(any());
-        verify(identity).sendStudentAccountNotification(20L, "12345");
     }
 
     private CreateStudentRequest request() {

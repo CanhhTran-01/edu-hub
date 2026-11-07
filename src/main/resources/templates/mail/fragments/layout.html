@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" th:fragment="layout(pageTitle, previewText, content)">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
+    <title th:text="${pageTitle}">Thông báo EduHub</title>
+    <style>
+        @media only screen and (max-width: 620px) {
+            .outer-padding { padding: 20px 12px !important; }
+            .content-padding { padding: 28px 22px !important; }
+            .header-padding { padding: 26px 22px !important; }
+            .footer-padding { padding: 22px !important; }
+            .email-title { font-size: 25px !important; line-height: 33px !important; }
+        }
+    </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #eef3f9; font-family: Arial, Helvetica, sans-serif; color: #24344d; -webkit-text-size-adjust: 100%;">
+<div style="display: none; max-height: 0; overflow: hidden; opacity: 0; color: transparent;" th:text="${previewText}">Thông báo từ EduHub.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width: 100%; background-color: #eef3f9;">
+    <tr>
+        <td align="center" class="outer-padding" style="padding: 40px 20px;">
+            <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width: 100%; max-width: 600px; background-color: #ffffff; border: 1px solid #dde5f0; border-radius: 16px; border-spacing: 0; overflow: hidden;">
+                <tr><td style="height: 5px; background-color: #397cf6; font-size: 0; line-height: 0;">&nbsp;</td></tr>
+                <tr>
+                    <td class="header-padding" style="padding: 28px 36px; background-color: #132d54;">
+                        <p style="margin: 0; color: #ffffff; font-size: 28px; line-height: 36px; font-weight: 700; letter-spacing: -1px;" th:text="${brandName}">EduHub</p>
+                        <p style="margin: 5px 0 0; color: #b8cbed; font-size: 11px; line-height: 18px; letter-spacing: 1.5px;">HỆ THỐNG QUẢN LÝ ĐÀO TẠO</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="content-padding" style="padding: 36px;">
+                        <th:block th:replace="${content}"></th:block>
+                        <table th:if="${loginUrl != null}" role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin-top: 28px;">
+                            <tr>
+                                <td align="center" bgcolor="#2465df" style="background-color: #2465df; border-radius: 8px; mso-padding-alt: 16px 24px;">
+                                    <a th:href="${loginUrl}" href="https://example.com/login" style="display: block; padding: 16px 24px; color: #ffffff; text-decoration: none; font-size: 15px; line-height: 22px; font-weight: 700;">Đăng nhập hệ thống &rarr;</a>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding-top: 14px; color: #718096; font-size: 12px; line-height: 19px;">
+                                    Nếu nút không mở được, bạn có thể truy cập:<br>
+                                    <a th:href="${loginUrl}" th:text="${loginUrl}" href="https://example.com/login" style="color: #2465df; text-decoration: underline; word-break: break-all;">Đường dẫn đăng nhập</a>
+                                </td>
+                            </tr>
+                        </table>
+                        <p th:if="${loginUrl == null}" style="margin: 24px 0 0; color: #52647e; font-size: 14px; line-height: 23px;">Vui lòng truy cập hệ thống của nhà trường để đăng nhập.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="footer-padding" style="padding: 24px 36px; background-color: #f8fafd; border-top: 1px solid #e5ebf4;">
+                        <p style="margin: 0; color: #52647e; font-size: 13px; line-height: 21px;">
+                            Cần hỗ trợ? Vui lòng liên hệ bộ phận học vụ<span th:if="${supportEmail != null}"> qua
+                            <a th:href="${'mailto:' + supportEmail}" th:text="${supportEmail}" href="mailto:support@example.com" style="color: #2465df; text-decoration: none; word-break: break-all;">email hỗ trợ</a></span>.
+                        </p>
+                        <p style="margin: 10px 0 0; color: #8793a6; font-size: 11px; line-height: 18px;">Đây là email tự động. Vui lòng bảo mật thông tin đăng nhập của bạn.</p>
+                    </td>
+                </tr>
+            </table>
+            <!--[if mso]></td></tr></table><![endif]-->
+            <p style="margin: 20px 0 0; color: #8793a6; font-size: 11px; line-height: 18px;"><span th:text="${brandName}">EduHub</span> &middot; Kết nối thông tin học tập</p>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

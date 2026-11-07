@@ -6,20 +6,23 @@ import com.eduhub.edu_hub.identity.application.command.CreateLecturerAccountComm
 import com.eduhub.edu_hub.identity.application.command.CreateStudentAccountCommand;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.identity.application.result.CreateStudentAccountResult;
+import com.eduhub.edu_hub.identity.application.result.StudentAccountInfo;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.model.Role;
 import com.eduhub.edu_hub.identity.domain.model.User;
 import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.RoleRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
-import com.eduhub.edu_hub.identity.infrastructure.mail.TemporaryPasswordMailService;
+import com.eduhub.edu_hub.notification.application.command.AccountEmailCommand;
+import com.eduhub.edu_hub.notification.application.command.AdmissionEmailCommand;
+import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
+import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
 import com.eduhub.edu_hub.shared.enums.RoleName;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.mail.MailException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,7 +35,7 @@ public class IdentityFacadeImpl implements IdentityFacade {
     private final RoleRepository roles;
     private final RefreshTokenRepository sessions;
     private final TokenService tokens;
-    private final TemporaryPasswordMailService mailService;
+    private final NotificationFacade.Mail notifications;
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
     @Override
@@ -86,16 +89,28 @@ public class IdentityFacadeImpl implements IdentityFacade {
         if (!user.isFirstLogin()) {
             return new CreateStudentAccountResult(userId, false, "ACCOUNT_ALREADY_ACTIVATED");
         }
+        if (user.isDeleted()
+                || user.getStatus() != UserStatus.ACTIVE
+                || (user.getLockedUntil() != null
+                        && user.getLockedUntil().isAfter(LocalDateTime.now(java.time.ZoneOffset.UTC)))) {
+            return new CreateStudentAccountResult(userId, false, "ACCOUNT_NOT_AVAILABLE");
+        }
+        if (!encoder.matches(initialPassword, user.getPasswordHash())) {
+            return new CreateStudentAccountResult(userId, false, "INITIAL_PASSWORD_NO_LONGER_VALID");
+        }
         if (user.getEmail() == null || user.getEmail().isBlank()) {
             return new CreateStudentAccountResult(userId, false, "ACCOUNT_EMAIL_MISSING");
         }
-        try {
-            mailService.sendAccount(user.getEmail(), user.getUsername(), initialPassword);
-            return new CreateStudentAccountResult(userId, true, null);
-        } catch (MailException exception) {
+        var delivery = notifications.sendAccount(AccountEmailCommand.builder()
+                .recipient(user.getEmail())
+                .username(user.getUsername())
+                .temporaryPassword(initialPassword)
+                .templateType(EmailTemplateType.ACCOUNT_CREATED)
+                .build());
+        if (!delivery.sent()) {
             log.error("Initial account email failed for user {}", userId);
-            return new CreateStudentAccountResult(userId, false, "EMAIL_SEND_FAILED");
         }
+        return new CreateStudentAccountResult(userId, delivery.sent(), delivery.error());
     }
 
     @Override
@@ -123,6 +138,42 @@ public class IdentityFacadeImpl implements IdentityFacade {
         }
 
         return response(current);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public StudentAccountInfo getStudentAccount(Long userId) {
+        User account = user(userId);
+        if (account.isDeleted()
+                || !RoleName.STUDENT.name().equals(account.getRole().getRoleName())) {
+            throw new BaseException(ErrorCode.USER_NOT_FOUND);
+        }
+        boolean locked = account.getStatus() != UserStatus.ACTIVE
+                || (account.getLockedUntil() != null
+                        && account.getLockedUntil().isAfter(LocalDateTime.now(java.time.ZoneOffset.UTC)));
+        return new StudentAccountInfo(
+                account.getId(),
+                account.getUsername(),
+                account.getEmail(),
+                account.getStatus().name(),
+                account.isFirstLogin(),
+                locked);
+    }
+
+    @Override
+    public CreateStudentAccountResult sendStudentAdmissionNotification(Long userId, String recipient) {
+        var account = getStudentAccount(userId);
+        if (recipient == null || recipient.isBlank()) {
+            return new CreateStudentAccountResult(userId, false, "ACCOUNT_EMAIL_MISSING");
+        }
+        var delivery = notifications.sendAdmissionConfirmation(AdmissionEmailCommand.builder()
+                .recipient(recipient)
+                .username(account.username())
+                .build());
+        if (!delivery.sent()) {
+            log.error("Admission confirmation email failed for user {}", userId);
+        }
+        return new CreateStudentAccountResult(userId, delivery.sent(), delivery.error());
     }
 
     private Long createStudentAccountRecord(CreateStudentAccountCommand command) {

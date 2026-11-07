@@ -121,7 +121,7 @@ class FlywayMigrationIntegrationTest {
                 .load();
     }
 
-    private int count(String schema, String table) {
+    private Integer count(String schema, String table) {
         return jdbc.queryForObject("select count(*) from " + schema + "." + table, Integer.class);
     }
 }

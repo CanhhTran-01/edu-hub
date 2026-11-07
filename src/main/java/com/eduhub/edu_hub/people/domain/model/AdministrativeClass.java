@@ -11,14 +11,22 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
 @Table(name = "administrative_classes")
 @Getter
 @Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class AdministrativeClass extends BaseEntity {
+    // TODO(CLASS_PREFIX_CONFIG): configurable prefixes/explicit renames will be added later.
     @Column(name = "class_name", nullable = false)
     private String className;
 
@@ -39,4 +47,10 @@ public class AdministrativeClass extends BaseEntity {
 
     @Column(name = "max_capacity", nullable = false)
     private int maxCapacity;
+
+    @Column(name = "reserve_capacity", nullable = false)
+    private int reserveCapacity;
+
+    @Column(name = "last_student_sequence", nullable = false)
+    private int lastStudentSequence;
 }

@@ -30,6 +30,7 @@ public class LecturerAccountNotificationService {
 
         // TODO: Có thể chuyển gửi email sang Spring Event + @Async,
         //  @TransactionalEventListener(AFTER_COMMIT), kết hợp Outbox Pattern khi cần.
+
         CreateStudentAccountResult result =
                 identityFacade.sendLecturerAccountNotification(lecturer.getUserId(), initialPassword);
 

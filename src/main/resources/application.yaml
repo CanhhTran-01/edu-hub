@@ -15,6 +15,7 @@ spring:
     password: ${DBMS_PASSWORD}
     driver-class-name: org.postgresql.Driver
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: none
     show-sql: false
@@ -38,5 +39,25 @@ spring:
       mail.smtp.timeout: 10000
       mail.smtp.writetimeout: 10000
 
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 21MB
+
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}  # mặc định dev, prod override bằng env var
+
+admission:
+  min-capacity: 40
+  max-capacity: 50
+  reserve-capacity: 15
+  max-import-rows: 50000
+  student-code-format: "[MaNganh][SttKhoa][SttLop][SttSVTrongLop]"
+  notifications-enabled: true
+  mail-retry-delay-ms: 60000
+
+notification:
+  mail:
+    brand-name: ${NOTIFICATION_MAIL_BRAND_NAME:EduHub}
+    login-url: ${NOTIFICATION_MAIL_LOGIN_URL:}
+    support-email: ${NOTIFICATION_MAIL_SUPPORT_EMAIL:}

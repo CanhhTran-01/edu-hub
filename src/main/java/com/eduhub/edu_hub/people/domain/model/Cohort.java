@@ -15,6 +15,9 @@ public class Cohort extends BaseEntity {
     @Column(name = "cohort_code", nullable = false)
     private String cohortCode;
 
+    @Column(name = "code_sequence", unique = true)
+    private Integer codeSequence;
+
     @Column(name = "start_year")
     private Integer startYear;
 

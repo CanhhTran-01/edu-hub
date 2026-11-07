@@ -12,7 +12,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.eduhub.edu_hub.people.api.dto.request.CreateStudentRequest;
-import com.eduhub.edu_hub.people.api.dto.response.AccountNotificationResponse;
 import com.eduhub.edu_hub.people.api.dto.response.CreateStudentResponse;
 import com.eduhub.edu_hub.people.api.dto.response.StudentResponse;
 import com.eduhub.edu_hub.people.application.StudentApplicationService;
@@ -64,6 +63,7 @@ class StudentControllerTest {
                                         """
                                 {
                                     "fullName": "Nguyen Van An",
+                                    "citizenId": "012345678901",
                                     "email": "an@example.com",
                                     "majorId": 1,
                                     "cohortId": 2,
@@ -78,13 +78,8 @@ class StudentControllerTest {
     }
 
     @Test
-    void stillResendsStudentAccountNotification() throws Exception {
-        when(service.resendAccountNotification(1L))
-                .thenReturn(new AccountNotificationResponse(1L, "CT080101", "SENT", null));
-
-        mvc.perform(post("/api/v1/students/1/account-notification/resend"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.notificationStatus").value("SENT"));
-        verify(service).resendAccountNotification(1L);
+    void noLongerAllowsManualAccountNotificationResend() throws Exception {
+        mvc.perform(post("/api/v1/students/1/account-notification/resend")).andExpect(status().isNotFound());
+        verifyNoInteractions(service);
     }
 }

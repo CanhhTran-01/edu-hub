@@ -8,6 +8,9 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 
 public interface RoomRepository extends JpaRepository<Room, Long>, JpaSpecificationExecutor<Room> {
+    long countByDeletedFalseAndStatusAndCapacityGreaterThanEqual(
+            com.eduhub.edu_hub.scheduling.domain.enums.RoomStatus status, int capacity);
+
     Optional<Room> findByIdAndDeletedFalse(Long id);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

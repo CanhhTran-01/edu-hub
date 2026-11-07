@@ -3,7 +3,6 @@ package com.eduhub.edu_hub.people.api.controller;
 import com.eduhub.edu_hub.people.api.dto.request.CreateStudentRequest;
 import com.eduhub.edu_hub.people.api.dto.request.StudentSearchRequest;
 import com.eduhub.edu_hub.people.api.dto.request.UpdateStudentRequest;
-import com.eduhub.edu_hub.people.api.dto.response.AccountNotificationResponse;
 import com.eduhub.edu_hub.people.api.dto.response.CreateStudentResponse;
 import com.eduhub.edu_hub.people.api.dto.response.StudentResponse;
 import com.eduhub.edu_hub.people.application.StudentApplicationService;
@@ -31,11 +30,6 @@ public class StudentController {
     @PostMapping
     public ApiResponse<CreateStudentResponse> create(@Valid @RequestBody CreateStudentRequest request) {
         return ApiResponse.success(studentService.create(request));
-    }
-
-    @PostMapping("/{id}/account-notification/resend")
-    public ApiResponse<AccountNotificationResponse> resendAccountNotification(@PathVariable Long id) {
-        return ApiResponse.success(studentService.resendAccountNotification(id));
     }
 
     @GetMapping

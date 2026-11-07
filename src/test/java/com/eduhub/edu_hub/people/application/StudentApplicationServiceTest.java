@@ -11,7 +11,6 @@ import com.eduhub.edu_hub.people.api.dto.request.UpdateStudentRequest;
 import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
 import com.eduhub.edu_hub.people.domain.model.Cohort;
 import com.eduhub.edu_hub.people.domain.model.Student;
-import com.eduhub.edu_hub.people.domain.repository.AdministrativeClassRepository;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
 import com.eduhub.edu_hub.shared.enums.TrainingType;
 import java.util.List;
@@ -27,9 +26,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class StudentApplicationServiceTest {
     @Mock
     private StudentRepository students;
-
-    @Mock
-    private AdministrativeClassRepository classes;
 
     @Mock
     private CurriculumFacade.ReferenceData curriculum;

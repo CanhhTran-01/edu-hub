@@ -1,0 +1,23 @@
+[(${brandName})] - THÔNG TIN TÀI KHOẢN
+
+Xin chào,
+Tài khoản trên [(${brandName})] đã được cấp cho bạn.
+
+Tên đăng nhập: [(${username})]
+Mật khẩu khởi tạo: [(${temporaryPassword})]
+
+Vui lòng đăng nhập bằng thông tin trên và đổi mật khẩu ngay trong lần đăng nhập đầu tiên.
+[# th:if="${loginUrl != null}"]
+Đăng nhập hệ thống: [(${loginUrl})]
+[/]
+[# th:if="${loginUrl == null}"]
+Vui lòng truy cập hệ thống của nhà trường để đăng nhập.
+[/]
+[# th:if="${supportEmail != null}"]
+Cần hỗ trợ? Liên hệ bộ phận học vụ qua [(${supportEmail})].
+[/]
+[# th:if="${supportEmail == null}"]
+Cần hỗ trợ? Vui lòng liên hệ bộ phận học vụ.
+[/]
+
+Đây là email tự động. Vui lòng bảo mật thông tin đăng nhập của bạn.

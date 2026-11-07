@@ -13,6 +13,7 @@ public enum ErrorCode {
     VALIDATION_ERROR(1001, "Dữ liệu đầu vào không hợp lệ", HttpStatus.BAD_REQUEST),
     MISSING_PARAMETER(1002, "Thiếu tham số bắt buộc", HttpStatus.BAD_REQUEST),
     METHOD_NOT_ALLOWED(1003, "Phương thức HTTP không được hỗ trợ", HttpStatus.METHOD_NOT_ALLOWED),
+    ENDPOINT_NOT_FOUND(1004, "Không tìm thấy API", HttpStatus.NOT_FOUND),
 
     // Identity
     USER_NOT_FOUND(4002, "Không tìm thấy người dùng", HttpStatus.NOT_FOUND),
@@ -29,13 +30,30 @@ public enum ErrorCode {
     DUPLICATE_STUDENT_CODE(4103, "MSSV đã tồn tại", HttpStatus.CONFLICT),
     DUPLICATE_LECTURER_CODE(4104, "Mã giảng viên đã tồn tại", HttpStatus.CONFLICT),
     CLASS_CAPACITY_EXCEEDED(4105, "Lớp đã đầy sức chứa", HttpStatus.BAD_REQUEST),
-    INVALID_STUDENT_CODE_MAJOR(4109, "Mã ngành phải gồm đúng 2 ký tự chữ", HttpStatus.BAD_REQUEST),
-    INVALID_STUDENT_CODE_COHORT(4110, "Mã khóa không đúng định dạng sinh MSSV", HttpStatus.BAD_REQUEST),
-    INVALID_STUDENT_CODE_CLASS(4111, "Mã lớp hành chính không đúng định dạng L01", HttpStatus.BAD_REQUEST),
+    INVALID_STUDENT_CODE_MAJOR(4109, "Mã ngành phải gồm các chữ cái theo danh mục ngành", HttpStatus.BAD_REQUEST),
+    INVALID_STUDENT_CODE_COHORT(4110, "Khóa học cần có số thứ tự định danh từ 01 đến 99", HttpStatus.BAD_REQUEST),
+    INVALID_STUDENT_CODE_CLASS(4111, "Tên lớp hoặc số thứ tự lớp không hợp lệ (01 đến 99)", HttpStatus.BAD_REQUEST),
     STUDENT_CODE_SEQUENCE_EXCEEDED(4112, "Số thứ tự MSSV trong lớp đã vượt 99", HttpStatus.CONFLICT),
     DUPLICATE_STUDENT_EMAIL(4113, "Email sinh viên đã tồn tại", HttpStatus.CONFLICT),
     DUPLICATE_STUDENT_CITIZEN_ID(4114, "CCCD sinh viên đã tồn tại", HttpStatus.CONFLICT),
     STUDENT_CLASS_MISMATCH(4115, "Ngành, hệ đào tạo hoặc khóa không khớp với lớp", HttpStatus.BAD_REQUEST),
+    ADMISSION_PLAN_NOT_FOUND(4130, "Không tìm thấy phương án nhập học", HttpStatus.NOT_FOUND),
+    ADMISSION_INVALID_CAPACITY(
+            4131, "Cấu hình sĩ số không hợp lệ hoặc vượt giới hạn định danh", HttpStatus.BAD_REQUEST),
+    ADMISSION_STALE_PLAN(4132, "Phương án đã thay đổi, hãy tải lại trước khi xác nhận", HttpStatus.CONFLICT),
+    ADMISSION_WARNING_CONFIRMATION_REQUIRED(
+            4133, "Cần xác nhận dự phòng hoặc ghi lý do chấp nhận dưới tối thiểu", HttpStatus.CONFLICT),
+    ADMISSION_INVALID_STATE(4134, "Trạng thái phương án không cho phép thao tác này", HttpStatus.CONFLICT),
+    ADMISSION_CLASS_UNAVAILABLE(4135, "Lớp không phù hợp, đã có sinh viên hoặc đã được sử dụng", HttpStatus.CONFLICT),
+    ADMISSION_DATA_CHANGED(4136, "Dữ liệu nhập học đã thay đổi, cần kiểm tra lại danh sách", HttpStatus.CONFLICT),
+    ADMISSION_APPLICATION_CONFLICT(4137, "Mã hồ sơ hoặc CCCD có dữ liệu xung đột", HttpStatus.CONFLICT),
+    ADMISSION_IMPORT_INVALID(4138, "File phải là XLSX đúng mẫu và không chứa công thức", HttpStatus.BAD_REQUEST),
+    ADMISSION_IMPORT_METADATA_REQUIRED(
+            4139,
+            "File thiếu thông tin ngành/khóa hoặc không đúng mẫu mới; hãy tải lại mẫu theo ngành và khóa đã chọn",
+            HttpStatus.BAD_REQUEST),
+    ADMISSION_IMPORT_SCOPE_MISMATCH(
+            4140, "Ngành hoặc khóa trong file không khớp với ngành và khóa đã chọn", HttpStatus.BAD_REQUEST),
 
     // Curriculum
     INVALID_TARGET_GPA(4120, "GPA mục tiêu phải từ 0 đến 4", HttpStatus.BAD_REQUEST),
