@@ -1,13 +1,13 @@
 package com.eduhub.edu_hub.admission.application.service;
 
-import com.eduhub.edu_hub.admission.application.command.AdmissionCommands.PlanCommand;
+import com.eduhub.edu_hub.admission.application.command.AdmissionCommands.CreatePlanCommand;
 import com.eduhub.edu_hub.admission.application.command.AdmissionImportScope;
 import com.eduhub.edu_hub.admission.application.result.AdmissionResults.PlanResult;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionPlan;
 import com.eduhub.edu_hub.admission.domain.policy.AdmissionCapacityPolicy;
 import com.eduhub.edu_hub.admission.domain.repository.AdmissionPlanRepository;
 import com.eduhub.edu_hub.admission.infrastructure.config.AdmissionSettings;
-import com.eduhub.edu_hub.admission.infrastructure.spreadsheet.AdmissionTemplateWriter;
+import com.eduhub.edu_hub.admission.infrastructure.spreadsheet.AdmissionSpreadsheetTemplateWriter;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.shared.exception.*;
@@ -22,19 +22,19 @@ import org.springframework.web.multipart.MultipartFile;
 @Slf4j
 @Transactional(readOnly = true)
 public class AdmissionPlanningService {
-    private final AdmissionPlanRepository plans;
-    private final PeopleFacade.Admission people;
-    private final CurriculumFacade.Majors majors;
-    private final AdmissionSettings settings;
-    private final AdmissionCapacityPolicy capacity;
-    private final AdmissionPlanQueryService view;
-    private final AdmissionImportService imports;
-    private final AdmissionTemplateWriter spreadsheet;
+    private final AdmissionPlanRepository planRepository;
+    private final PeopleFacade.Admission peopleAdmissionFacade;
+    private final CurriculumFacade.Majors majorCatalogFacade;
+    private final AdmissionSettings admissionSettings;
+    private final AdmissionCapacityPolicy capacityPolicy;
+    private final AdmissionPlanQueryService planQueryService;
+    private final AdmissionImportService importService;
+    private final AdmissionSpreadsheetTemplateWriter templateWriter;
 
-    public byte[] template(Long majorId, Long cohortId) {
-        var major = majors.requireMajor(majorId);
-        var cohort = people.requireCohort(cohortId);
-        return spreadsheet.write(AdmissionImportScope.builder()
+    public byte[] generateImportTemplate(Long majorId, Long cohortId) {
+        var major = majorCatalogFacade.requireMajor(majorId);
+        var cohort = peopleAdmissionFacade.requireCohort(cohortId);
+        return templateWriter.writeTemplate(AdmissionImportScope.builder()
                 .majorCode(major.majorCode())
                 .majorName(major.majorName())
                 .cohortCode(cohort.cohortCode())
@@ -42,35 +42,37 @@ public class AdmissionPlanningService {
     }
 
     @Transactional
-    public PlanResult createWithFile(PlanCommand request, MultipartFile file) {
-        PlanResult created = create(request);
-        return imports.upload(created.id(), created.revision(), file);
+    public PlanResult createPlanFromFile(CreatePlanCommand command, MultipartFile file) {
+        PlanResult createdPlan = createPlan(command);
+        return importService.importApplicants(createdPlan.id(), createdPlan.revision(), file);
     }
 
     @Transactional
-    public PlanResult create(PlanCommand request) {
-        int minimum = request.minCapacity() == null ? settings.getMinCapacity() : request.minCapacity();
-        int maximum = request.maxCapacity() == null ? settings.getMaxCapacity() : request.maxCapacity();
-        int reserve = request.reserveCapacity() == null ? settings.getReserveCapacity() : request.reserveCapacity();
-        capacity.validate(minimum, maximum, reserve);
-        majors.requireMajor(request.majorId());
-        people.requireCohort(request.cohortId());
+    public PlanResult createPlan(CreatePlanCommand command) {
+        int minCapacity = command.minCapacity() == null ? admissionSettings.getMinCapacity() : command.minCapacity();
+        int maxCapacity = command.maxCapacity() == null ? admissionSettings.getMaxCapacity() : command.maxCapacity();
+        int reserveCapacity =
+                command.reserveCapacity() == null ? admissionSettings.getReserveCapacity() : command.reserveCapacity();
+        capacityPolicy.validateCapacityLimits(minCapacity, maxCapacity, reserveCapacity);
+        majorCatalogFacade.requireMajor(command.majorId());
+        peopleAdmissionFacade.requireCohort(command.cohortId());
         AdmissionPlan plan = AdmissionPlan.builder()
-                .majorId(request.majorId())
-                .cohortId(request.cohortId())
-                .totalStudents(request.totalStudents())
-                .minCapacity(minimum)
-                .maxCapacity(maximum)
-                .reserveCapacity(reserve)
+                .majorId(command.majorId())
+                .cohortId(command.cohortId())
+                .totalStudents(command.totalStudents())
+                .minCapacity(minCapacity)
+                .maxCapacity(maxCapacity)
+                .reserveCapacity(reserveCapacity)
                 .build();
-        plans.saveAndFlush(plan);
+        planRepository.saveAndFlush(plan);
         // TODO(AUDIT_LOG): Ghi người lập phương án, ngành/khóa và cấu hình sĩ số sau khi commit.
         log.info("Created admission plan: planId={}, totalStudents={}", plan.getId(), plan.getTotalStudents());
-        return view.response(plan);
+        return planQueryService.buildPlanResult(plan);
     }
 
-    public PlanResult get(Long id) {
-        return view.response(plans.findByIdAndDeletedFalse(id)
+    public PlanResult getPlan(Long planId) {
+        return planQueryService.buildPlanResult(planRepository
+                .findByIdAndDeletedFalse(planId)
                 .orElseThrow(() -> new BaseException(ErrorCode.ADMISSION_PLAN_NOT_FOUND)));
     }
 }

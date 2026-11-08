@@ -1,7 +1,7 @@
 package com.eduhub.edu_hub.people.application;
 
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
-import com.eduhub.edu_hub.identity.application.result.CreateStudentAccountResult;
+import com.eduhub.edu_hub.identity.application.result.AccountNotificationResult;
 import com.eduhub.edu_hub.people.api.dto.response.LecturerNotificationResponse;
 import com.eduhub.edu_hub.people.domain.enums.AccountNotificationStatus;
 import com.eduhub.edu_hub.people.domain.repository.LecturerRepository;
@@ -31,7 +31,7 @@ public class LecturerAccountNotificationService {
         // TODO: Có thể chuyển gửi email sang Spring Event + @Async,
         //  @TransactionalEventListener(AFTER_COMMIT), kết hợp Outbox Pattern khi cần.
 
-        CreateStudentAccountResult result =
+        AccountNotificationResult result =
                 identityFacade.sendLecturerAccountNotification(lecturer.getUserId(), initialPassword);
 
         AccountNotificationStatus status =

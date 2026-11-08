@@ -6,7 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.eduhub.edu_hub.admission.api.exception.StudentAdmissionExceptionHandler;
-import com.eduhub.edu_hub.admission.application.command.AdmissionCommands.PlanCommand;
+import com.eduhub.edu_hub.admission.application.command.AdmissionCommands.CreatePlanCommand;
 import com.eduhub.edu_hub.admission.application.exception.AdmissionImportScopeException;
 import com.eduhub.edu_hub.admission.application.service.AdmissionAllocationService;
 import com.eduhub.edu_hub.admission.application.service.AdmissionConfirmationService;
@@ -63,7 +63,7 @@ class StudentAdmissionControllerTest {
                         .content("{\"majorId\":1,\"cohortId\":8,\"totalStudents\":120}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
-        verify(planning).create(new PlanCommand(1L, 8L, 120, null, null, null));
+        verify(planning).createPlan(new CreatePlanCommand(1L, 8L, 120, null, null, null));
     }
 
     @Test
@@ -102,7 +102,7 @@ class StudentAdmissionControllerTest {
     @Test
     void downloadsTemplateForTheSelectedMajorAndCohort() throws Exception {
         byte[] template = {1, 2, 3};
-        when(planning.template(1L, 8L)).thenReturn(template);
+        when(planning.generateImportTemplate(1L, 8L)).thenReturn(template);
         mvc.perform(get("/api/v1/student-admissions/template")
                         .param("majorId", "1")
                         .param("cohortId", "8"))
@@ -110,7 +110,7 @@ class StudentAdmissionControllerTest {
                 .andExpect(content().contentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .andExpect(header().string("Content-Disposition", "attachment; filename=admission-template.xlsx"))
                 .andExpect(content().bytes(template));
-        verify(planning).template(1L, 8L);
+        verify(planning).generateImportTemplate(1L, 8L);
     }
 
     @Test
@@ -129,7 +129,7 @@ class StudentAdmissionControllerTest {
 
     @Test
     void returnsTheMismatchedFileAndSelectedCodesInTheImportError() throws Exception {
-        when(planning.createWithFile(any(), any()))
+        when(planning.createPlanFromFile(any(), any()))
                 .thenThrow(new AdmissionImportScopeException(List.of(
                         new FieldErrorDetail("majorCode", "Ngành trong file: ATTT; ngành đã chọn: CNTT"),
                         new FieldErrorDetail("cohortCode", "Khóa trong file: CT9; khóa đã chọn: CT8"))));

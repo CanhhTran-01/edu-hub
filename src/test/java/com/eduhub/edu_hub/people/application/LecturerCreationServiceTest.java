@@ -16,7 +16,7 @@ import static org.mockito.Mockito.when;
 
 import com.eduhub.edu_hub.identity.application.command.CreateLecturerAccountCommand;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
-import com.eduhub.edu_hub.identity.application.result.CreateStudentAccountResult;
+import com.eduhub.edu_hub.identity.application.result.AccountNotificationResult;
 import com.eduhub.edu_hub.people.api.dto.request.CreateLecturerRequest;
 import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
 import com.eduhub.edu_hub.people.application.code.LecturerCodeGenerator;
@@ -225,7 +225,7 @@ class LecturerCreationServiceTest {
         var lecturer = existingLecturer();
         when(lecturers.findByIdAndDeletedFalse(3L)).thenReturn(Optional.of(lecturer));
         when(identity.sendLecturerAccountNotification(2L, "12345"))
-                .thenReturn(new CreateStudentAccountResult(2L, true, null));
+                .thenReturn(new AccountNotificationResult(2L, true, null));
 
         var response = service.resend(3L);
 
@@ -277,7 +277,7 @@ class LecturerCreationServiceTest {
         });
         when(lecturers.findByIdAndDeletedFalse(3L)).thenAnswer(call -> Optional.of(savedLecturer));
         when(identity.sendLecturerAccountNotification(eq(2L), anyString()))
-                .thenReturn(new CreateStudentAccountResult(2L, emailSent, emailError));
+                .thenReturn(new AccountNotificationResult(2L, emailSent, emailError));
         when(queries.findById(3L))
                 .thenReturn(LecturerResponse.builder()
                         .id(3L)

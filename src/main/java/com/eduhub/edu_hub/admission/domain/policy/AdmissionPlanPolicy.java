@@ -3,9 +3,11 @@ package com.eduhub.edu_hub.admission.domain.policy;
 import com.eduhub.edu_hub.admission.domain.enums.AdmissionPlanStatus;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionPlan;
 import com.eduhub.edu_hub.shared.exception.*;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class AdmissionPlanPolicy {
-    private AdmissionPlanPolicy() {}
 
     public static void requireEditable(AdmissionPlan plan) {
         if (plan.getState() == AdmissionPlanStatus.CONFIRMED
@@ -14,7 +16,7 @@ public final class AdmissionPlanPolicy {
             throw new BaseException(ErrorCode.ADMISSION_INVALID_STATE);
     }
 
-    public static void changed(AdmissionPlan plan) {
+    public static void incrementRevision(AdmissionPlan plan) {
         plan.setRevision(plan.getRevision() + 1);
     }
 }

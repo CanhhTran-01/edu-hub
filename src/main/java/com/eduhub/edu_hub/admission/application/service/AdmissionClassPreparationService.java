@@ -1,6 +1,6 @@
 package com.eduhub.edu_hub.admission.application.service;
 
-import com.eduhub.edu_hub.admission.application.command.AdmissionCommands.CreateClassesCommand;
+import com.eduhub.edu_hub.admission.application.command.AdmissionCommands.PrepareClassesCommand;
 import com.eduhub.edu_hub.admission.application.result.AdmissionResults.AdministrativeClassResult;
 import com.eduhub.edu_hub.admission.application.result.AdmissionResults.PlanResult;
 import com.eduhub.edu_hub.admission.domain.enums.AdmissionApplicantStatus;
@@ -17,7 +17,7 @@ import com.eduhub.edu_hub.people.application.facade.dto.*;
 import com.eduhub.edu_hub.scheduling.application.SchedulingFacade;
 import com.eduhub.edu_hub.shared.enums.TrainingType;
 import com.eduhub.edu_hub.shared.exception.*;
-import com.eduhub.edu_hub.shared.text.PersonText;
+import com.eduhub.edu_hub.shared.text.TextsNormalizer;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,129 +29,139 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Transactional(readOnly = true)
 public class AdmissionClassPreparationService {
-    private final AdmissionPlanRepository plans;
-    private final AdmissionPlanClassRepository planClasses;
-    private final PeopleFacade.Admission people;
-    private final AdmissionCapacityPolicy capacity;
-    private final SchedulingFacade.RoomCapacity rooms;
-    private final AdmissionPlanQueryService view;
-    private final AdmissionApplicantRepository applicants;
+    private final AdmissionPlanRepository planRepository;
+    private final AdmissionPlanClassRepository planClassRepository;
+    private final PeopleFacade.Admission peopleAdmissionFacade;
+    private final AdmissionCapacityPolicy capacityPolicy;
+    private final SchedulingFacade.RoomCapacity roomCapacityFacade;
+    private final AdmissionPlanQueryService planQueryService;
+    private final AdmissionApplicantRepository applicantRepository;
 
-    public List<AdministrativeClassResult> list(Long majorId, Long cohortId) {
-        return people.findClasses(majorId, cohortId).stream()
-                .filter(c -> !c.isDeleted())
-                .map(c -> AdministrativeClassResult.builder()
-                        .id(c.getId())
-                        .className(c.getClassName())
-                        .majorCode(c.getMajorCode())
-                        .majorName(c.getMajorName())
-                        .cohortCode(c.getCohortCode())
-                        .trainingType(c.getTrainingType())
-                        .currentSize((int) c.getCurrentSize())
-                        .minCapacity(c.getMinCapacity())
-                        .maxCapacity(c.getMaxCapacity())
-                        .reserveCapacity(c.getReserveCapacity())
-                        .availableForAdmission(available(c))
+    public List<AdministrativeClassResult> listAdministrativeClasses(Long majorId, Long cohortId) {
+        return peopleAdmissionFacade.findClasses(majorId, cohortId).stream()
+                .filter(administrativeClass -> !administrativeClass.isDeleted())
+                .map(administrativeClass -> AdministrativeClassResult.builder()
+                        .id(administrativeClass.getId())
+                        .className(administrativeClass.getClassName())
+                        .majorCode(administrativeClass.getMajorCode())
+                        .majorName(administrativeClass.getMajorName())
+                        .cohortCode(administrativeClass.getCohortCode())
+                        .trainingType(administrativeClass.getTrainingType())
+                        .currentSize((int) administrativeClass.getCurrentSize())
+                        .minCapacity(administrativeClass.getMinCapacity())
+                        .maxCapacity(administrativeClass.getMaxCapacity())
+                        .reserveCapacity(administrativeClass.getReserveCapacity())
+                        .availableForAdmission(isAvailableForAdmission(administrativeClass))
                         .build())
                 .toList();
     }
 
     @Transactional
-    public PlanResult createFromPlan(CreateClassesCommand request) {
-        AdmissionPlan plan = AdmissionPlanLoader.locked(plans, request.planId(), request.expectedRevision());
+    public PlanResult prepareClasses(PrepareClassesCommand command) {
+        AdmissionPlan plan =
+                AdmissionPlanLoader.lockPlanAtRevision(planRepository, command.planId(), command.expectedRevision());
         AdmissionPlanPolicy.requireEditable(plan);
-        if (applicants.findByPlan_IdOrderByRowNumber(plan.getId()).stream()
-                .anyMatch(row -> row.getState() == AdmissionApplicantStatus.ENROLLED))
+        if (applicantRepository.findByPlan_IdOrderByRowNumber(plan.getId()).stream()
+                .anyMatch(applicant -> applicant.getState() == AdmissionApplicantStatus.ENROLLED))
             throw new BaseException(ErrorCode.ADMISSION_INVALID_STATE);
-        if (request.classCount() < 1 || request.classCount() > 99 || plan.getTotalStudents() == 0)
+        if (command.classCount() < 1 || command.classCount() > 99 || plan.getTotalStudents() == 0)
             throw new BaseException(ErrorCode.VALIDATION_ERROR);
-        var scenario = capacity
-                .scenarios(
+        var scenario = capacityPolicy
+                .generateScenarios(
                         plan.getTotalStudents(),
                         plan.getMinCapacity(),
                         plan.getMaxCapacity(),
                         plan.getReserveCapacity(),
-                        rooms.countSuitableRooms(plan.getMaxCapacity() + plan.getReserveCapacity()))
+                        roomCapacityFacade.countSuitableRooms(plan.getMaxCapacity() + plan.getReserveCapacity()))
                 .stream()
-                .filter(s -> s.classCount() == request.classCount())
+                .filter(candidateScenario -> candidateScenario.classCount() == command.classCount())
                 .findFirst()
                 .orElseThrow(() -> new BaseException(ErrorCode.ADMISSION_INVALID_CAPACITY));
-        capacity.requireAcceptance(scenario, request.acceptReserve(), request.acceptBelowMinimum(), request.reason());
-        people.lockCohort(plan.getCohortId());
-        planClasses.deleteAll(planClasses.findByPlan_IdOrderByPosition(plan.getId()));
-        planClasses.flush();
-        List<AdmissionClassInfo> scope = people.findClasses(plan.getMajorId(), plan.getCohortId());
-        List<AdmissionClassInfo> selected = new ArrayList<>();
-        if (request.existingClassIds() != null) {
-            if (new HashSet<>(request.existingClassIds()).size()
-                            != request.existingClassIds().size()
-                    || request.existingClassIds().size() > request.classCount())
+        capacityPolicy.requireScenarioAcceptance(
+                scenario, command.acceptReserve(), command.acceptBelowMinimum(), command.reason());
+        peopleAdmissionFacade.lockCohort(plan.getCohortId());
+        planClassRepository.deleteAll(planClassRepository.findByPlan_IdOrderByPosition(plan.getId()));
+        planClassRepository.flush();
+        List<AdmissionClassInfo> classesInScope =
+                peopleAdmissionFacade.findClasses(plan.getMajorId(), plan.getCohortId());
+        List<AdmissionClassInfo> selectedClasses = new ArrayList<>();
+        if (command.existingClassIds() != null) {
+            if (new HashSet<>(command.existingClassIds()).size()
+                            != command.existingClassIds().size()
+                    || command.existingClassIds().size() > command.classCount())
                 throw new BaseException(ErrorCode.VALIDATION_ERROR);
-            for (Long id : request.existingClassIds()) {
-                AdmissionClassInfo candidate = scope.stream()
-                        .filter(c -> c.getId().equals(id))
+            for (Long classId : command.existingClassIds()) {
+                AdmissionClassInfo candidateClass = classesInScope.stream()
+                        .filter(administrativeClass ->
+                                administrativeClass.getId().equals(classId))
                         .findFirst()
                         .orElseThrow(() -> new BaseException(ErrorCode.ADMISSION_CLASS_UNAVAILABLE));
-                if (!available(candidate)) throw new BaseException(ErrorCode.ADMISSION_CLASS_UNAVAILABLE);
-                var locked = people.lockClass(id);
-                if (locked.getCurrentSize() != 0) throw new BaseException(ErrorCode.ADMISSION_CLASS_UNAVAILABLE);
-                selected.add(locked);
+                if (!isAvailableForAdmission(candidateClass))
+                    throw new BaseException(ErrorCode.ADMISSION_CLASS_UNAVAILABLE);
+                var lockedClass = peopleAdmissionFacade.lockClass(classId);
+                if (lockedClass.getCurrentSize() != 0) throw new BaseException(ErrorCode.ADMISSION_CLASS_UNAVAILABLE);
+                selectedClasses.add(lockedClass);
             }
         } else {
-            for (var candidate : scope) {
-                if (selected.size() == request.classCount()) break;
-                if (available(candidate)) {
-                    var locked = people.lockClass(candidate.getId());
-                    if (locked.getCurrentSize() == 0) selected.add(locked);
+            for (var candidateClass : classesInScope) {
+                if (selectedClasses.size() == command.classCount()) break;
+                if (isAvailableForAdmission(candidateClass)) {
+                    var lockedClass = peopleAdmissionFacade.lockClass(candidateClass.getId());
+                    if (lockedClass.getCurrentSize() == 0) selectedClasses.add(lockedClass);
                 }
             }
         }
         // Tính cả lớp đã xóa/tên lớp cũ để không cấp lại số thứ tự đã sử dụng.
-        int next = scope.stream()
+        int nextClassSequence = classesInScope.stream()
                         .map(AdmissionClassInfo::getClassSequence)
                         .filter(Objects::nonNull)
                         .mapToInt(Integer::intValue)
                         .max()
                         .orElse(0)
                 + 1;
-        while (selected.size() < request.classCount()) {
-            if (next > 99) throw new BaseException(ErrorCode.INVALID_STUDENT_CODE_CLASS);
-            selected.add(people.createClass(AdmissionClassRequest.builder()
+        while (selectedClasses.size() < command.classCount()) {
+            if (nextClassSequence > 99) throw new BaseException(ErrorCode.INVALID_STUDENT_CODE_CLASS);
+            selectedClasses.add(peopleAdmissionFacade.createClass(AdmissionClassRequest.builder()
                     .majorId(plan.getMajorId())
                     .cohortId(plan.getCohortId())
-                    .sequence(next++)
+                    .sequence(nextClassSequence++)
                     .minimum(plan.getMinCapacity())
                     .maximum(plan.getMaxCapacity())
                     .reserve(plan.getReserveCapacity())
                     .build()));
         }
-        for (int i = 0; i < selected.size(); i++) {
-            var target = people.configureClass(
-                    selected.get(i).getId(), plan.getMinCapacity(), plan.getMaxCapacity(), plan.getReserveCapacity());
-            planClasses.save(AdmissionPlanClass.builder()
+        for (int classIndex = 0; classIndex < selectedClasses.size(); classIndex++) {
+            var configuredClass = peopleAdmissionFacade.configureClass(
+                    selectedClasses.get(classIndex).getId(),
+                    plan.getMinCapacity(),
+                    plan.getMaxCapacity(),
+                    plan.getReserveCapacity());
+            planClassRepository.save(AdmissionPlanClass.builder()
                     .plan(plan)
-                    .administrativeClassId(target.getId())
-                    .position(i + 1)
-                    .targetSize(scenario.targetSizes().get(i))
+                    .administrativeClassId(configuredClass.getId())
+                    .position(classIndex + 1)
+                    .targetSize(scenario.targetSizes().get(classIndex))
                     .build());
         }
-        planClasses.flush();
-        plan.setSelectedClassCount(request.classCount());
-        plan.setExceptionReason(PersonText.optional(request.reason()));
+        planClassRepository.flush();
+        plan.setSelectedClassCount(command.classCount());
+        plan.setExceptionReason(TextsNormalizer.normalizeOptionalText(command.reason()));
         plan.setState(AdmissionPlanStatus.CLASSES_READY);
-        applicants.findByPlan_IdOrderByRowNumber(plan.getId()).forEach(row -> row.setAdministrativeClassId(null));
-        AdmissionPlanPolicy.changed(plan);
+        applicantRepository
+                .findByPlan_IdOrderByRowNumber(plan.getId())
+                .forEach(applicant -> applicant.setAdministrativeClassId(null));
+        AdmissionPlanPolicy.incrementRevision(plan);
         // TODO(AUDIT_LOG): Ghi kịch bản được chọn, lớp tạo/dùng lại và xác nhận ngoại lệ.
-        log.info("Prepared administrative classes: planId={}, classCount={}", plan.getId(), request.classCount());
-        return view.response(plan);
+        log.info("Prepared administrative classes: planId={}, classCount={}", plan.getId(), command.classCount());
+        return planQueryService.buildPlanResult(plan);
     }
 
-    private boolean available(AdmissionClassInfo value) {
-        return !value.isDeleted()
-                && value.getTrainingType() == TrainingType.CHINH_QUY
-                && value.getClassSequence() != null
-                && value.getLastStudentSequence() == 0
-                && value.getCurrentSize() == 0
-                && !planClasses.existsByAdministrativeClassId(value.getId());
+    private boolean isAvailableForAdmission(AdmissionClassInfo administrativeClass) {
+        return !administrativeClass.isDeleted()
+                && administrativeClass.getTrainingType() == TrainingType.CHINH_QUY
+                && administrativeClass.getClassSequence() != null
+                && administrativeClass.getLastStudentSequence() == 0
+                && administrativeClass.getCurrentSize() == 0
+                && !planClassRepository.existsByAdministrativeClassId(administrativeClass.getId());
     }
 }

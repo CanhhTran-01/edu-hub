@@ -9,7 +9,7 @@ import com.eduhub.edu_hub.identity.domain.model.RefreshToken;
 import com.eduhub.edu_hub.identity.domain.model.User;
 import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
-import com.eduhub.edu_hub.notification.application.command.AccountEmailCommand;
+import com.eduhub.edu_hub.notification.application.command.SendAccountEmailCommand;
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
 import com.eduhub.edu_hub.notification.application.result.EmailDeliveryResult;
 import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
@@ -25,8 +25,9 @@ class AdminUserNotificationTest {
     private final UserRepository users = mock(UserRepository.class);
     private final RefreshTokenRepository sessions = mock(RefreshTokenRepository.class);
     private final TokenService tokens = mock(TokenService.class);
-    private final NotificationFacade.Mail notifications = mock(NotificationFacade.Mail.class);
-    private final AdminUserService service = new AdminUserService(users, sessions, tokens, notifications);
+    private final NotificationFacade.ImmediateEmail immediateEmailNotifications =
+            mock(NotificationFacade.ImmediateEmail.class);
+    private final AdminUserService service = new AdminUserService(users, sessions, tokens, immediateEmailNotifications);
 
     @BeforeEach
     void accounts() {
@@ -48,11 +49,11 @@ class AdminUserNotificationTest {
 
     @Test
     void resetExplicitlySelectsTheResetTemplateAndIncludesTargetUsername() {
-        when(notifications.sendAccount(any()))
+        when(immediateEmailNotifications.sendAccountEmail(any()))
                 .thenReturn(EmailDeliveryResult.builder().sent(true).build());
         service.resetPassword("test-token", 2L);
-        verify(notifications)
-                .sendAccount(AccountEmailCommand.builder()
+        verify(immediateEmailNotifications)
+                .sendAccountEmail(SendAccountEmailCommand.builder()
                         .recipient("student@example.com")
                         .username("CNTT080101")
                         .temporaryPassword("new-temporary-password")
@@ -63,7 +64,7 @@ class AdminUserNotificationTest {
     @ParameterizedTest
     @ValueSource(strings = {"EMAIL_SEND_FAILED", "EMAIL_TEMPLATE_RENDER_FAILED"})
     void failedDeliveryStillThrowsTheErrorUsedToRollBackPasswordReset(String error) {
-        when(notifications.sendAccount(any()))
+        when(immediateEmailNotifications.sendAccountEmail(any()))
                 .thenReturn(EmailDeliveryResult.builder().error(error).build());
         assertThatThrownBy(() -> service.resetPassword("test-token", 2L))
                 .isInstanceOfSatisfying(BaseException.class, failure -> assertThat(failure.getErrorCode())

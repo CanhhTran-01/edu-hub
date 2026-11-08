@@ -12,18 +12,21 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class AdmissionNotificationQueryService {
-    private final StudentAdmissionRepository admissions;
-    private final NotificationFacade.Queue notifications;
+    private final StudentAdmissionRepository studentAdmissionRepository;
+    private final NotificationFacade.AdmissionQueue notificationQueue;
 
-    public List<NotificationResult> list(Long planId) {
-        // Admission xác định nguồn thuộc plan; notification không đọc entity/repository của admission.
-        return notifications.findByAdmissionIds(admissions.findIdsByPlanId(planId)).stream()
-                .map(n -> NotificationResult.builder()
-                        .id(n.id())
-                        .admissionId(n.admissionId())
-                        .state(n.state())
-                        .failureCount(n.failureCount())
-                        .error(n.error())
+    public List<NotificationResult> listPlanNotifications(Long planId) {
+        // Admission xác định nguồn thuộc plan
+        // notification không đọc entity/repository của admission.
+        return notificationQueue
+                .findNotificationsByAdmissionIds(studentAdmissionRepository.findIdsByPlanId(planId))
+                .stream()
+                .map(notification -> NotificationResult.builder()
+                        .id(notification.id())
+                        .admissionId(notification.admissionId())
+                        .state(notification.state())
+                        .failureCount(notification.failureCount())
+                        .error(notification.error())
                         .build())
                 .toList();
     }

@@ -5,7 +5,7 @@ import com.eduhub.edu_hub.curriculum.application.facade.dto.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.identity.application.command.CreateStudentAccountCommand;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
-import com.eduhub.edu_hub.identity.application.result.CreateStudentAccountResult;
+import com.eduhub.edu_hub.identity.application.result.AccountNotificationResult;
 import com.eduhub.edu_hub.people.api.dto.request.CreateStudentRequest;
 import com.eduhub.edu_hub.people.api.dto.request.StudentSearchRequest;
 import com.eduhub.edu_hub.people.api.dto.request.UpdateStudentRequest;
@@ -23,7 +23,7 @@ import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.mapper.PageMapper;
-import com.eduhub.edu_hub.shared.text.PersonText;
+import com.eduhub.edu_hub.shared.text.TextsNormalizer;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
@@ -70,9 +70,9 @@ public class StudentApplicationService {
         //  Khi tích hợp hàng đợi thông báo dùng chung, đưa cả luồng này vào scheduler với 3 retry.
         //  Không khôi phục endpoint resend hoặc reset bộ đếm để vượt giới hạn của luồng nhập học.
 
-        CreateStudentAccountResult notification = created.hasEmail()
+        AccountNotificationResult notification = created.hasEmail()
                 ? identityFacade.sendStudentAccountNotification(created.userId(), INITIAL_PASSWORD)
-                : new CreateStudentAccountResult(created.userId(), false, "ACCOUNT_EMAIL_MISSING");
+                : new AccountNotificationResult(created.userId(), false, "ACCOUNT_EMAIL_MISSING");
 
         AccountNotificationStatus notificationStatus = !created.hasEmail()
                 ? AccountNotificationStatus.SKIPPED
@@ -88,7 +88,7 @@ public class StudentApplicationService {
     private CreatedStudent createInTransaction(CreateStudentRequest request) {
 
         String fullName = request.getFullName().trim();
-        String email = PersonText.email(request.getEmail());
+        String email = TextsNormalizer.normalizeEmail(request.getEmail());
         String citizenId = normalizeCitizenId(request.getCitizenId());
 
         String reason = request.getReason().trim();

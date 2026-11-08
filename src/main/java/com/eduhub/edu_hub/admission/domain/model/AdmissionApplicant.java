@@ -44,11 +44,11 @@ public class AdmissionApplicant extends BaseEntity {
     @Column(name = "student_id")
     private Long studentId;
 
-    public boolean isPending() {
+    public boolean isPendingEnrollment() {
         return state == AdmissionApplicantStatus.VALID || state == AdmissionApplicantStatus.FAILED;
     }
 
-    public boolean isIncluded() {
-        return isPending() || state == AdmissionApplicantStatus.ENROLLED;
+    public boolean isIncludedInPlan() {
+        return isPendingEnrollment() || state == AdmissionApplicantStatus.ENROLLED;
     }
 }

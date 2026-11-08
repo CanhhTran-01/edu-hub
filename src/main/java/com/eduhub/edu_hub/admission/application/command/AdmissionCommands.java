@@ -9,7 +9,7 @@ public final class AdmissionCommands {
     private AdmissionCommands() {}
 
     @Builder
-    public record PlanCommand(
+    public record CreatePlanCommand(
             @NotNull @Positive Long majorId,
             @NotNull @Positive Long cohortId,
             @Min(0) int totalStudents,
@@ -18,7 +18,7 @@ public final class AdmissionCommands {
             @Min(0) @Max(98) Integer reserveCapacity) {}
 
     @Builder
-    public record CreateClassesCommand(
+    public record PrepareClassesCommand(
             @NotNull @Positive Long planId,
             @Min(0) long expectedRevision,
             @Min(1) @Max(99) int classCount,
@@ -28,7 +28,7 @@ public final class AdmissionCommands {
             @Size(max = 500) String reason) {}
 
     @Builder
-    public record PreviewCommand(@Min(0) long expectedRevision) {}
+    public record PreviewAllocationCommand(@Min(0) long expectedRevision) {}
 
     @Builder
     public record AssignmentCommand(@NotNull @Positive Long applicantId, @NotNull @Positive Long classId) {}
@@ -38,7 +38,7 @@ public final class AdmissionCommands {
             @Min(0) long expectedRevision, @NotEmpty List<@NotNull @Valid AssignmentCommand> assignments) {}
 
     @Builder
-    public record ConfirmCommand(
+    public record ConfirmEnrollmentCommand(
             @Min(0) long expectedRevision,
             boolean acceptReserve,
             boolean acceptBelowMinimum,

@@ -4,7 +4,7 @@ public enum AdmissionPlanStatus {
     DRAFT,
     CLASSES_READY,
     PREVIEWED,
-    CONFIRMING,
-    PARTIALLY_CONFIRMED,
+    CONFIRMING, // Đang trong quá trình xác nhận
+    PARTIALLY_CONFIRMED, // Xác nhận một phần, một số sinh viên bị lỗi hoặc chưa xử lý
     CONFIRMED
 }

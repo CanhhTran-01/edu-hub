@@ -21,7 +21,7 @@ import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.application.facade.dto.AdmissionStudentInfo;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
-import com.eduhub.edu_hub.shared.text.PersonText;
+import com.eduhub.edu_hub.shared.text.TextsNormalizer;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -35,24 +35,24 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 @Slf4j
 public class AdmissionImportService {
-    private final AdmissionPlanRepository plans;
-    private final AdmissionApplicantRepository applicants;
-    private final StudentAdmissionRepository admissions;
-    private final PeopleFacade.Admission people;
-    private final IdentityFacade identity;
-    private final CurriculumFacade.Majors majors;
-    private final AdmissionSpreadsheetReader spreadsheet;
-    private final AdmissionIdentityPolicy policy;
-    private final AdmissionApplicantValidator validator;
-    private final AdmissionApplicantMerger merger;
+    private final AdmissionPlanRepository planRepository;
+    private final AdmissionApplicantRepository applicantRepository;
+    private final StudentAdmissionRepository studentAdmissionRepository;
+    private final PeopleFacade.Admission peopleAdmissionFacade;
+    private final IdentityFacade identityFacade;
+    private final CurriculumFacade.Majors majorCatalogFacade;
+    private final AdmissionSpreadsheetReader spreadsheetReader;
+    private final AdmissionIdentityPolicy identityPolicy;
+    private final AdmissionApplicantValidator applicantValidator;
+    private final AdmissionApplicantMerger applicantMerger;
     private final AdmissionApplicantMapper applicantMapper;
-    private final AdmissionPlanQueryService view;
+    private final AdmissionPlanQueryService planQueryService;
 
     @Transactional
-    public PlanResult upload(Long planId, long expectedRevision, MultipartFile file) {
+    public PlanResult importApplicants(Long planId, long expectedRevision, MultipartFile file) {
 
         // lấy plan và khóa lại: pessimistic lock và optimistic lock thủ công
-        AdmissionPlan plan = AdmissionPlanLoader.locked(plans, planId, expectedRevision);
+        AdmissionPlan plan = AdmissionPlanLoader.lockPlanAtRevision(planRepository, planId, expectedRevision);
 
         // đang tạo sinh viên thì không cho upload lại
         if (plan.getState() == AdmissionPlanStatus.CONFIRMING) {
@@ -62,9 +62,9 @@ public class AdmissionImportService {
         // Ngành/khóa của plan là nguồn chính thức. File chỉ cung cấp thông tin đối chiếu,
         // không được đổi ngành/khóa của plan hoặc quyết định tiền tố lớp/MSSV.
         // Kiểm tra trước mọi thao tác xóa, thay thế hoặc gộp danh sách đã nhập.
-        var major = majors.requireMajor(plan.getMajorId());
-        var cohort = people.requireCohort(plan.getCohortId());
-        List<AdmissionApplicant> rows = new ArrayList<>(spreadsheet
+        var major = majorCatalogFacade.requireMajor(plan.getMajorId());
+        var cohort = peopleAdmissionFacade.requireCohort(plan.getCohortId());
+        List<AdmissionApplicant> importedApplicants = new ArrayList<>(spreadsheetReader
                 .parse(
                         file,
                         AdmissionImportScope.builder()
@@ -77,37 +77,40 @@ public class AdmissionImportService {
                 .toList());
 
         // Lấy dòng cũ của plan, kiểm tra có ai nhập học thành công (ENROLLED) chưa
-        List<AdmissionApplicant> previousRows = applicants.findByPlan_IdOrderByRowNumber(planId);
-        boolean hasEnrolled = previousRows.stream().anyMatch(r -> r.getState() == AdmissionApplicantStatus.ENROLLED);
+        List<AdmissionApplicant> existingApplicants = applicantRepository.findByPlan_IdOrderByRowNumber(planId);
+        boolean hasEnrolledApplicants = existingApplicants.stream()
+                .anyMatch(applicant -> applicant.getState() == AdmissionApplicantStatus.ENROLLED);
 
         // validate các AdmissionApplicant đã parse từ file mới
-        for (AdmissionApplicant row : rows) {
+        for (AdmissionApplicant applicant : importedApplicants) {
 
-            row.setPlan(plan); // applican này thuộc về plant hiện tại
+            applicant.setPlan(plan); // applican này thuộc về plant hiện tại
 
-            if (row.getState() == AdmissionApplicantStatus.INVALID) continue;
+            if (applicant.getState() == AdmissionApplicantStatus.INVALID) continue;
 
-            List<String> errors = validator.validate(row);
-            if (!errors.isEmpty()) mark(row, AdmissionApplicantStatus.INVALID, String.join("; ", errors));
+            List<String> validationErrors = applicantValidator.validate(applicant);
+            if (!validationErrors.isEmpty())
+                setApplicantStatus(applicant, AdmissionApplicantStatus.INVALID, String.join("; ", validationErrors));
         }
 
         // Chỉ giữ lại những thí sinh đã qua bước parse và validate
-        var validRows = rows.stream()
-                .filter(r -> r.getState() == AdmissionApplicantStatus.VALID)
+        var validApplicants = importedApplicants.stream()
+                .filter(applicant -> applicant.getState() == AdmissionApplicantStatus.VALID)
                 .toList();
 
         Map<String, StudentAdmission> existingAdmissionsByApplicationCode = new HashMap<>();
         Map<String, List<AdmissionStudentInfo>> existingStudentsByCitizenId = new HashMap<>();
 
-        for (int offset = 0; offset < validRows.size(); offset += 500) {
+        for (int offset = 0; offset < validApplicants.size(); offset += 500) {
             // Chia nhỏ query để không vượt quá giới hạn tham số của PostgreSQL khi import dữ liệu lớn
             // Tra DB theo lô 500
-            List<AdmissionApplicant> chunks = validRows.subList(offset, Math.min(offset + 500, validRows.size()));
+            List<AdmissionApplicant> applicantBatch =
+                    validApplicants.subList(offset, Math.min(offset + 500, validApplicants.size()));
 
             // Lưu trước các StudentAdmission theo mã hồ sơ để truy vấn, tránh N+1 query
             // dùng để xem hồ sơ này đã được import trước đó chưa ?
-            admissions
-                    .findByApplicationCodeIn(chunks.stream()
+            studentAdmissionRepository
+                    .findByApplicationCodeIn(applicantBatch.stream()
                             .map(AdmissionApplicant::getApplicationCode)
                             .distinct()
                             .toList())
@@ -115,7 +118,8 @@ public class AdmissionImportService {
 
             //  Lưu trước các StudentAdmission theo CCCD để truy vấn, tránh N+1 query
             // dùng để biết người này đã có trong hệ thống chưa ?
-            people.findStudentsByCitizenIds(chunks.stream()
+            peopleAdmissionFacade
+                    .findStudentsByCitizenIds(applicantBatch.stream()
                             .map(AdmissionApplicant::getCitizenId)
                             .distinct()
                             .toList())
@@ -125,17 +129,19 @@ public class AdmissionImportService {
         }
 
         // phân loại validRows thành: mới, đã tồn tại (EXISTING), hoặc xung đột (CONFLICT)
-        Map<String, AdmissionApplicant> seenCodes = new HashMap<>();
-        Map<String, List<AdmissionApplicant>> seenCitizens =
-                validRows.stream().collect(Collectors.groupingBy(AdmissionApplicant::getCitizenId));
+        Map<String, AdmissionApplicant> firstApplicantByApplicationCode = new HashMap<>();
+        Map<String, List<AdmissionApplicant>> applicantsByCitizenId =
+                validApplicants.stream().collect(Collectors.groupingBy(AdmissionApplicant::getCitizenId));
 
-        for (AdmissionApplicant row : validRows) {
+        for (AdmissionApplicant applicant : validApplicants) {
 
             // lấy dữ liệu lên check
-            AdmissionApplicant previous = seenCodes.putIfAbsent(row.getApplicationCode(), row);
-            StudentAdmission exist = existingAdmissionsByApplicationCode.get(row.getApplicationCode());
-            List<AdmissionStudentInfo> matches = existingStudentsByCitizenId
-                    .getOrDefault(row.getCitizenId(), List.of())
+            AdmissionApplicant firstApplicantWithSameCode =
+                    firstApplicantByApplicationCode.putIfAbsent(applicant.getApplicationCode(), applicant);
+            StudentAdmission existingAdmission =
+                    existingAdmissionsByApplicationCode.get(applicant.getApplicationCode());
+            List<AdmissionStudentInfo> matchingStudents = existingStudentsByCitizenId
+                    .getOrDefault(applicant.getCitizenId(), List.of())
                     .stream()
                     .collect(Collectors.toMap(
                             AdmissionStudentInfo::getId, Function.identity(), (first, second) -> first))
@@ -144,100 +150,122 @@ public class AdmissionImportService {
                     .toList();
 
             // CCCD chưa có trong hệ thống, đây là thí sinh mới hoàn toàn
-            // TODO(ADMISSION_IMPORT_VALIDATION_ORDER): Kiểm tra mã hồ sơ trước nhánh CCCD mới; lỗi có từ trước đợt tách
-            // module.
-            if (matches.isEmpty()) continue;
+            // TODO(ADMISSION_IMPORT_VALIDATION_ORDER): Kiểm tra mã hồ sơ trước nhánh CCCD mới;
+            //  lỗi có từ trước đợt tách module.
+            if (matchingStudents.isEmpty()) continue;
 
             // Trùng mã hồ sơ ngay trong file
-            if (previous != null) {
-                if (policy.same(previous, row) && previous.getState() != AdmissionApplicantStatus.CONFLICT) {
-                    mark(row, AdmissionApplicantStatus.EXISTING, "Dòng trùng đã tồn tại trong file");
+            if (firstApplicantWithSameCode != null) {
+                if (identityPolicy.hasSameApplicantData(firstApplicantWithSameCode, applicant)
+                        && firstApplicantWithSameCode.getState() != AdmissionApplicantStatus.CONFLICT) {
+                    setApplicantStatus(
+                            applicant, AdmissionApplicantStatus.EXISTING, "Dòng trùng đã tồn tại trong file");
                 } else {
-                    mark(previous, AdmissionApplicantStatus.CONFLICT, "Cùng mã hồ sơ, khác dữ liệu trong file");
-                    mark(row, AdmissionApplicantStatus.CONFLICT, "Cùng mã hồ sơ, khác dữ liệu trong file");
+                    setApplicantStatus(
+                            firstApplicantWithSameCode,
+                            AdmissionApplicantStatus.CONFLICT,
+                            "Cùng mã hồ sơ, khác dữ liệu trong file");
+                    setApplicantStatus(
+                            applicant, AdmissionApplicantStatus.CONFLICT, "Cùng mã hồ sơ, khác dữ liệu trong file");
                 }
                 continue;
             }
 
             // Mã hồ sơ đã có trong DB
-            if (exist != null) {
-                row.setStudentId(exist.getStudentId());
-                row.setReuseAccount(true);
-                mark(
-                        row,
-                        policy.same(row, exist) ? AdmissionApplicantStatus.EXISTING : AdmissionApplicantStatus.CONFLICT,
-                        policy.same(row, exist) ? "Hồ sơ đã tồn tại" : "Cùng mã hồ sơ nhưng khác dữ liệu hoặc CCCD");
+            if (existingAdmission != null) {
+                applicant.setStudentId(existingAdmission.getStudentId());
+                applicant.setReuseAccount(true);
+                setApplicantStatus(
+                        applicant,
+                        identityPolicy.hasSameApplicantData(applicant, existingAdmission)
+                                ? AdmissionApplicantStatus.EXISTING
+                                : AdmissionApplicantStatus.CONFLICT,
+                        identityPolicy.hasSameApplicantData(applicant, existingAdmission)
+                                ? "Hồ sơ đã tồn tại"
+                                : "Cùng mã hồ sơ nhưng khác dữ liệu hoặc CCCD");
                 continue;
             }
 
             // Chưa có mã hồ sơ, nhưng CCCD khớp sinh viên cũ
-            if (matches.size() != 1
-                    || matches.getFirst().isDeleted()
-                    || matches.getFirst().getUserId() == null) {
-                mark(row, AdmissionApplicantStatus.CONFLICT, "Danh tính cũ đã tồn tại trong hệ thống");
+            if (matchingStudents.size() != 1
+                    || matchingStudents.getFirst().isDeleted()
+                    || matchingStudents.getFirst().getUserId() == null) {
+                setApplicantStatus(
+                        applicant, AdmissionApplicantStatus.CONFLICT, "Danh tính cũ đã tồn tại trong hệ thống");
                 continue;
             }
 
             // Khớp đúng một sinh viên, kiểm tra tài khoản
-            AdmissionStudentInfo student = matches.getFirst();
+            AdmissionStudentInfo student = matchingStudents.getFirst();
             try {
-                var account = identity.getStudentAccount(student.getUserId());
-                row.setStudentId(student.getId());
-                row.setReuseAccount(true);
+                var account = identityFacade.getStudentAccount(student.getUserId());
+                applicant.setStudentId(student.getId());
+                applicant.setReuseAccount(true);
 
                 if (account.locked()) {
-                    row.setWarningMessage("Tài khoản cũ đang khóa/ngừng hoạt động; hệ thống giữ nguyên trạng thái");
+                    applicant.setWarningMessage(
+                            "Tài khoản cũ đang khóa/ngừng hoạt động; hệ thống giữ nguyên trạng thái");
                 }
 
-                if (!PersonText.key(student.getFullName()).equals(PersonText.key(row.getFullName()))) {
-                    row.setWarningMessage("Họ tên khác hồ sơ danh tính cũ; giữ nguyên hồ sơ gốc"
-                            + (row.getWarningMessage() == null ? "" : "; " + row.getWarningMessage()));
+                if (!TextsNormalizer.normalizeKey(student.getFullName())
+                        .equals(TextsNormalizer.normalizeKey(applicant.getFullName()))) {
+                    applicant.setWarningMessage("Họ tên khác hồ sơ danh tính cũ; giữ nguyên hồ sơ gốc"
+                            + (applicant.getWarningMessage() == null ? "" : "; " + applicant.getWarningMessage()));
                 }
 
             } catch (BaseException exception) {
-                mark(row, AdmissionApplicantStatus.CONFLICT, "Không thể dùng lại tài khoản cũ; Admin cần kiểm tra");
+                setApplicantStatus(
+                        applicant,
+                        AdmissionApplicantStatus.CONFLICT,
+                        "Không thể dùng lại tài khoản cũ; Admin cần kiểm tra");
             }
         }
 
         // Quét xung đột chéo
 
         // Một CCCD có nhiều mã hồ sơ
-        seenCitizens.values().stream()
+        applicantsByCitizenId.values().stream()
                 .filter(group -> group.stream()
                                 .map(AdmissionApplicant::getApplicationCode)
                                 .distinct()
                                 .count()
                         > 1)
-                .forEach(group -> group.forEach(row ->
-                        mark(row, AdmissionApplicantStatus.CONFLICT, "Một CCCD có nhiều mã hồ sơ ở cùng đợt phân")));
+                .forEach(group -> group.forEach(applicant -> setApplicantStatus(
+                        applicant, AdmissionApplicantStatus.CONFLICT, "Một CCCD có nhiều mã hồ sơ ở cùng đợt phân")));
 
         // Lan truyền xung đột theo mã hồ sơ
         // Nhóm các dòng theo mã hồ sơ; nếu có ít nhất một dòng CONFLICT thì mọi dòng cùng mã đều thành CONFLICT
-        validRows.stream().collect(Collectors.groupingBy(AdmissionApplicant::getApplicationCode)).values().stream()
-                .filter(group -> group.stream().anyMatch(row -> row.getState() == AdmissionApplicantStatus.CONFLICT))
-                .forEach(group -> group.forEach(row ->
-                        mark(row, AdmissionApplicantStatus.CONFLICT, "Cùng mã hồ sơ nhưng có dữ liệu xung đột")));
+        validApplicants.stream()
+                .collect(Collectors.groupingBy(AdmissionApplicant::getApplicationCode))
+                .values()
+                .stream()
+                .filter(group ->
+                        group.stream().anyMatch(applicant -> applicant.getState() == AdmissionApplicantStatus.CONFLICT))
+                .forEach(group -> group.forEach(applicant -> setApplicantStatus(
+                        applicant, AdmissionApplicantStatus.CONFLICT, "Cùng mã hồ sơ nhưng có dữ liệu xung đột")));
 
         // đã có sinh viên nhập học từ lần import trước
         // Khi kế hoạch đã có người nhập học thành công, không được xóa sạch dữ liệu cũ mà phải gộp.
-        if (hasEnrolled) {
-            rows = merger.merge(previousRows, rows);
+        if (hasEnrolledApplicants) {
+            importedApplicants =
+                    applicantMerger.mergePreservingEnrolledApplicants(existingApplicants, importedApplicants);
         } else {
             // Xóa toàn bộ dòng import cũ của kế hoạch rồi import lại từ đầu
-            applicants.deleteByPlan_Id(planId);
-            applicants.flush();
+            applicantRepository.deleteByPlan_Id(planId);
+            applicantRepository.flush();
         }
 
         // Lưu toàn bộ dòng (kể cả INVALID, CONFLICT, để người dùng xem lại).
-        applicants.saveAll(rows);
-        applicants.flush();
+        applicantRepository.saveAll(importedApplicants);
+        applicantRepository.flush();
 
         // Tổng số sinh viên = số dòng được tính vào đợt
-        plan.setTotalStudents(
-                (int) rows.stream().filter(AdmissionApplicant::isIncluded).count());
+        plan.setTotalStudents((int) importedApplicants.stream()
+                .filter(AdmissionApplicant::isIncludedInPlan)
+                .count());
 
         // Trạng thái kế hoạch
-        if (hasEnrolled && rows.stream().noneMatch(AdmissionApplicant::isPending)) {
+        if (hasEnrolledApplicants && importedApplicants.stream().noneMatch(AdmissionApplicant::isPendingEnrollment)) {
             // Đã có người nhập học và không còn dòng nào đang chờ --> CONFIRMED (hoàn tất)
             plan.setState(AdmissionPlanStatus.CONFIRMED);
         } else {
@@ -249,21 +277,22 @@ public class AdmissionImportService {
         }
 
         // đánh dấu kế hoạch thay đổi
-        AdmissionPlanPolicy.changed(plan);
+        AdmissionPlanPolicy.incrementRevision(plan);
 
         // TODO(AUDIT_LOG): Ghi lần import, hồ sơ bị loại/xung đột và quyết định xử lý lại sau commit.
 
         log.info(
                 "Imported admission candidates: planId={}, rows={}, eligible={}",
                 planId,
-                rows.size(),
+                importedApplicants.size(),
                 plan.getTotalStudents());
 
-        return view.response(plan);
+        return planQueryService.buildPlanResult(plan);
     }
 
-    private void mark(AdmissionApplicant row, AdmissionApplicantStatus state, String error) {
-        row.setState(state);
-        row.setErrorMessage(error);
+    private void setApplicantStatus(
+            AdmissionApplicant applicant, AdmissionApplicantStatus status, String errorMessage) {
+        applicant.setState(status);
+        applicant.setErrorMessage(errorMessage);
     }
 }

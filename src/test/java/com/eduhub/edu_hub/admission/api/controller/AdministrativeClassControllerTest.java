@@ -4,7 +4,7 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import com.eduhub.edu_hub.admission.application.command.AdmissionCommands.CreateClassesCommand;
+import com.eduhub.edu_hub.admission.application.command.AdmissionCommands.PrepareClassesCommand;
 import com.eduhub.edu_hub.admission.application.service.AdmissionClassPreparationService;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;
 import java.util.List;
@@ -30,11 +30,11 @@ class AdministrativeClassControllerTest {
 
     @Test
     void listsClassesWithoutControllerAuthorizationChecks() throws Exception {
-        when(classes.list(1L, 8L)).thenReturn(List.of());
+        when(classes.listAdministrativeClasses(1L, 8L)).thenReturn(List.of());
         mvc.perform(get("/api/v1/administrative-classes").param("majorId", "1").param("cohortId", "8"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").isEmpty());
-        verify(classes).list(1L, 8L);
+        verify(classes).listAdministrativeClasses(1L, 8L);
     }
 
     @Test
@@ -49,7 +49,7 @@ class AdministrativeClassControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
-        verify(classes).createFromPlan(new CreateClassesCommand(1L, 0, 2, null, false, false, null));
+        verify(classes).prepareClasses(new PrepareClassesCommand(1L, 0, 2, null, false, false, null));
     }
 
     @Test

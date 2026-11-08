@@ -20,9 +20,9 @@ import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.util.ReflectionTestUtils;
 
-class SmtpMailSenderTest {
+class SmtpEmailSenderTest {
     private final JavaMailSender transport = mock(JavaMailSender.class);
-    private final SmtpMailSender sender = new SmtpMailSender(transport);
+    private final SmtpEmailSender sender = new SmtpEmailSender(transport);
     private final RenderedEmail email = RenderedEmail.builder()
             .subject("EduHub - Thông tin tài khoản")
             .textBody("Tên đăng nhập: CNTT080101\nMật khẩu khởi tạo: 12345")
@@ -31,13 +31,13 @@ class SmtpMailSenderTest {
 
     @BeforeEach
     void configureFrom() {
-        ReflectionTestUtils.setField(sender, "from", "eduhub@example.com");
+        ReflectionTestUtils.setField(sender, "senderAddress", "eduhub@example.com");
         when(transport.createMimeMessage()).thenReturn(new MimeMessage(Session.getInstance(new Properties())));
     }
 
     @Test
     void sendsUtf8MimeWithBothPlainTextAndHtmlAlternatives() throws Exception {
-        sender.send("student@example.com", email);
+        sender.sendEmail("student@example.com", email);
         var captor = ArgumentCaptor.forClass(MimeMessage.class);
         verify(transport).send(captor.capture());
         var message = captor.getValue();
@@ -53,21 +53,22 @@ class SmtpMailSenderTest {
 
     @Test
     void missingSenderConfigurationFailsBeforeUsingSmtp() {
-        ReflectionTestUtils.setField(sender, "from", "");
-        assertThatThrownBy(() -> sender.send("student@example.com", email)).isInstanceOf(MailSendException.class);
+        ReflectionTestUtils.setField(sender, "senderAddress", "");
+        assertThatThrownBy(() -> sender.sendEmail("student@example.com", email)).isInstanceOf(MailSendException.class);
         verifyNoInteractions(transport);
     }
 
     @Test
     void invalidRecipientIsReportedAsMailPreparationFailure() {
-        assertThatThrownBy(() -> sender.send("bad@@example.com", email)).isInstanceOf(MailPreparationException.class);
+        assertThatThrownBy(() -> sender.sendEmail("bad@@example.com", email))
+                .isInstanceOf(MailPreparationException.class);
         verify(transport, never()).send(any(MimeMessage.class));
     }
 
     @Test
     void transportFailureRemainsAMailExceptionForTheFacade() {
         doThrow(new MailSendException("SMTP unavailable")).when(transport).send(any(MimeMessage.class));
-        assertThatThrownBy(() -> sender.send("student@example.com", email)).isInstanceOf(MailSendException.class);
+        assertThatThrownBy(() -> sender.sendEmail("student@example.com", email)).isInstanceOf(MailSendException.class);
     }
 
     private void collectBodies(Part part, Map<String, String> bodies) throws Exception {

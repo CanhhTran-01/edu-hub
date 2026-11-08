@@ -5,5 +5,5 @@ import lombok.Builder;
 
 /** Mật khẩu chỉ truyền trong bộ nhớ để gửi, không lưu vào bảng thông báo hoặc ghi log. */
 @Builder
-public record AccountEmailCommand(
+public record SendAccountEmailCommand(
         String recipient, String username, String temporaryPassword, EmailTemplateType templateType) {}

@@ -5,7 +5,7 @@ import com.eduhub.edu_hub.identity.application.*;
 import com.eduhub.edu_hub.identity.application.command.CreateLecturerAccountCommand;
 import com.eduhub.edu_hub.identity.application.command.CreateStudentAccountCommand;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
-import com.eduhub.edu_hub.identity.application.result.CreateStudentAccountResult;
+import com.eduhub.edu_hub.identity.application.result.AccountNotificationResult;
 import com.eduhub.edu_hub.identity.application.result.StudentAccountInfo;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.model.Role;
@@ -13,8 +13,8 @@ import com.eduhub.edu_hub.identity.domain.model.User;
 import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.RoleRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
-import com.eduhub.edu_hub.notification.application.command.AccountEmailCommand;
-import com.eduhub.edu_hub.notification.application.command.AdmissionEmailCommand;
+import com.eduhub.edu_hub.notification.application.command.SendAccountEmailCommand;
+import com.eduhub.edu_hub.notification.application.command.SendAdmissionConfirmationEmailCommand;
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
 import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
 import com.eduhub.edu_hub.shared.enums.RoleName;
@@ -35,7 +35,7 @@ public class IdentityFacadeImpl implements IdentityFacade {
     private final RoleRepository roles;
     private final RefreshTokenRepository sessions;
     private final TokenService tokens;
-    private final NotificationFacade.Mail notifications;
+    private final NotificationFacade.ImmediateEmail immediateEmailNotifications;
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
     @Override
@@ -52,7 +52,7 @@ public class IdentityFacadeImpl implements IdentityFacade {
 
     @Override
     @Transactional(readOnly = true)
-    public CreateStudentAccountResult sendLecturerAccountNotification(Long userId, String initialPassword) {
+    public AccountNotificationResult sendLecturerAccountNotification(Long userId, String initialPassword) {
 
         User account = user(userId);
 
@@ -60,21 +60,14 @@ public class IdentityFacadeImpl implements IdentityFacade {
         if (account.isDeleted()
                 || !RoleName.LECTURER.name().equals(account.getRole().getRoleName())
                 || account.getStatus() != UserStatus.ACTIVE) {
-            return new CreateStudentAccountResult(userId, false, "ACCOUNT_NOT_AVAILABLE");
+            return new AccountNotificationResult(userId, false, "ACCOUNT_NOT_AVAILABLE");
         }
 
         if (!encoder.matches(initialPassword, account.getPasswordHash())) {
-            return new CreateStudentAccountResult(userId, false, "INITIAL_PASSWORD_NO_LONGER_VALID");
+            return new AccountNotificationResult(userId, false, "INITIAL_PASSWORD_NO_LONGER_VALID");
         }
 
         return sendStudentAccountNotification(userId, initialPassword);
-    }
-
-    @Override
-    @Transactional
-    public CreateStudentAccountResult createStudentAccount(CreateStudentAccountCommand command) {
-        Long userId = createStudentAccountRecord(command);
-        return sendStudentAccountNotification(userId, command.initialPassword());
     }
 
     @Override
@@ -84,33 +77,38 @@ public class IdentityFacadeImpl implements IdentityFacade {
     }
 
     @Override
-    public CreateStudentAccountResult sendStudentAccountNotification(Long userId, String initialPassword) {
+    public AccountNotificationResult sendStudentAccountNotification(Long userId, String initialPassword) {
+
         User user = user(userId);
+
         if (!user.isFirstLogin()) {
-            return new CreateStudentAccountResult(userId, false, "ACCOUNT_ALREADY_ACTIVATED");
+            return new AccountNotificationResult(userId, false, "ACCOUNT_ALREADY_ACTIVATED");
         }
+
         if (user.isDeleted()
                 || user.getStatus() != UserStatus.ACTIVE
                 || (user.getLockedUntil() != null
                         && user.getLockedUntil().isAfter(LocalDateTime.now(java.time.ZoneOffset.UTC)))) {
-            return new CreateStudentAccountResult(userId, false, "ACCOUNT_NOT_AVAILABLE");
+            return new AccountNotificationResult(userId, false, "ACCOUNT_NOT_AVAILABLE");
         }
+
         if (!encoder.matches(initialPassword, user.getPasswordHash())) {
-            return new CreateStudentAccountResult(userId, false, "INITIAL_PASSWORD_NO_LONGER_VALID");
+            return new AccountNotificationResult(userId, false, "INITIAL_PASSWORD_NO_LONGER_VALID");
         }
+
         if (user.getEmail() == null || user.getEmail().isBlank()) {
-            return new CreateStudentAccountResult(userId, false, "ACCOUNT_EMAIL_MISSING");
+            return new AccountNotificationResult(userId, false, "ACCOUNT_EMAIL_MISSING");
         }
-        var delivery = notifications.sendAccount(AccountEmailCommand.builder()
+
+        var delivery = immediateEmailNotifications.sendAccountEmail(SendAccountEmailCommand.builder()
                 .recipient(user.getEmail())
                 .username(user.getUsername())
                 .temporaryPassword(initialPassword)
                 .templateType(EmailTemplateType.ACCOUNT_CREATED)
                 .build());
-        if (!delivery.sent()) {
-            log.error("Initial account email failed for user {}", userId);
-        }
-        return new CreateStudentAccountResult(userId, delivery.sent(), delivery.error());
+
+        if (!delivery.sent()) log.error("Initial account email failed for user {}", userId);
+        return new AccountNotificationResult(userId, delivery.sent(), delivery.error());
     }
 
     @Override
@@ -141,7 +139,6 @@ public class IdentityFacadeImpl implements IdentityFacade {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public StudentAccountInfo getStudentAccount(Long userId) {
         User account = user(userId);
         if (account.isDeleted()
@@ -161,19 +158,20 @@ public class IdentityFacadeImpl implements IdentityFacade {
     }
 
     @Override
-    public CreateStudentAccountResult sendStudentAdmissionNotification(Long userId, String recipient) {
+    public AccountNotificationResult sendStudentAdmissionNotification(Long userId, String recipient) {
         var account = getStudentAccount(userId);
         if (recipient == null || recipient.isBlank()) {
-            return new CreateStudentAccountResult(userId, false, "ACCOUNT_EMAIL_MISSING");
+            return new AccountNotificationResult(userId, false, "ACCOUNT_EMAIL_MISSING");
         }
-        var delivery = notifications.sendAdmissionConfirmation(AdmissionEmailCommand.builder()
-                .recipient(recipient)
-                .username(account.username())
-                .build());
+        var delivery = immediateEmailNotifications.sendAdmissionConfirmationEmail(
+                SendAdmissionConfirmationEmailCommand.builder()
+                        .recipient(recipient)
+                        .username(account.username())
+                        .build());
         if (!delivery.sent()) {
             log.error("Admission confirmation email failed for user {}", userId);
         }
-        return new CreateStudentAccountResult(userId, delivery.sent(), delivery.error());
+        return new AccountNotificationResult(userId, delivery.sent(), delivery.error());
     }
 
     private Long createStudentAccountRecord(CreateStudentAccountCommand command) {

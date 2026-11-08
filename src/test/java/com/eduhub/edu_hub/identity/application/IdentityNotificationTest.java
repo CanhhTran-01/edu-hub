@@ -11,8 +11,8 @@ import com.eduhub.edu_hub.identity.domain.model.User;
 import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.RoleRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
-import com.eduhub.edu_hub.notification.application.command.AccountEmailCommand;
-import com.eduhub.edu_hub.notification.application.command.AdmissionEmailCommand;
+import com.eduhub.edu_hub.notification.application.command.SendAccountEmailCommand;
+import com.eduhub.edu_hub.notification.application.command.SendAdmissionConfirmationEmailCommand;
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
 import com.eduhub.edu_hub.notification.application.result.EmailDeliveryResult;
 import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
@@ -25,13 +25,14 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 class IdentityNotificationTest {
     private final UserRepository users = mock(UserRepository.class);
-    private final NotificationFacade.Mail notifications = mock(NotificationFacade.Mail.class);
+    private final NotificationFacade.ImmediateEmail immediateEmailNotifications =
+            mock(NotificationFacade.ImmediateEmail.class);
     private final IdentityFacadeImpl identity = new IdentityFacadeImpl(
             users,
             mock(RoleRepository.class),
             mock(RefreshTokenRepository.class),
             mock(TokenService.class),
-            notifications);
+            immediateEmailNotifications);
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
     private User user;
 
@@ -52,14 +53,14 @@ class IdentityNotificationTest {
 
     @Test
     void delegatesOnlyAfterAccountChecksAndKeepsDeliveryErrorContract() {
-        when(notifications.sendAccount(any()))
+        when(immediateEmailNotifications.sendAccountEmail(any()))
                 .thenReturn(
                         EmailDeliveryResult.builder().error("EMAIL_SEND_FAILED").build());
         var result = identity.sendStudentAccountNotification(7L, "12345");
         assertThat(result.emailSent()).isFalse();
         assertThat(result.emailError()).isEqualTo("EMAIL_SEND_FAILED");
-        verify(notifications)
-                .sendAccount(new AccountEmailCommand(
+        verify(immediateEmailNotifications)
+                .sendAccountEmail(new SendAccountEmailCommand(
                         "student@example.com", "CNTT080101", "12345", EmailTemplateType.ACCOUNT_CREATED));
     }
 
@@ -88,20 +89,22 @@ class IdentityNotificationTest {
                 };
         assertThat(identity.sendStudentAccountNotification(7L, "12345").emailError())
                 .isEqualTo(error);
-        verifyNoInteractions(notifications);
+        verifyNoInteractions(immediateEmailNotifications);
     }
 
     @Test
     void reEnrollmentConfirmationKeepsLockedAccountAndDoesNotSendInitialPassword() {
         user.setStatus(UserStatus.LOCKED);
         user.setFirstLogin(false);
-        when(notifications.sendAdmissionConfirmation(any()))
+        when(immediateEmailNotifications.sendAdmissionConfirmationEmail(any()))
                 .thenReturn(EmailDeliveryResult.builder().sent(true).build());
         assertThat(identity.sendStudentAdmissionNotification(7L, "new@example.com")
                         .emailSent())
                 .isTrue();
-        verify(notifications).sendAdmissionConfirmation(new AdmissionEmailCommand("new@example.com", "CNTT080101"));
-        verifyNoMoreInteractions(notifications);
+        verify(immediateEmailNotifications)
+                .sendAdmissionConfirmationEmail(
+                        new SendAdmissionConfirmationEmailCommand("new@example.com", "CNTT080101"));
+        verifyNoMoreInteractions(immediateEmailNotifications);
         assertThat(user.getStatus()).isEqualTo(UserStatus.LOCKED);
         assertThat(user.isFirstLogin()).isFalse();
         assertThat(encoder.matches("12345", user.getPasswordHash())).isTrue();

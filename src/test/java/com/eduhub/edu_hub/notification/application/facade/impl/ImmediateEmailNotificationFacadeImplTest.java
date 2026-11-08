@@ -4,20 +4,21 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-import com.eduhub.edu_hub.notification.application.command.AccountEmailCommand;
-import com.eduhub.edu_hub.notification.application.command.AdmissionEmailCommand;
+import com.eduhub.edu_hub.notification.application.command.SendAccountEmailCommand;
+import com.eduhub.edu_hub.notification.application.command.SendAdmissionConfirmationEmailCommand;
 import com.eduhub.edu_hub.notification.application.result.RenderedEmail;
 import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
-import com.eduhub.edu_hub.notification.infrastructure.mail.SmtpMailSender;
+import com.eduhub.edu_hub.notification.infrastructure.mail.SmtpEmailSender;
 import com.eduhub.edu_hub.notification.infrastructure.template.EmailTemplateRenderer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mail.MailSendException;
 
-class MailNotificationFacadeImplTest {
-    private final SmtpMailSender mail = mock(SmtpMailSender.class);
+class ImmediateEmailNotificationFacadeImplTest {
+    private final SmtpEmailSender mail = mock(SmtpEmailSender.class);
     private final EmailTemplateRenderer templates = mock(EmailTemplateRenderer.class);
-    private final MailNotificationFacadeImpl facade = new MailNotificationFacadeImpl(mail, templates);
+    private final ImmediateEmailNotificationFacadeImpl facade =
+            new ImmediateEmailNotificationFacadeImpl(mail, templates);
     private final RenderedEmail accountEmail = RenderedEmail.builder()
             .subject("Thông tin tài khoản")
             .textBody("Thông tin tài khoản")
@@ -31,13 +32,13 @@ class MailNotificationFacadeImplTest {
 
     @BeforeEach
     void renderedContent() {
-        when(templates.renderAccount(any())).thenReturn(accountEmail);
-        when(templates.renderAdmission(any())).thenReturn(admissionEmail);
+        when(templates.renderAccountEmail(any())).thenReturn(accountEmail);
+        when(templates.renderAdmissionConfirmationEmail(any())).thenReturn(admissionEmail);
     }
 
     @Test
     void reportsAccountDeliveryWithoutExposingTransportDetails() {
-        var result = facade.sendAccount(AccountEmailCommand.builder()
+        var result = facade.sendAccountEmail(SendAccountEmailCommand.builder()
                 .recipient("student@example.com")
                 .username("CNTT080101")
                 .temporaryPassword("12345")
@@ -45,13 +46,13 @@ class MailNotificationFacadeImplTest {
                 .build());
         assertThat(result.sent()).isTrue();
         assertThat(result.error()).isNull();
-        verify(mail).send("student@example.com", accountEmail);
+        verify(mail).sendEmail("student@example.com", accountEmail);
     }
 
     @Test
     void returnsFailureInsteadOfInterruptingAccountCreation() {
-        doThrow(new MailSendException("SMTP unavailable")).when(mail).send("student@example.com", accountEmail);
-        var result = facade.sendAccount(AccountEmailCommand.builder()
+        doThrow(new MailSendException("SMTP unavailable")).when(mail).sendEmail("student@example.com", accountEmail);
+        var result = facade.sendAccountEmail(SendAccountEmailCommand.builder()
                 .recipient("student@example.com")
                 .temporaryPassword("temporary")
                 .templateType(EmailTemplateType.PASSWORD_RESET)
@@ -62,19 +63,19 @@ class MailNotificationFacadeImplTest {
 
     @Test
     void reEnrollmentUsesConfirmationWithoutInitialPassword() {
-        var result = facade.sendAdmissionConfirmation(AdmissionEmailCommand.builder()
+        var result = facade.sendAdmissionConfirmationEmail(SendAdmissionConfirmationEmailCommand.builder()
                 .recipient("student@example.com")
                 .username("CNTT080101")
                 .build());
         assertThat(result.sent()).isTrue();
-        verify(mail).send("student@example.com", admissionEmail);
+        verify(mail).sendEmail("student@example.com", admissionEmail);
         verifyNoMoreInteractions(mail);
     }
 
     @Test
     void renderFailureReturnsASeparateErrorWithoutCallingSmtp() {
-        when(templates.renderAccount(any())).thenThrow(new IllegalStateException("Template unavailable"));
-        var result = facade.sendAccount(AccountEmailCommand.builder()
+        when(templates.renderAccountEmail(any())).thenThrow(new IllegalStateException("Template unavailable"));
+        var result = facade.sendAccountEmail(SendAccountEmailCommand.builder()
                 .recipient("student@example.com")
                 .username("CNTT080101")
                 .temporaryPassword("12345")

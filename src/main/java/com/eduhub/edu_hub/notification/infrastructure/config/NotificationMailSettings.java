@@ -17,7 +17,7 @@ public class NotificationMailSettings {
     private String brandName = "EduHub";
 
     // Chưa có URL frontend thì ẩn nút đăng nhập, không gửi đường dẫn giả cho người nhận.
-    @Pattern(regexp = "^$|https?://[^\\s]+")
+    @Pattern(regexp = "^$|https?://\\S+")
     private String loginUrl = "";
 
     @Email

@@ -24,9 +24,9 @@ public class AccessTokenFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
-//        return !path.startsWith("/api/v1/")
-//                || path.equals("/api/v1/auth/login")
-//                || request.getMethod().equals("OPTIONS");
+        //        return !path.startsWith("/api/v1/")
+        //                || path.equals("/api/v1/auth/login")
+        //                || request.getMethod().equals("OPTIONS");
         return true; // TODO: bật lại khi làm xong các luồng khác
     }
 

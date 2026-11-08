@@ -1,6 +1,6 @@
 package com.eduhub.edu_hub.admission.api.controller;
 
-import com.eduhub.edu_hub.admission.api.dto.request.AdmissionRequests.CreateClassesRequest;
+import com.eduhub.edu_hub.admission.api.dto.request.AdmissionRequests.PrepareClassesRequest;
 import com.eduhub.edu_hub.admission.api.dto.response.AdministrativeClassResponse;
 import com.eduhub.edu_hub.admission.api.dto.response.AdmissionResponses.PlanResponse;
 import com.eduhub.edu_hub.admission.api.mapper.AdmissionApiMapper;
@@ -15,20 +15,22 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/administrative-classes")
 @RequiredArgsConstructor
 public class AdministrativeClassController {
-    private final AdmissionApiMapper mapper;
-    private final AdmissionClassPreparationService classes;
+    private final AdmissionApiMapper apiMapper;
+    private final AdmissionClassPreparationService classPreparationService;
 
     // Xem các lớp hiện có
     @GetMapping
-    public ApiResponse<List<AdministrativeClassResponse>> list(
+    public ApiResponse<List<AdministrativeClassResponse>> listAdministrativeClasses(
             @RequestParam Long majorId, @RequestParam Long cohortId) {
-        return ApiResponse.success(
-                classes.list(majorId, cohortId).stream().map(mapper::toResponse).toList());
+        return ApiResponse.success(classPreparationService.listAdministrativeClasses(majorId, cohortId).stream()
+                .map(apiMapper::toResponse)
+                .toList());
     }
 
     // Chọn kịch bản và chuẩn bị lớp
     @PostMapping("/from-admission-plan")
-    public ApiResponse<PlanResponse> create(@Valid @RequestBody CreateClassesRequest request) {
-        return ApiResponse.success(mapper.toResponse(classes.createFromPlan(mapper.toCommand(request))));
+    public ApiResponse<PlanResponse> prepareClasses(@Valid @RequestBody PrepareClassesRequest request) {
+        return ApiResponse.success(
+                apiMapper.toResponse(classPreparationService.prepareClasses(apiMapper.toCommand(request))));
     }
 }

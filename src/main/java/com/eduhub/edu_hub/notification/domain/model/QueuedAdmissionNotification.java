@@ -1,6 +1,6 @@
 package com.eduhub.edu_hub.notification.domain.model;
 
-import com.eduhub.edu_hub.notification.domain.enums.NotificationKind;
+import com.eduhub.edu_hub.notification.domain.enums.AdmissionNotificationKind;
 import com.eduhub.edu_hub.notification.domain.enums.NotificationStatus;
 import com.eduhub.edu_hub.shared.common.BaseEntity;
 import jakarta.persistence.*;
@@ -14,7 +14,7 @@ import lombok.*;
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
-public class QueuedNotification extends BaseEntity {
+public class QueuedAdmissionNotification extends BaseEntity {
 
     // TODO(NOTIFICATION_STORAGE): Khi mở rộng hàng đợi sang nguồn khác, thiết kế sourceType/sourceId
     //  và migration chuyển dữ liệu riêng; không tạo StudentAdmission giả cho luồng không nhập học.
@@ -28,7 +28,7 @@ public class QueuedNotification extends BaseEntity {
     private String recipient;
 
     @Enumerated(EnumType.STRING)
-    private NotificationKind kind;
+    private AdmissionNotificationKind kind;
 
     @Enumerated(EnumType.STRING)
     private NotificationStatus state;

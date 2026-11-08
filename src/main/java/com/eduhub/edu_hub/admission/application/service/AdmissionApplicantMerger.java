@@ -11,46 +11,52 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class AdmissionApplicantMerger {
-    private final AdmissionIdentityPolicy policy;
+    private final AdmissionIdentityPolicy identityPolicy;
 
-    public List<AdmissionApplicant> merge(List<AdmissionApplicant> previousRows, List<AdmissionApplicant> rows) {
+    public List<AdmissionApplicant> mergePreservingEnrolledApplicants(
+            List<AdmissionApplicant> existingApplicants, List<AdmissionApplicant> incomingApplicants) {
 
-        int nextRow = previousRows.stream()
+        int nextRowNumber = existingApplicants.stream()
                         .mapToInt(AdmissionApplicant::getRowNumber)
                         .max()
                         .orElse(1)
                 + 1;
-        Map<String, AdmissionApplicant> previousByCode = new HashMap<>();
-        Set<String> mergedCodes = new HashSet<>(); // tập mã đã xử lý, chống xử lý lặp.
+        Map<String, AdmissionApplicant> existingApplicantsByApplicationCode = new HashMap<>();
+        Set<String> processedApplicationCodes = new HashSet<>(); // tập mã đã xử lý, chống xử lý lặp.
 
-        previousRows.forEach(row -> {
-            if (row.getApplicationCode() != null) previousByCode.putIfAbsent(row.getApplicationCode(), row);
+        existingApplicants.forEach(applicant -> {
+            if (applicant.getApplicationCode() != null)
+                existingApplicantsByApplicationCode.putIfAbsent(applicant.getApplicationCode(), applicant);
         });
 
-        for (AdmissionApplicant incoming : rows) {
+        for (AdmissionApplicant incomingApplicant : incomingApplicants) {
 
-            AdmissionApplicant previous = previousByCode.get(incoming.getApplicationCode());
+            AdmissionApplicant existingApplicant =
+                    existingApplicantsByApplicationCode.get(incomingApplicant.getApplicationCode());
 
             // đã gộp rồi, bỏ qua các bản lặp của cùng mã trong file mới.
-            if (previous != null && !mergedCodes.add(incoming.getApplicationCode())) continue;
+            if (existingApplicant != null && !processedApplicationCodes.add(incomingApplicant.getApplicationCode()))
+                continue;
 
             // dòng cũ đã ENROLLED, có 3 case:
-            if (previous != null && previous.getState() == AdmissionApplicantStatus.ENROLLED) {
+            if (existingApplicant != null && existingApplicant.getState() == AdmissionApplicantStatus.ENROLLED) {
 
                 // dòng mới là EXISTING và giống dòng cũ --> bỏ qua
-                if (incoming.getState() == AdmissionApplicantStatus.EXISTING && policy.same(previous, incoming))
-                    continue;
+                if (incomingApplicant.getState() == AdmissionApplicantStatus.EXISTING
+                        && identityPolicy.hasSameApplicantData(existingApplicant, incomingApplicant)) continue;
 
                 // ngược lại, đánh CONFLICT, gán số dòng mới và thêm vào danh sách để Admin thấy
-                mark(incoming, AdmissionApplicantStatus.CONFLICT, "Không ghi đè hồ sơ đã nhập học thành công");
-                incoming.setRowNumber(nextRow++);
-                previousRows.add(incoming);
+                setApplicantStatus(
+                        incomingApplicant
+                );
+                incomingApplicant.setRowNumber(nextRowNumber++);
+                existingApplicants.add(incomingApplicant);
 
-            } else if (previous != null) {
+            } else if (existingApplicant != null) {
                 // chép dữ liệu mới đè lên dòng cũ, trừ các trường định danh/audit
                 BeanUtils.copyProperties(
-                        incoming,
-                        previous,
+                        incomingApplicant,
+                        existingApplicant,
                         "id",
                         "createdAt",
                         "updatedAt",
@@ -60,16 +66,17 @@ public class AdmissionApplicantMerger {
                         "plan",
                         "deleted");
             } else {
-                incoming.setRowNumber(nextRow++);
-                previousRows.add(incoming);
+                incomingApplicant.setRowNumber(nextRowNumber++);
+                existingApplicants.add(incomingApplicant);
             }
         }
 
-        return previousRows;
+        return existingApplicants;
     }
 
-    private void mark(AdmissionApplicant row, AdmissionApplicantStatus state, String error) {
-        row.setState(state);
-        row.setErrorMessage(error);
+    private void setApplicantStatus(
+            AdmissionApplicant applicant) {
+        applicant.setState(AdmissionApplicantStatus.CONFLICT);
+        applicant.setErrorMessage("Không ghi đè hồ sơ đã nhập học thành công");
     }
 }

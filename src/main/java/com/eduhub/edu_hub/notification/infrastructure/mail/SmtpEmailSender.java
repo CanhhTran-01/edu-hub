@@ -2,6 +2,7 @@ package com.eduhub.edu_hub.notification.infrastructure.mail;
 
 import com.eduhub.edu_hub.notification.application.result.RenderedEmail;
 import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
 import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,34 +14,34 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
-public class SmtpMailSender {
-    private final JavaMailSender sender;
+public class SmtpEmailSender {
+    private final JavaMailSender javaMailSender;
 
     @Value("${GMAIL_ADDRESS:}")
-    private String from;
+    private String senderAddress;
 
-    public void send(String recipient, RenderedEmail email) {
+    public void sendEmail(String recipientEmail, RenderedEmail renderedEmail) {
 
-        if (from == null || from.isBlank()) {
+        if (senderAddress == null || senderAddress.isBlank())
             throw new MailSendException("Gmail sender is not configured");
-        }
 
-        var message = sender.createMimeMessage();
+        MimeMessage mimeMessage = prepareMimeMessage(recipientEmail, renderedEmail);
+        javaMailSender.send(mimeMessage);
+    }
 
+    private MimeMessage prepareMimeMessage(String recipientEmail, RenderedEmail renderedEmail) {
+        var mimeMessage = javaMailSender.createMimeMessage();
         try {
-
-            var helper = new MimeMessageHelper(message, true, StandardCharsets.UTF_8.name());
-            helper.setFrom(from);
-            helper.setTo(recipient);
-            helper.setSubject(email.subject());
-            helper.setText(email.textBody(), email.htmlBody());
-
+            var messageHelper = new MimeMessageHelper(mimeMessage, true, StandardCharsets.UTF_8.name());
+            messageHelper.setFrom(senderAddress);
+            messageHelper.setTo(recipientEmail);
+            messageHelper.setSubject(renderedEmail.subject());
+            messageHelper.setText(renderedEmail.textBody(), renderedEmail.htmlBody());
         } catch (MessagingException exception) {
-
             // Không đưa địa chỉ/nội dung thư vào message lỗi hoặc log.
             throw new MailPreparationException("Cannot prepare notification email", exception);
         }
 
-        sender.send(message);
+        return mimeMessage;
     }
 }

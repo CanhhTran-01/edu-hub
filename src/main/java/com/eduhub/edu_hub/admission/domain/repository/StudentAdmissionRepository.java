@@ -10,9 +10,7 @@ import org.springframework.data.repository.query.Param;
 public interface StudentAdmissionRepository extends JpaRepository<StudentAdmission, Long> {
     Optional<StudentAdmission> findByApplicationCode(String applicationCode);
 
-    List<StudentAdmission> findByApplicationCodeIn(List<String> codes);
-
-    long countByStudentIdAndAdministrativeClassIdAndDeletedFalse(Long studentId, Long classId);
+    List<StudentAdmission> findByApplicationCodeIn(List<String> applicationCodes);
 
     @Query("select a.id from StudentAdmission a where a.plan.id = :planId and a.deleted = false order by a.id")
     List<Long> findIdsByPlanId(@Param("planId") Long planId);

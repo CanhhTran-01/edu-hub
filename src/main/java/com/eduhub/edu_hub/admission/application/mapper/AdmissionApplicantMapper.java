@@ -6,5 +6,5 @@ import org.mapstruct.*;
 
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface AdmissionApplicantMapper {
-    AdmissionApplicant fromImportRow(AdmissionImportRow row);
+    AdmissionApplicant fromImportRow(AdmissionImportRow importRow);
 }

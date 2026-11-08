@@ -2,11 +2,11 @@ package com.eduhub.edu_hub.notification.infrastructure.template;
 
 import static org.assertj.core.api.Assertions.*;
 
-import com.eduhub.edu_hub.notification.application.command.AccountEmailCommand;
-import com.eduhub.edu_hub.notification.application.command.AdmissionEmailCommand;
+import com.eduhub.edu_hub.notification.application.command.SendAccountEmailCommand;
+import com.eduhub.edu_hub.notification.application.command.SendAdmissionConfirmationEmailCommand;
 import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
+import com.eduhub.edu_hub.notification.infrastructure.config.EmailTemplateConfiguration;
 import com.eduhub.edu_hub.notification.infrastructure.config.NotificationMailSettings;
-import com.eduhub.edu_hub.notification.infrastructure.config.NotificationTemplateConfiguration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -19,13 +19,13 @@ class EmailTemplateRendererTest {
         settings = new NotificationMailSettings();
         settings.setLoginUrl("https://eduhub.example.com/login");
         settings.setSupportEmail("support@example.com");
-        renderer = new EmailTemplateRenderer(
-                new NotificationTemplateConfiguration().notificationEmailTemplateEngine(), settings);
+        renderer =
+                new EmailTemplateRenderer(new EmailTemplateConfiguration().notificationEmailTemplateEngine(), settings);
     }
 
     @Test
     void rendersNewAccountWithCredentialsAndResolvedSharedLayout() {
-        var email = renderer.renderAccount(AccountEmailCommand.builder()
+        var email = renderer.renderAccountEmail(SendAccountEmailCommand.builder()
                 .recipient("student@example.com")
                 .username("CNTT080101")
                 .temporaryPassword("12345")
@@ -52,7 +52,7 @@ class EmailTemplateRendererTest {
 
     @Test
     void resetPurposeIsExplicitEvenWhenUsernameIsProvided() {
-        var email = renderer.renderAccount(AccountEmailCommand.builder()
+        var email = renderer.renderAccountEmail(SendAccountEmailCommand.builder()
                 .username("CNTT080101")
                 .temporaryPassword("new-temporary-password")
                 .templateType(EmailTemplateType.PASSWORD_RESET)
@@ -66,7 +66,7 @@ class EmailTemplateRendererTest {
 
     @Test
     void resetWorksWithoutUsernameAndNeverDisplaysNull() {
-        var email = renderer.renderAccount(AccountEmailCommand.builder()
+        var email = renderer.renderAccountEmail(SendAccountEmailCommand.builder()
                 .temporaryPassword("temporary-password")
                 .templateType(EmailTemplateType.PASSWORD_RESET)
                 .build());
@@ -76,8 +76,9 @@ class EmailTemplateRendererTest {
 
     @Test
     void admissionConfirmationUsesExistingAccountWithoutCredentials() {
-        var email = renderer.renderAdmission(
-                AdmissionEmailCommand.builder().username("CNTT080101").build());
+        var email = renderer.renderAdmissionConfirmationEmail(SendAdmissionConfirmationEmailCommand.builder()
+                .username("CNTT080101")
+                .build());
         assertThat(email.subject()).isEqualTo("EduHub - Xác nhận nhập học");
         assertThat(email.htmlBody())
                 .contains("CNTT080101", "mật khẩu hiện tại", "không bị đặt lại", "tài khoản đang bị khóa")
@@ -89,7 +90,7 @@ class EmailTemplateRendererTest {
     void escapesCredentialsInHtmlWhileKeepingPlainTextReadable() {
         String username = "<img src=x onerror=alert(1)>";
         String password = "p<>&\"'é";
-        var email = renderer.renderAccount(AccountEmailCommand.builder()
+        var email = renderer.renderAccountEmail(SendAccountEmailCommand.builder()
                 .username(username)
                 .temporaryPassword(password)
                 .templateType(EmailTemplateType.ACCOUNT_CREATED)
@@ -102,8 +103,9 @@ class EmailTemplateRendererTest {
     void absentLoginAndSupportConfigurationDoesNotExposePlaceholderLinks() {
         settings.setLoginUrl("");
         settings.setSupportEmail("");
-        var email = renderer.renderAdmission(
-                AdmissionEmailCommand.builder().username("CNTT080101").build());
+        var email = renderer.renderAdmissionConfirmationEmail(SendAdmissionConfirmationEmailCommand.builder()
+                .username("CNTT080101")
+                .build());
         assertThat(email.htmlBody()).doesNotContain("href=", "example.com", "Đăng nhập hệ thống");
         assertThat(email.textBody())
                 .contains("truy cập hệ thống của nhà trường")
@@ -112,10 +114,10 @@ class EmailTemplateRendererTest {
 
     @Test
     void requiresAnAccountTemplateTypeInsteadOfInferringFromUsername() {
-        var command = AccountEmailCommand.builder()
+        var command = SendAccountEmailCommand.builder()
                 .username("CNTT080101")
                 .temporaryPassword("12345")
                 .build();
-        assertThatThrownBy(() -> renderer.renderAccount(command)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> renderer.renderAccountEmail(command)).isInstanceOf(IllegalArgumentException.class);
     }
 }

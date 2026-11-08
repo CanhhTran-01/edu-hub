@@ -7,8 +7,8 @@ import com.eduhub.edu_hub.admission.domain.enums.AdmissionPlanStatus;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionApplicant;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionPlan;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionPlanClass;
-import com.eduhub.edu_hub.admission.domain.policy.AdmissionBalancePolicy;
 import com.eduhub.edu_hub.admission.domain.policy.AdmissionCapacityPolicy;
+import com.eduhub.edu_hub.admission.domain.policy.AdmissionScoreBalancePolicy;
 import com.eduhub.edu_hub.admission.domain.repository.AdmissionApplicantRepository;
 import com.eduhub.edu_hub.admission.domain.repository.AdmissionPlanClassRepository;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
@@ -34,10 +34,10 @@ class AdmissionPlanQueryServiceTest {
             people,
             new AdmissionCapacityPolicy(),
             rooms,
-            new AdmissionBalancePolicy(),
+            new AdmissionScoreBalancePolicy(),
             new com.eduhub.edu_hub.admission.application.mapper.AdmissionPlanAssembler(),
             org.mapstruct.factory.Mappers.getMapper(
-                    com.eduhub.edu_hub.admission.application.mapper.AdmissionResultMapper.class));
+                    com.eduhub.edu_hub.admission.application.mapper.AdmissionScenarioMapper.class));
 
     @ParameterizedTest
     @CsvSource({"1,0", "2,0", "3,0", "4,1", "5,1"})
@@ -46,7 +46,7 @@ class AdmissionPlanQueryServiceTest {
         for (int i = 0; i < count; i++) {
             names.add(i % 2 == 0 ? "Nguyễn Văn An" : "  NGUYỄN   VĂN AN ");
         }
-        var response = view.response(prepare(names));
+        var response = view.buildPlanResult(prepare(names));
         var warnings = response.warnings().stream()
                 .filter(value -> value.contains("trùng họ tên"))
                 .toList();
@@ -66,7 +66,7 @@ class AdmissionPlanQueryServiceTest {
                 "Trần Văn Bình",
                 "Trần Văn Bình",
                 "Trần Văn Bình"));
-        var warnings = view.response(plan).warnings().stream()
+        var warnings = view.buildPlanResult(plan).warnings().stream()
                 .filter(value -> value.contains("trùng họ tên"))
                 .toList();
         assertThat(warnings).singleElement().satisfies(value -> assertThat(value)
@@ -82,7 +82,7 @@ class AdmissionPlanQueryServiceTest {
                         new AdmissionClassPrefix(2L, "CNTT", "Công nghệ thông tin", "CT"),
                         new AdmissionClassPrefix(4L, "DIENTU", "Cơ điện tử", "CT"),
                         new AdmissionClassPrefix(5L, "ATTT", "An toàn thông tin", "AT")));
-        assertThat(view.response(plan).warnings().stream()
+        assertThat(view.buildPlanResult(plan).warnings().stream()
                         .filter(value -> value.startsWith("Tiền tố lớp"))
                         .toList())
                 .singleElement()

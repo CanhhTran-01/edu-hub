@@ -2,7 +2,7 @@ package com.eduhub.edu_hub.admission.application.service;
 
 import com.eduhub.edu_hub.admission.application.command.AdmissionCommands.AdjustAssignmentsCommand;
 import com.eduhub.edu_hub.admission.application.command.AdmissionCommands.AssignmentCommand;
-import com.eduhub.edu_hub.admission.application.command.AdmissionCommands.PreviewCommand;
+import com.eduhub.edu_hub.admission.application.command.AdmissionCommands.PreviewAllocationCommand;
 import com.eduhub.edu_hub.admission.application.result.AdmissionResults.PlanResult;
 import com.eduhub.edu_hub.admission.domain.enums.AdmissionApplicantStatus;
 import com.eduhub.edu_hub.admission.domain.enums.AdmissionPlanStatus;
@@ -27,143 +27,148 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Slf4j
 public class AdmissionAllocationService {
-    private final AdmissionPlanRepository plans;
-    private final AdmissionPlanClassRepository planClasses;
-    private final AdmissionApplicantRepository applicants;
+    private final AdmissionPlanRepository planRepository;
+    private final AdmissionPlanClassRepository planClassRepository;
+    private final AdmissionApplicantRepository applicantRepository;
 
-    private final PeopleFacade.Admission people;
-    private final AdmissionCapacityPolicy capacity;
-    private final SerpentineClassAllocator allocator;
-    private final AdmissionPlanQueryService view;
+    private final PeopleFacade.Admission peopleAdmissionFacade;
+    private final AdmissionCapacityPolicy capacityPolicy;
+    private final SerpentineClassAllocator classAllocator;
+    private final AdmissionPlanQueryService planQueryService;
 
     @Transactional
-    public PlanResult preview(Long id, PreviewCommand request) {
+    public PlanResult previewAllocation(Long planId, PreviewAllocationCommand command) {
 
-        AdmissionPlan plan = AdmissionPlanLoader.locked(plans, id, request.expectedRevision()); // xử lý concurrent
+        AdmissionPlan plan = AdmissionPlanLoader.lockPlanAtRevision(
+                planRepository, planId, command.expectedRevision()); // xử lý concurrent
         AdmissionPlanPolicy.requireEditable(plan); // phải ở trạng thái còn cho phép sửa
 
         // chuẩn bị dữ liệu: Các “chỗ lớp” của kế hoạch, toàn bộ thí sinh, thí sinh đang chờ, thí sinh đã phân bổ
-        List<AdmissionPlanClass> slots = planClasses.findByPlan_IdOrderByPosition(id);
-        List<AdmissionApplicant> allRows = applicants.findByPlan_IdOrderByRowNumber(id);
-        List<AdmissionApplicant> pendingRows =
-                allRows.stream().filter(AdmissionApplicant::isPending).toList();
-        List<AdmissionApplicant> enrolledRows = allRows.stream()
-                .filter(row -> row.getState() == AdmissionApplicantStatus.ENROLLED)
+        List<AdmissionPlanClass> plannedClasses = planClassRepository.findByPlan_IdOrderByPosition(planId);
+        List<AdmissionApplicant> allApplicants = applicantRepository.findByPlan_IdOrderByRowNumber(planId);
+        List<AdmissionApplicant> pendingApplicants = allApplicants.stream()
+                .filter(AdmissionApplicant::isPendingEnrollment)
+                .toList();
+        List<AdmissionApplicant> enrolledApplicants = allApplicants.stream()
+                .filter(applicant -> applicant.getState() == AdmissionApplicantStatus.ENROLLED)
                 .toList();
 
-        if (slots.isEmpty()
-                || pendingRows.isEmpty()
-                || pendingRows.size() + enrolledRows.size() != plan.getTotalStudents()) {
+        if (plannedClasses.isEmpty()
+                || pendingApplicants.isEmpty()
+                || pendingApplicants.size() + enrolledApplicants.size() != plan.getTotalStudents()) {
             // dữ liệu lệch so với lúc import
             throw new BaseException(ErrorCode.ADMISSION_INVALID_STATE);
         }
 
         // Tính sĩ số mục tiêu mỗi lớp
-        List<Integer> sizes = capacity.sizes(plan.getTotalStudents(), slots.size());
-        if (sizes.getFirst() > plan.getMaxCapacity() + plan.getReserveCapacity()) {
+        List<Integer> targetClassSizes =
+                capacityPolicy.distributeEvenly(plan.getTotalStudents(), plannedClasses.size());
+        if (targetClassSizes.getFirst() > plan.getMaxCapacity() + plan.getReserveCapacity()) {
             throw new BaseException(ErrorCode.ADMISSION_INVALID_CAPACITY);
         }
 
-        List<AdmissionPlanClass> remainingSlots = new ArrayList<>();
+        List<AdmissionPlanClass> remainingClassCapacities = new ArrayList<>();
 
-        for (int index = 0; index < slots.size(); index++) {
+        for (int index = 0; index < plannedClasses.size(); index++) {
 
-            var slot = slots.get(index);
+            var plannedClass = plannedClasses.get(index);
 
-            var target = people.lockClass(slot.getAdministrativeClassId());
+            var administrativeClass = peopleAdmissionFacade.lockClass(plannedClass.getAdministrativeClassId());
 
-            long alreadyEnrolled = enrolledRows.stream()
-                    .filter(row -> row.getAdministrativeClassId().equals(target.getId()))
+            long enrolledCount = enrolledApplicants.stream()
+                    .filter(applicant -> applicant.getAdministrativeClassId().equals(administrativeClass.getId()))
                     .count();
 
-            if (target.isDeleted()
-                    || target.getMaxCapacity() != plan.getMaxCapacity()
-                    || target.getReserveCapacity() != plan.getReserveCapacity()
-                    || target.getCurrentSize() != alreadyEnrolled
-                    || alreadyEnrolled > sizes.get(index)) {
+            if (administrativeClass.isDeleted()
+                    || administrativeClass.getMaxCapacity() != plan.getMaxCapacity()
+                    || administrativeClass.getReserveCapacity() != plan.getReserveCapacity()
+                    || administrativeClass.getCurrentSize() != enrolledCount
+                    || enrolledCount > targetClassSizes.get(index)) {
 
                 // dữ liệu đã đổi so với lúc cấu hình
                 throw new BaseException(ErrorCode.ADMISSION_DATA_CHANGED);
             }
 
-            slot.setTargetSize(sizes.get(index));
+            plannedClass.setTargetSize(targetClassSizes.get(index));
 
             // Chỉ phân vào số chỗ còn lại; không chuyển lớp những người đã nhập học thành công.
-            AdmissionPlanClass remaining = AdmissionPlanClass.builder()
-                    .administrativeClassId(target.getId())
-                    .targetSize(sizes.get(index) - (int) alreadyEnrolled)
+            AdmissionPlanClass remainingClassCapacity = AdmissionPlanClass.builder()
+                    .administrativeClassId(administrativeClass.getId())
+                    .targetSize(targetClassSizes.get(index) - (int) enrolledCount)
                     .build();
-            remainingSlots.add(remaining);
+            remainingClassCapacities.add(remainingClassCapacity);
         }
 
         // Phân bổ và chuyển trạng thái
-        allocator.assign(pendingRows, remainingSlots, enrolledRows);
+        classAllocator.allocateByScore(pendingApplicants, remainingClassCapacities, enrolledApplicants);
         plan.setState(AdmissionPlanStatus.PREVIEWED);
 
-        AdmissionPlanPolicy.changed(plan);
+        AdmissionPlanPolicy.incrementRevision(plan);
         log.info(
                 "Previewed admission assignment: planId={}, students={}, classes={}",
-                id,
-                pendingRows.size(),
-                slots.size());
+                planId,
+                pendingApplicants.size(),
+                plannedClasses.size());
 
-        return view.response(plan);
+        return planQueryService.buildPlanResult(plan);
     }
 
     @Transactional
-    public PlanResult adjust(Long id, AdjustAssignmentsCommand request) {
+    public PlanResult adjustAssignments(Long planId, AdjustAssignmentsCommand command) {
 
-        AdmissionPlan plan = AdmissionPlanLoader.locked(plans, id, request.expectedRevision());
+        AdmissionPlan plan = AdmissionPlanLoader.lockPlanAtRevision(planRepository, planId, command.expectedRevision());
 
         if (plan.getState() != AdmissionPlanStatus.PREVIEWED
                 && plan.getState() != AdmissionPlanStatus.PARTIALLY_CONFIRMED) {
             throw new BaseException(ErrorCode.ADMISSION_INVALID_STATE);
         }
 
-        List<AdmissionPlanClass> slots = planClasses.findByPlan_IdOrderByPosition(id);
-        List<AdmissionApplicant> rows = applicants.findByPlan_IdOrderByRowNumber(id);
-        Set<Long> moved = new HashSet<>();
+        List<AdmissionPlanClass> plannedClasses = planClassRepository.findByPlan_IdOrderByPosition(planId);
+        List<AdmissionApplicant> planApplicants = applicantRepository.findByPlan_IdOrderByRowNumber(planId);
+        Set<Long> adjustedApplicantIds = new HashSet<>();
 
-        for (AssignmentCommand move : request.assignments()) {
+        for (AssignmentCommand assignment : command.assignments()) {
             // Chống chuyển trùng một người
-            if (!moved.add(move.applicantId())) throw new BaseException(ErrorCode.VALIDATION_ERROR);
+            if (!adjustedApplicantIds.add(assignment.applicantId()))
+                throw new BaseException(ErrorCode.VALIDATION_ERROR);
 
             // Tìm thí sinh đang chờ
-            AdmissionApplicant row = rows.stream()
-                    .filter(value -> value.getId().equals(move.applicantId()) && value.isPending())
+            AdmissionApplicant applicant = planApplicants.stream()
+                    .filter(candidate ->
+                            candidate.getId().equals(assignment.applicantId()) && candidate.isPendingEnrollment())
                     .findFirst()
                     .orElseThrow(() -> new BaseException(ErrorCode.VALIDATION_ERROR));
 
             // Tìm lớp đích, chỉ trong các lớp của plan
-            Long target = slots.stream()
+            Long targetClassId = plannedClasses.stream()
                     .map(AdmissionPlanClass::getAdministrativeClassId)
-                    .filter(value -> value.equals(move.classId()))
+                    .filter(candidate -> candidate.equals(assignment.classId()))
                     .findFirst()
                     .orElseThrow(() -> new BaseException(ErrorCode.ADMISSION_CLASS_UNAVAILABLE));
 
             // Gán lớp mới ***
-            row.setAdministrativeClassId(target);
+            applicant.setAdministrativeClassId(targetClassId);
         }
 
         // Kiểm tra sức chứa sau khi chuyển
-        for (AdmissionPlanClass slot : slots) {
+        for (AdmissionPlanClass plannedClass : plannedClasses) {
             // rows.stream() trên bộ nhớ Java, không query DB, nên không cần flush khi gán lớp mới (chỗ đánh ***)
-            long projected = rows.stream()
-                    .filter(AdmissionApplicant::isIncluded)
-                    .filter(row -> row.getAdministrativeClassId() != null
-                            && row.getAdministrativeClassId().equals(slot.getAdministrativeClassId()))
+            long projectedClassSize = planApplicants.stream()
+                    .filter(AdmissionApplicant::isIncludedInPlan)
+                    .filter(applicant -> applicant.getAdministrativeClassId() != null
+                            && applicant.getAdministrativeClassId().equals(plannedClass.getAdministrativeClassId()))
                     .count();
 
-            if (projected > plan.getMaxCapacity() + plan.getReserveCapacity()) {
+            if (projectedClassSize > plan.getMaxCapacity() + plan.getReserveCapacity()) {
                 throw new BaseException(ErrorCode.CLASS_CAPACITY_EXCEEDED);
             }
         }
 
-        AdmissionPlanPolicy.changed(plan);
+        AdmissionPlanPolicy.incrementRevision(plan);
 
         // TODO(AUDIT_LOG): Ghi người điều chỉnh, lớp trước/sau của từng hồ sơ khi transaction đã commit.
-        log.info("Adjusted admission assignment: planId={}, moved={}", id, moved.size());
+        log.info("Adjusted admission assignment: planId={}, moved={}", planId, adjustedApplicantIds.size());
 
-        return view.response(plan);
+        return planQueryService.buildPlanResult(plan);
     }
 }

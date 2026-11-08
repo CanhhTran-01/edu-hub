@@ -233,8 +233,7 @@ class ModuleClassApplicationServiceTest {
         return semester;
     }
 
-    private ModuleClass historical(
-            Semester semester, int sequence, ModuleClassStatus status, boolean deleted) {
+    private ModuleClass historical(Semester semester, int sequence, ModuleClassStatus status, boolean deleted) {
         var subject = Subject.builder().build();
         subject.setId((long) 1);
         var lecturer = new Lecturer();

@@ -9,34 +9,34 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 @Configuration
 @EnableAsync
 @EnableScheduling
-public class NotificationMailConfiguration {
+public class NotificationEmailExecutionConfiguration {
 
     @Bean(name = {"notificationMailExecutor", "admissionMailExecutor"})
     public ThreadPoolTaskExecutor notificationMailExecutor() {
 
         // khởi tạo
-        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        ThreadPoolTaskExecutor emailExecutor = new ThreadPoolTaskExecutor();
 
         // cấu hình
-        executor.setCorePoolSize(2);
-        executor.setMaxPoolSize(4);
-        executor.setQueueCapacity(1000);
-        executor.setThreadNamePrefix("notification-mail-");
+        emailExecutor.setCorePoolSize(2);
+        emailExecutor.setMaxPoolSize(4);
+        emailExecutor.setQueueCapacity(1000);
+        emailExecutor.setThreadNamePrefix("notification-mail-");
 
         // Âm thầm bỏ tác vụ bị từ chối khi quá tải hoặc executor đã tắt.
         // Thông báo vẫn được lưu trong cơ sở dữ liệu ở trạng thái chờ;
         // bộ xử lý định kỳ sẽ quét và thử gửi lại.
-        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.DiscardPolicy());
+        emailExecutor.setRejectedExecutionHandler(new ThreadPoolExecutor.DiscardPolicy());
 
         // Khi ứng dụng tắt, tiếp tục xử lý các tác vụ đã nhận.
         // nhưng không đảm bảo tất cả sẽ hoàn thành
-        executor.setWaitForTasksToCompleteOnShutdown(true);
+        emailExecutor.setWaitForTasksToCompleteOnShutdown(true);
 
         // Spring chỉ chờ tối đa 15 giây.
         // Hết thời gian này, quá trình đóng ứng dụng tiếp tục;
         // tác vụ chưa xong có thể bị gián đoạn khi tiến trình kết thúc
-        executor.setAwaitTerminationSeconds(15);
+        emailExecutor.setAwaitTerminationSeconds(15);
 
-        return executor;
+        return emailExecutor;
     }
 }

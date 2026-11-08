@@ -9,7 +9,7 @@ public final class AdmissionRequests {
     private AdmissionRequests() {}
 
     @Builder
-    public record PlanRequest(
+    public record CreatePlanRequest(
             @NotNull @Positive Long majorId,
             @NotNull @Positive Long cohortId,
             @Min(0) int totalStudents,
@@ -18,7 +18,7 @@ public final class AdmissionRequests {
             @Min(0) @Max(98) Integer reserveCapacity) {}
 
     @Builder
-    public record CreateClassesRequest(
+    public record PrepareClassesRequest(
             @NotNull @Positive Long planId,
             @Min(0) long expectedRevision,
             @Min(1) @Max(99) int classCount,
@@ -28,7 +28,7 @@ public final class AdmissionRequests {
             @Size(max = 500) String reason) {}
 
     @Builder
-    public record PreviewRequest(@Min(0) long expectedRevision) {}
+    public record PreviewAllocationRequest(@Min(0) long expectedRevision) {}
 
     @Builder
     public record Assignment(@NotNull @Positive Long applicantId, @NotNull @Positive Long classId) {}
@@ -38,7 +38,7 @@ public final class AdmissionRequests {
             @Min(0) long expectedRevision, @NotEmpty List<@NotNull @Valid Assignment> assignments) {}
 
     @Builder
-    public record ConfirmRequest(
+    public record ConfirmEnrollmentRequest(
             @Min(0) long expectedRevision,
             boolean acceptReserve,
             boolean acceptBelowMinimum,

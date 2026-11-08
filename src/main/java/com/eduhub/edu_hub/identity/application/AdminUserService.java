@@ -5,7 +5,7 @@ import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.model.User;
 import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
-import com.eduhub.edu_hub.notification.application.command.AccountEmailCommand;
+import com.eduhub.edu_hub.notification.application.command.SendAccountEmailCommand;
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
 import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
 import com.eduhub.edu_hub.shared.common.PageResponse;
@@ -29,7 +29,7 @@ public class AdminUserService {
     private final UserRepository users;
     private final RefreshTokenRepository sessions;
     private final TokenService tokens;
-    private final NotificationFacade.Mail notifications;
+    private final NotificationFacade.ImmediateEmail immediateEmailNotifications;
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
     @Transactional(readOnly = true)
@@ -84,7 +84,7 @@ public class AdminUserService {
         target.setFirstLogin(true);
         target.setPasswordChangedAt(LocalDateTime.now(ZoneOffset.UTC));
         revoke(target);
-        var delivery = notifications.sendAccount(AccountEmailCommand.builder()
+        var delivery = immediateEmailNotifications.sendAccountEmail(SendAccountEmailCommand.builder()
                 .recipient(target.getEmail())
                 .username(target.getUsername())
                 .temporaryPassword(temporaryPassword)

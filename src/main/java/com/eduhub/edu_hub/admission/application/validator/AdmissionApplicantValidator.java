@@ -1,7 +1,7 @@
 package com.eduhub.edu_hub.admission.application.validator;
 
 import com.eduhub.edu_hub.admission.domain.model.AdmissionApplicant;
-import com.eduhub.edu_hub.shared.text.PersonText;
+import com.eduhub.edu_hub.shared.text.TextsNormalizer;
 import jakarta.validation.Validator;
 import jakarta.validation.constraints.Email;
 import java.time.LocalDate;
@@ -12,24 +12,25 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class AdmissionApplicantValidator {
-    private final Validator validator;
+    private final Validator beanValidator;
 
     private record EmailValue(@Email String value) {}
 
     public List<String> validate(AdmissionApplicant applicant) {
 
-        List<String> errors = new ArrayList<>();
+        List<String> validationErrors = new ArrayList<>();
 
         if (applicant.getApplicationCode() == null
                 || applicant.getApplicationCode().isBlank()
-                || applicant.getApplicationCode().length() > 100) errors.add("Mã hồ sơ bắt buộc, tối đa 100 ký tự");
+                || applicant.getApplicationCode().length() > 100)
+            validationErrors.add("Mã hồ sơ bắt buộc, tối đa 100 ký tự");
 
         if (applicant.getCitizenId() == null || !applicant.getCitizenId().matches("[0-9]{12}")) {
-            errors.add("CCCD bắt buộc và phải gồm 12 chữ số");
+            validationErrors.add("CCCD bắt buộc và phải gồm 12 chữ số");
         }
 
         if (applicant.getFullName() == null || applicant.getFullName().length() > 255) {
-            errors.add("Họ tên bắt buộc, tối đa 255 ký tự");
+            validationErrors.add("Họ tên bắt buộc, tối đa 255 ký tự");
         }
 
         if (applicant.getEntranceScore() == null
@@ -39,29 +40,30 @@ public class AdmissionApplicantValidator {
                 || applicant.getEntranceScore().precision()
                                 - applicant.getEntranceScore().scale()
                         > 17) {
-            errors.add("Điểm đầu vào bắt buộc, không âm, tối đa 2 chữ số thập phân");
+            validationErrors.add("Điểm đầu vào bắt buộc, không âm, tối đa 2 chữ số thập phân");
         }
 
         if (applicant.getEmail() != null
                 && (applicant.getEmail().length() > 255
-                        || !validator
+                        || !beanValidator
                                 .validate(new EmailValue(applicant.getEmail()))
                                 .isEmpty())) {
-            errors.add("Email sai định dạng");
+            validationErrors.add("Email sai định dạng");
         }
 
         if (applicant.getPhone() != null && !applicant.getPhone().matches("\\+?[0-9 ()-]{7,32}")) {
-            errors.add("Số điện thoại sai định dạng");
+            validationErrors.add("Số điện thoại sai định dạng");
         }
 
         if (applicant.getDateOfBirth() != null && !applicant.getDateOfBirth().isBefore(LocalDate.now())) {
-            errors.add("Ngày sinh phải nằm trong quá khứ");
+            validationErrors.add("Ngày sinh phải nằm trong quá khứ");
         }
 
         if (applicant.getGender() != null
                 && !List.of("NAM", "NỮ", "NU", "KHÁC", "KHAC", "MALE", "FEMALE", "OTHER")
-                        .contains(PersonText.key(applicant.getGender()))) errors.add("Giới tính không hợp lệ");
+                        .contains(TextsNormalizer.normalizeKey(applicant.getGender())))
+            validationErrors.add("Giới tính không hợp lệ");
 
-        return List.copyOf(errors);
+        return List.copyOf(validationErrors);
     }
 }

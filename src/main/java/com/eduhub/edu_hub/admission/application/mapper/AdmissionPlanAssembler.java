@@ -14,34 +14,34 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class AdmissionPlanAssembler {
-    public ApplicantResult applicant(AdmissionApplicant row, AdmissionStudentInfo student) {
+    public ApplicantResult toApplicantResult(AdmissionApplicant applicant, AdmissionStudentInfo student) {
         return ApplicantResult.builder()
-                .id(row.getId())
-                .rowNumber(row.getRowNumber())
-                .applicationCode(row.getApplicationCode())
-                .citizenId(row.getCitizenId())
-                .fullName(row.getFullName())
-                .dateOfBirth(row.getDateOfBirth())
-                .gender(row.getGender())
-                .email(row.getEmail())
-                .phone(row.getPhone())
-                .entranceScore(row.getEntranceScore())
-                .state(row.getState().name())
-                .error(row.getErrorMessage())
-                .assignedClassId(row.getAdministrativeClassId())
-                .studentId(row.getStudentId())
+                .id(applicant.getId())
+                .rowNumber(applicant.getRowNumber())
+                .applicationCode(applicant.getApplicationCode())
+                .citizenId(applicant.getCitizenId())
+                .fullName(applicant.getFullName())
+                .dateOfBirth(applicant.getDateOfBirth())
+                .gender(applicant.getGender())
+                .email(applicant.getEmail())
+                .phone(applicant.getPhone())
+                .entranceScore(applicant.getEntranceScore())
+                .state(applicant.getState().name())
+                .error(applicant.getErrorMessage())
+                .assignedClassId(applicant.getAdministrativeClassId())
+                .studentId(applicant.getStudentId())
                 .studentCode(student == null ? null : student.getStudentCode())
-                .reusingAccount(row.isReuseAccount())
-                .warnings(row.getWarningMessage() == null ? List.of() : List.of(row.getWarningMessage()))
+                .reusingAccount(applicant.isReuseAccount())
+                .warnings(applicant.getWarningMessage() == null ? List.of() : List.of(applicant.getWarningMessage()))
                 .build();
     }
 
-    public PlanResult plan(
+    public PlanResult toPlanResult(
             AdmissionPlan plan,
-            List<ClassResult> classes,
-            List<ApplicantResult> applicants,
-            List<ScenarioResult> scenarios,
-            BigDecimal difference,
+            List<ClassResult> classResults,
+            List<ApplicantResult> applicantResults,
+            List<ScenarioResult> scenarioResults,
+            BigDecimal averageScoreDifference,
             List<String> warnings) {
         return PlanResult.builder()
                 .id(plan.getId())
@@ -56,10 +56,10 @@ public class AdmissionPlanAssembler {
                         .maximum(plan.getMaxCapacity())
                         .reserve(plan.getReserveCapacity())
                         .build())
-                .classes(List.copyOf(classes))
-                .applicants(List.copyOf(applicants))
-                .scenarios(scenarios)
-                .averageScoreDifference(difference)
+                .classes(List.copyOf(classResults))
+                .applicants(List.copyOf(applicantResults))
+                .scenarios(scenarioResults)
+                .averageScoreDifference(averageScoreDifference)
                 .warnings(List.copyOf(warnings))
                 .build();
     }

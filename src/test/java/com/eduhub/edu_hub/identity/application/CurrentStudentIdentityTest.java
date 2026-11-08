@@ -22,7 +22,7 @@ class CurrentStudentIdentityTest {
     RefreshTokenRepository sessions = mock(RefreshTokenRepository.class);
     TokenService tokens = mock(TokenService.class);
     IdentityFacadeImpl facade = new IdentityFacadeImpl(
-            users, mock(RoleRepository.class), sessions, tokens, mock(NotificationFacade.Mail.class));
+            users, mock(RoleRepository.class), sessions, tokens, mock(NotificationFacade.ImmediateEmail.class));
     User user;
     RefreshToken session;
 
