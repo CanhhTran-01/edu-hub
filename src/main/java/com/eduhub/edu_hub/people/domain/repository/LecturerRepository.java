@@ -7,8 +7,14 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface LecturerRepository extends JpaRepository<Lecturer, Long>, JpaSpecificationExecutor<Lecturer> {
+    @Query(
+            "select lecturer.fullName from Lecturer lecturer where lecturer.userId = :userId and lecturer.deleted = false")
+    Optional<String> findFullNameByUserId(@Param("userId") Long userId);
+
     boolean existsByEmailIgnoreCaseAndDeletedFalse(String email);
 
     boolean existsByCitizenIdAndDeletedFalse(String citizenId);

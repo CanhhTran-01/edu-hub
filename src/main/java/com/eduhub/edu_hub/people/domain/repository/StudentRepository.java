@@ -21,6 +21,9 @@ public interface StudentRepository extends JpaRepository<Student, Long>, JpaSpec
     @EntityGraph(attributePaths = {"administrativeClass", "administrativeClass.cohort"})
     Optional<Student> findByUserIdAndDeletedFalse(Long userId);
 
+    @Query("select student.fullName from Student student where student.userId = :userId and student.deleted = false")
+    Optional<String> findFullNameByUserId(@Param("userId") Long userId);
+
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from Student s where s.userId = :userId and s.deleted = false")
     Optional<Student> findMyProfileForUpdate(@Param("userId") Long userId);

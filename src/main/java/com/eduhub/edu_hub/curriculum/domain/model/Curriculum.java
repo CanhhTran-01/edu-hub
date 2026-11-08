@@ -1,9 +1,9 @@
 package com.eduhub.edu_hub.curriculum.domain.model;
 
 import com.eduhub.edu_hub.curriculum.domain.enums.CatalogStatus;
+import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import com.eduhub.edu_hub.people.domain.model.Cohort;
 import com.eduhub.edu_hub.shared.common.BaseEntity;
-import com.eduhub.edu_hub.shared.enums.TrainingType;
 import jakarta.persistence.*;
 import lombok.*;
 

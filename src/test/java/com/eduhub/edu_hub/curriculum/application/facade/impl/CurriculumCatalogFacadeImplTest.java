@@ -4,11 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 import com.eduhub.edu_hub.curriculum.domain.enums.*;
+import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import com.eduhub.edu_hub.curriculum.domain.model.*;
 import com.eduhub.edu_hub.curriculum.domain.repository.CurriculumRepository;
 import com.eduhub.edu_hub.curriculum.domain.repository.CurriculumSubjectRepository;
 import com.eduhub.edu_hub.people.domain.model.Cohort;
-import com.eduhub.edu_hub.shared.enums.TrainingType;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;

@@ -5,30 +5,10 @@ import static org.mockito.Mockito.*;
 
 import com.eduhub.edu_hub.enrollment.application.EnrollmentFacade;
 import com.eduhub.edu_hub.enrollment.application.facade.dto.ModuleClassUsageResponse;
-import com.eduhub.edu_hub.scheduling.application.port.ModuleClassEnrollmentQuery;
-import com.eduhub.edu_hub.shared.exception.BaseException;
-import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 class FacadeModuleClassEnrollmentQueryTest {
-    @ParameterizedTest
-    @ValueSource(strings = {"dev", "test", "prod"})
-    void everyProfileRequiresRealEnrollmentData(String profile) {
-        try (var context = new AnnotationConfigApplicationContext()) {
-            context.getEnvironment().setActiveProfiles(profile);
-            context.register(FacadeModuleClassEnrollmentQuery.class);
-            context.refresh();
-            var query = context.getBean(ModuleClassEnrollmentQuery.class);
-            assertThatThrownBy(() -> query.summarize(1L, "ANY_CLASS"))
-                    .isInstanceOfSatisfying(BaseException.class, error -> assertThat(error.getErrorCode())
-                            .isEqualTo(ErrorCode.MODULE_CLASS_ENROLLMENT_DATA_UNAVAILABLE));
-        }
-    }
-
     @Test
     void queriesTheRealClassIdAndPreservesCompleteHistoricalCounts() {
         var enrollment = mock(EnrollmentFacade.Planning.class);

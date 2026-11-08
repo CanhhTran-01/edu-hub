@@ -12,9 +12,10 @@ import static org.mockito.Mockito.when;
 
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.curriculum.application.facade.dto.MajorSimpleResponse;
+import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import com.eduhub.edu_hub.curriculum.domain.model.Major;
+import com.eduhub.edu_hub.identity.api.dto.response.AccountNotificationResponse;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
-import com.eduhub.edu_hub.identity.application.result.AccountNotificationResult;
 import com.eduhub.edu_hub.people.api.dto.request.CreateStudentRequest;
 import com.eduhub.edu_hub.people.application.code.StudentCodeGenerator;
 import com.eduhub.edu_hub.people.domain.enums.AccountNotificationStatus;
@@ -23,7 +24,6 @@ import com.eduhub.edu_hub.people.domain.model.Cohort;
 import com.eduhub.edu_hub.people.domain.model.Student;
 import com.eduhub.edu_hub.people.domain.repository.AdministrativeClassRepository;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
-import com.eduhub.edu_hub.shared.enums.TrainingType;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.math.BigDecimal;
@@ -101,7 +101,7 @@ class StudentCreationServiceTest {
         when(generator.generate(administrativeClass, 1)).thenReturn("CT080101");
         when(identity.createStudentAccountWithoutNotification(any())).thenReturn(20L);
         when(identity.sendStudentAccountNotification(20L, "12345"))
-                .thenReturn(new AccountNotificationResult(20L, true, null));
+                .thenReturn(new AccountNotificationResponse(20L, true, null));
         when(students.save(any(Student.class))).thenAnswer(invocation -> {
             Student student = invocation.getArgument(0);
             if (student.getId() == null) student.setId(30L);
@@ -138,7 +138,7 @@ class StudentCreationServiceTest {
         when(generator.generate(any(), anyInt())).thenReturn("CT080101");
         when(identity.createStudentAccountWithoutNotification(any())).thenReturn(20L);
         when(identity.sendStudentAccountNotification(20L, "12345"))
-                .thenReturn(new AccountNotificationResult(20L, false, "EMAIL_SEND_FAILED"));
+                .thenReturn(new AccountNotificationResponse(20L, false, "EMAIL_SEND_FAILED"));
         when(students.save(any(Student.class))).thenAnswer(invocation -> {
             Student student = invocation.getArgument(0);
             if (student.getId() == null) student.setId(30L);

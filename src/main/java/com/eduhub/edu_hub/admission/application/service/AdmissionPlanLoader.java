@@ -11,7 +11,8 @@ public final class AdmissionPlanLoader {
     public static AdmissionPlan lockPlanAtRevision(
             AdmissionPlanRepository planRepository, Long planId, long expectedRevision) {
         // findForUpdate: khóa row, chống việc hai người bấm cùng lúc làm dữ liệu lệch
-        AdmissionPlan plan = planRepository.findForUpdate(planId)
+        AdmissionPlan plan = planRepository
+                .findForUpdate(planId)
                 .orElseThrow(() -> new BaseException(ErrorCode.ADMISSION_PLAN_NOT_FOUND));
 
         // optimistic locking thủ công, số phiên bản không khớp thì người dùng tải lại trước khi sửa tiếp

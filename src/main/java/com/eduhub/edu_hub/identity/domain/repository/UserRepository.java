@@ -15,6 +15,10 @@ import org.springframework.data.repository.query.Param;
 public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByUsername(String username);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select user from User user where user.username = :username")
+    Optional<User> findByUsernameIncludingDeletedForUpdate(@Param("username") String username);
+
     @EntityGraph(attributePaths = "role")
     Optional<User> findByUsernameAndDeletedFalse(String username);
 

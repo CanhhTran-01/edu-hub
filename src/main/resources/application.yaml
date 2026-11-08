@@ -2,6 +2,20 @@ server:
   port: 8080
 jwt:
   secret: ${JWT_SECRET}
+  access-token-lifetime: ${JWT_ACCESS_TOKEN_LIFETIME:15m}
+  refresh-token-lifetime: ${JWT_REFRESH_TOKEN_LIFETIME:7d}
+
+identity:
+  authentication:
+    max-failed-logins: ${AUTH_MAX_FAILED_LOGINS:5}
+    temporary-lock-duration: ${AUTH_TEMPORARY_LOCK_DURATION:15m}
+
+app:
+  init:
+    system-admin:
+      username: ${APP_INIT_SYSTEM_ADMIN_USERNAME}
+      password: ${APP_INIT_SYSTEM_ADMIN_PASSWORD}
+      email: ${APP_INIT_SYSTEM_ADMIN_EMAIL:}
 
 spring:
   application:

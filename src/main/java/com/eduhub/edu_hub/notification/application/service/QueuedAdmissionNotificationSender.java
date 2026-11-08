@@ -3,8 +3,8 @@ package com.eduhub.edu_hub.notification.application.service;
 import static com.eduhub.edu_hub.notification.domain.policy.NotificationRetryPolicy.MAX_DELIVERY_ATTEMPTS;
 import static com.eduhub.edu_hub.notification.domain.policy.NotificationRetryPolicy.RETRY_DELAY_MINUTES;
 
+import com.eduhub.edu_hub.identity.api.dto.response.AccountNotificationResponse;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
-import com.eduhub.edu_hub.identity.application.result.AccountNotificationResult;
 import com.eduhub.edu_hub.notification.domain.enums.AdmissionNotificationKind;
 import com.eduhub.edu_hub.notification.domain.enums.NotificationStatus;
 import com.eduhub.edu_hub.notification.domain.model.QueuedAdmissionNotification;
@@ -62,7 +62,7 @@ public class QueuedAdmissionNotificationSender {
 
     private void deliverAndRecordOutcome(QueuedAdmissionNotification notification, LocalDateTime attemptTime) {
         try {
-            AccountNotificationResult deliveryResult = sendUsingCurrentStudentAccount(notification);
+            AccountNotificationResponse deliveryResult = sendUsingCurrentStudentAccount(notification);
 
             // cập nhật trạng thái
             recordDeliveryResult(notification, deliveryResult, attemptTime);
@@ -79,7 +79,7 @@ public class QueuedAdmissionNotificationSender {
         logDeliveryOutcome(notification);
     }
 
-    private AccountNotificationResult sendUsingCurrentStudentAccount(QueuedAdmissionNotification notification) {
+    private AccountNotificationResponse sendUsingCurrentStudentAccount(QueuedAdmissionNotification notification) {
         // lấy sinh viên
         var student = peopleAdmissionFacade
                 .findStudentsByIds(java.util.Set.of(notification.getStudentId()))
@@ -93,7 +93,7 @@ public class QueuedAdmissionNotificationSender {
 
     private void recordDeliveryResult(
             QueuedAdmissionNotification notification,
-            AccountNotificationResult deliveryResult,
+            AccountNotificationResponse deliveryResult,
             LocalDateTime attemptTime) {
         if (deliveryResult.emailSent()) {
             notification.setState(NotificationStatus.SENT);

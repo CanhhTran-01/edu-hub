@@ -21,7 +21,7 @@ public class AdmissionIdentityPolicy {
                         .equals(TextsNormalizer.normalizeKey(admission.getPhone()))
                 && applicant.getEntranceScore().compareTo(admission.getEntranceScore()) == 0;
     }
-    
+
     public boolean hasSameApplicantData(AdmissionApplicant existingApplicant, AdmissionApplicant incomingApplicant) {
         return Objects.equals(existingApplicant.getCitizenId(), incomingApplicant.getCitizenId())
                 && Objects.equals(existingApplicant.getApplicationCode(), incomingApplicant.getApplicationCode())

@@ -1,8 +1,8 @@
 package com.eduhub.edu_hub.people.domain.model;
 
+import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.shared.common.BaseEntity;
-import com.eduhub.edu_hub.shared.enums.TrainingType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

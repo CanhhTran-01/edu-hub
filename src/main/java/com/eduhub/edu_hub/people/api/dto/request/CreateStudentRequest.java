@@ -1,6 +1,6 @@
 package com.eduhub.edu_hub.people.api.dto.request;
 
-import com.eduhub.edu_hub.shared.enums.TrainingType;
+import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;

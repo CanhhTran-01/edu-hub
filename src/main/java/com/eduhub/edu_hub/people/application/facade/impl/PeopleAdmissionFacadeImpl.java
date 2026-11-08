@@ -1,8 +1,9 @@
 package com.eduhub.edu_hub.people.application.facade.impl;
 
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
+import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import com.eduhub.edu_hub.curriculum.domain.model.Major;
-import com.eduhub.edu_hub.identity.application.command.CreateStudentAccountCommand;
+import com.eduhub.edu_hub.identity.api.dto.request.CreateStudentAccountRequest;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.people.application.code.AdministrativeClassNames;
 import com.eduhub.edu_hub.people.application.code.StudentCodeGenerator;
@@ -12,7 +13,6 @@ import com.eduhub.edu_hub.people.domain.enums.AccountNotificationStatus;
 import com.eduhub.edu_hub.people.domain.model.*;
 import com.eduhub.edu_hub.people.domain.repository.*;
 import com.eduhub.edu_hub.shared.enums.ActivityStatus;
-import com.eduhub.edu_hub.shared.enums.TrainingType;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import jakarta.persistence.EntityManager;
@@ -138,7 +138,7 @@ public class PeopleAdmissionFacadeImpl implements PeopleFacade.Admission {
             if (students.existsByStudentCode(code) || identity.existsByUsername(code))
                 throw new BaseException(ErrorCode.DUPLICATE_STUDENT_CODE);
             Long userId = identity.createStudentAccountWithoutNotification(
-                    new CreateStudentAccountCommand(code, request.email(), INITIAL_PASSWORD, true));
+                    new CreateStudentAccountRequest(code, request.email(), INITIAL_PASSWORD, true));
             student = Student.builder()
                     .studentCode(code)
                     .userId(userId)

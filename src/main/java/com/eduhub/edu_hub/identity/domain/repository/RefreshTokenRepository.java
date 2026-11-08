@@ -7,10 +7,12 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
-    Optional<RefreshToken> findByTokenHashAndRevokedFalse(String tokenHash);
+    Optional<RefreshToken> findByTokenHash(String tokenHash);
 
     @EntityGraph(attributePaths = "user")
     Optional<RefreshToken> findByIdAndRevokedFalse(Long id);
 
     List<RefreshToken> findByUser_IdAndRevokedFalse(Long userId);
+
+    void deleteAllByUser_Id(Long userId);
 }

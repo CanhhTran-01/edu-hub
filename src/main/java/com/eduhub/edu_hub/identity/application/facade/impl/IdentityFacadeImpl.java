@@ -1,12 +1,15 @@
 package com.eduhub.edu_hub.identity.application.facade.impl;
 
+import com.eduhub.edu_hub.identity.api.dto.request.CreateLecturerAccountRequest;
+import com.eduhub.edu_hub.identity.api.dto.request.CreateStudentAccountRequest;
+import com.eduhub.edu_hub.identity.api.dto.response.AccountNotificationResponse;
+import com.eduhub.edu_hub.identity.api.dto.response.StudentAccountResponse;
 import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
-import com.eduhub.edu_hub.identity.application.*;
-import com.eduhub.edu_hub.identity.application.command.CreateLecturerAccountCommand;
-import com.eduhub.edu_hub.identity.application.command.CreateStudentAccountCommand;
+import com.eduhub.edu_hub.identity.application.exception.IdentityAccountException;
+import com.eduhub.edu_hub.identity.application.exception.IdentityAuthenticationException;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
-import com.eduhub.edu_hub.identity.application.result.AccountNotificationResult;
-import com.eduhub.edu_hub.identity.application.result.StudentAccountInfo;
+import com.eduhub.edu_hub.identity.application.service.TokenService;
+import com.eduhub.edu_hub.identity.domain.enums.RoleName;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.model.Role;
 import com.eduhub.edu_hub.identity.domain.model.User;
@@ -17,8 +20,6 @@ import com.eduhub.edu_hub.notification.application.command.SendAccountEmailComma
 import com.eduhub.edu_hub.notification.application.command.SendAdmissionConfirmationEmailCommand;
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
 import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
-import com.eduhub.edu_hub.shared.enums.RoleName;
-import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
@@ -40,19 +41,19 @@ public class IdentityFacadeImpl implements IdentityFacade {
 
     @Override
     @Transactional
-    public Long createLecturerAccountWithoutNotification(CreateLecturerAccountCommand command) {
-        if (users.existsByUsername(command.username())) {
-            throw new BaseException(ErrorCode.DUPLICATE_LECTURER_CODE);
+    public Long createLecturerAccountWithoutNotification(CreateLecturerAccountRequest request) {
+        if (users.existsByUsername(request.username())) {
+            throw new IdentityAccountException(ErrorCode.DUPLICATE_LECTURER_CODE);
         }
         Role role = roles.findByRoleNameAndDeletedFalse(RoleName.LECTURER.name())
-                .orElseThrow(() -> new BaseException(ErrorCode.VALIDATION_ERROR));
-        return save(command.username(), command.email(), command.initialPassword(), role, true)
+                .orElseThrow(() -> new IdentityAccountException(ErrorCode.VALIDATION_ERROR));
+        return save(request.username(), request.email(), request.initialPassword(), role, true)
                 .getId();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public AccountNotificationResult sendLecturerAccountNotification(Long userId, String initialPassword) {
+    public AccountNotificationResponse sendLecturerAccountNotification(Long userId, String initialPassword) {
 
         User account = user(userId);
 
@@ -60,11 +61,11 @@ public class IdentityFacadeImpl implements IdentityFacade {
         if (account.isDeleted()
                 || !RoleName.LECTURER.name().equals(account.getRole().getRoleName())
                 || account.getStatus() != UserStatus.ACTIVE) {
-            return new AccountNotificationResult(userId, false, "ACCOUNT_NOT_AVAILABLE");
+            return new AccountNotificationResponse(userId, false, "ACCOUNT_NOT_AVAILABLE");
         }
 
         if (!encoder.matches(initialPassword, account.getPasswordHash())) {
-            return new AccountNotificationResult(userId, false, "INITIAL_PASSWORD_NO_LONGER_VALID");
+            return new AccountNotificationResponse(userId, false, "INITIAL_PASSWORD_NO_LONGER_VALID");
         }
 
         return sendStudentAccountNotification(userId, initialPassword);
@@ -72,32 +73,32 @@ public class IdentityFacadeImpl implements IdentityFacade {
 
     @Override
     @Transactional
-    public Long createStudentAccountWithoutNotification(CreateStudentAccountCommand command) {
-        return createStudentAccountRecord(command);
+    public Long createStudentAccountWithoutNotification(CreateStudentAccountRequest request) {
+        return createStudentAccountRecord(request);
     }
 
     @Override
-    public AccountNotificationResult sendStudentAccountNotification(Long userId, String initialPassword) {
+    public AccountNotificationResponse sendStudentAccountNotification(Long userId, String initialPassword) {
 
         User user = user(userId);
 
         if (!user.isFirstLogin()) {
-            return new AccountNotificationResult(userId, false, "ACCOUNT_ALREADY_ACTIVATED");
+            return new AccountNotificationResponse(userId, false, "ACCOUNT_ALREADY_ACTIVATED");
         }
 
         if (user.isDeleted()
                 || user.getStatus() != UserStatus.ACTIVE
                 || (user.getLockedUntil() != null
                         && user.getLockedUntil().isAfter(LocalDateTime.now(java.time.ZoneOffset.UTC)))) {
-            return new AccountNotificationResult(userId, false, "ACCOUNT_NOT_AVAILABLE");
+            return new AccountNotificationResponse(userId, false, "ACCOUNT_NOT_AVAILABLE");
         }
 
         if (!encoder.matches(initialPassword, user.getPasswordHash())) {
-            return new AccountNotificationResult(userId, false, "INITIAL_PASSWORD_NO_LONGER_VALID");
+            return new AccountNotificationResponse(userId, false, "INITIAL_PASSWORD_NO_LONGER_VALID");
         }
 
         if (user.getEmail() == null || user.getEmail().isBlank()) {
-            return new AccountNotificationResult(userId, false, "ACCOUNT_EMAIL_MISSING");
+            return new AccountNotificationResponse(userId, false, "ACCOUNT_EMAIL_MISSING");
         }
 
         var delivery = immediateEmailNotifications.sendAccountEmail(SendAccountEmailCommand.builder()
@@ -108,18 +109,21 @@ public class IdentityFacadeImpl implements IdentityFacade {
                 .build());
 
         if (!delivery.sent()) log.error("Initial account email failed for user {}", userId);
-        return new AccountNotificationResult(userId, delivery.sent(), delivery.error());
+        return new AccountNotificationResponse(userId, delivery.sent(), delivery.error());
     }
 
     @Override
     @Transactional(readOnly = true)
     public UserInfoResponse requireCurrentUser(String accessToken) {
 
+        // TODO(AUTHENTICATED_PRINCIPAL): Khi refactor hồ sơ cá nhân, chuyển contract People–Identity sang danh tính
+        // đã xác thực từ SecurityContext để bỏ giải mã lại token; hiện giữ tương thích vì ngoài phạm vi login/logout.
+
         TokenService.TokenClaims claims = tokens.validateAccessToken(accessToken);
 
-        if (claims == null) throw new BaseException(ErrorCode.UNAUTHENTICATED);
+        if (claims == null) throw new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED);
         User current = users.findByUsernameAndDeletedFalse(claims.username())
-                .orElseThrow(() -> new BaseException(ErrorCode.UNAUTHENTICATED));
+                .orElseThrow(() -> new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED));
 
         LocalDateTime now = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC);
 
@@ -132,23 +136,23 @@ public class IdentityFacadeImpl implements IdentityFacade {
                 || current.getStatus() != UserStatus.ACTIVE
                 || (current.getLockedUntil() != null && now.isBefore(current.getLockedUntil()))
                 || !validSession) {
-            throw new BaseException(ErrorCode.UNAUTHENTICATED);
+            throw new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED);
         }
 
         return response(current);
     }
 
     @Override
-    public StudentAccountInfo getStudentAccount(Long userId) {
+    public StudentAccountResponse getStudentAccount(Long userId) {
         User account = user(userId);
         if (account.isDeleted()
                 || !RoleName.STUDENT.name().equals(account.getRole().getRoleName())) {
-            throw new BaseException(ErrorCode.USER_NOT_FOUND);
+            throw new IdentityAccountException(ErrorCode.USER_NOT_FOUND);
         }
         boolean locked = account.getStatus() != UserStatus.ACTIVE
                 || (account.getLockedUntil() != null
                         && account.getLockedUntil().isAfter(LocalDateTime.now(java.time.ZoneOffset.UTC)));
-        return new StudentAccountInfo(
+        return new StudentAccountResponse(
                 account.getId(),
                 account.getUsername(),
                 account.getEmail(),
@@ -158,10 +162,10 @@ public class IdentityFacadeImpl implements IdentityFacade {
     }
 
     @Override
-    public AccountNotificationResult sendStudentAdmissionNotification(Long userId, String recipient) {
+    public AccountNotificationResponse sendStudentAdmissionNotification(Long userId, String recipient) {
         var account = getStudentAccount(userId);
         if (recipient == null || recipient.isBlank()) {
-            return new AccountNotificationResult(userId, false, "ACCOUNT_EMAIL_MISSING");
+            return new AccountNotificationResponse(userId, false, "ACCOUNT_EMAIL_MISSING");
         }
         var delivery = immediateEmailNotifications.sendAdmissionConfirmationEmail(
                 SendAdmissionConfirmationEmailCommand.builder()
@@ -171,24 +175,24 @@ public class IdentityFacadeImpl implements IdentityFacade {
         if (!delivery.sent()) {
             log.error("Admission confirmation email failed for user {}", userId);
         }
-        return new AccountNotificationResult(userId, delivery.sent(), delivery.error());
+        return new AccountNotificationResponse(userId, delivery.sent(), delivery.error());
     }
 
-    private Long createStudentAccountRecord(CreateStudentAccountCommand command) {
+    private Long createStudentAccountRecord(CreateStudentAccountRequest request) {
 
-        if (users.existsByUsername(command.username())) {
-            throw new BaseException(ErrorCode.DUPLICATE_STUDENT_CODE);
+        if (users.existsByUsername(request.username())) {
+            throw new IdentityAccountException(ErrorCode.DUPLICATE_STUDENT_CODE);
         }
 
         Role role = roles.findByRoleNameAndDeletedFalse(RoleName.STUDENT.name())
-                .orElseThrow(() -> new BaseException(ErrorCode.VALIDATION_ERROR));
+                .orElseThrow(() -> new IdentityAccountException(ErrorCode.VALIDATION_ERROR));
 
         return save(
-                        command.username(),
-                        command.email(),
-                        command.initialPassword(),
+                        request.username(),
+                        request.email(),
+                        request.initialPassword(),
                         role,
-                        command.requirePasswordChange())
+                        request.requirePasswordChange())
                 .getId();
     }
 
@@ -211,7 +215,7 @@ public class IdentityFacadeImpl implements IdentityFacade {
     }
 
     private User user(Long id) {
-        return users.findById(id).orElseThrow(() -> new BaseException(ErrorCode.USER_NOT_FOUND));
+        return users.findById(id).orElseThrow(() -> new IdentityAccountException(ErrorCode.USER_NOT_FOUND));
     }
 
     private UserInfoResponse response(User user) {

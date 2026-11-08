@@ -1,7 +1,7 @@
 package com.eduhub.edu_hub.curriculum.domain.repository;
 
+import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import com.eduhub.edu_hub.curriculum.domain.model.Curriculum;
-import com.eduhub.edu_hub.shared.enums.TrainingType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;

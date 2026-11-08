@@ -1,6 +1,6 @@
 package com.eduhub.edu_hub.people.application.facade.dto;
 
-import com.eduhub.edu_hub.shared.enums.TrainingType;
+import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import lombok.Builder;
 import lombok.Value;
 

@@ -1,6 +1,6 @@
 package com.eduhub.edu_hub.people.application;
 
-import com.eduhub.edu_hub.identity.application.command.CreateLecturerAccountCommand;
+import com.eduhub.edu_hub.identity.api.dto.request.CreateLecturerAccountRequest;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.people.api.dto.request.CreateLecturerRequest;
 import com.eduhub.edu_hub.people.api.dto.response.CreateLecturerResponse;
@@ -73,7 +73,7 @@ public class LecturerCreationService {
 
         String lecturerCode = lecturerCodeGenerator.generate();
         Long userId = identityFacade.createLecturerAccountWithoutNotification(
-                new CreateLecturerAccountCommand(lecturerCode, email, INITIAL_PASSWORD));
+                new CreateLecturerAccountRequest(lecturerCode, email, INITIAL_PASSWORD));
 
         Lecturer lecturer = new Lecturer();
         lecturer.setLecturerCode(lecturerCode);

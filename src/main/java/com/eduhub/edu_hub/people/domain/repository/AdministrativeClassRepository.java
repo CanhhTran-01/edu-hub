@@ -1,7 +1,7 @@
 package com.eduhub.edu_hub.people.domain.repository;
 
+import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
-import com.eduhub.edu_hub.shared.enums.TrainingType;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;

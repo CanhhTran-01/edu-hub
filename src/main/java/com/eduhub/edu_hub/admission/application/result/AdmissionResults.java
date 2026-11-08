@@ -1,6 +1,6 @@
 package com.eduhub.edu_hub.admission.application.result;
 
-import com.eduhub.edu_hub.shared.enums.TrainingType;
+import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;

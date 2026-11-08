@@ -2,7 +2,7 @@ package com.eduhub.edu_hub.curriculum.application.facade;
 
 import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.dto.*;
-import com.eduhub.edu_hub.shared.enums.TrainingType;
+import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;

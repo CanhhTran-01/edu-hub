@@ -3,9 +3,9 @@ package com.eduhub.edu_hub.people.application;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.curriculum.application.facade.dto.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.domain.model.Major;
-import com.eduhub.edu_hub.identity.application.command.CreateStudentAccountCommand;
+import com.eduhub.edu_hub.identity.api.dto.request.CreateStudentAccountRequest;
+import com.eduhub.edu_hub.identity.api.dto.response.AccountNotificationResponse;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
-import com.eduhub.edu_hub.identity.application.result.AccountNotificationResult;
 import com.eduhub.edu_hub.people.api.dto.request.CreateStudentRequest;
 import com.eduhub.edu_hub.people.api.dto.request.StudentSearchRequest;
 import com.eduhub.edu_hub.people.api.dto.request.UpdateStudentRequest;
@@ -70,9 +70,9 @@ public class StudentApplicationService {
         //  Khi tích hợp hàng đợi thông báo dùng chung, đưa cả luồng này vào scheduler với 3 retry.
         //  Không khôi phục endpoint resend hoặc reset bộ đếm để vượt giới hạn của luồng nhập học.
 
-        AccountNotificationResult notification = created.hasEmail()
+        AccountNotificationResponse notification = created.hasEmail()
                 ? identityFacade.sendStudentAccountNotification(created.userId(), INITIAL_PASSWORD)
-                : new AccountNotificationResult(created.userId(), false, "ACCOUNT_EMAIL_MISSING");
+                : new AccountNotificationResponse(created.userId(), false, "ACCOUNT_EMAIL_MISSING");
 
         AccountNotificationStatus notificationStatus = !created.hasEmail()
                 ? AccountNotificationStatus.SKIPPED
@@ -119,7 +119,7 @@ public class StudentApplicationService {
                 && studentRepository.existsByFullNameIgnoreCaseAndDateOfBirthAndDeletedFalse(
                         fullName, request.getDateOfBirth());
         Long userId = identityFacade.createStudentAccountWithoutNotification(
-                new CreateStudentAccountCommand(studentCode, email, INITIAL_PASSWORD, true));
+                new CreateStudentAccountRequest(studentCode, email, INITIAL_PASSWORD, true));
         Student student = new Student();
         student.setUserId(userId);
         student.setAdministrativeClass(administrativeClass);

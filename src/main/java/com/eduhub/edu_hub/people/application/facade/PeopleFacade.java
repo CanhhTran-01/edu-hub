@@ -4,9 +4,17 @@ import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
 import com.eduhub.edu_hub.people.application.facade.dto.*;
 import com.eduhub.edu_hub.people.domain.enums.AccountNotificationStatus;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 public interface PeopleFacade {
+    /** Thông tin hiển thị sau xác thực; không tải tài khoản hoặc tạo hồ sơ khi đăng nhập. */
+    interface LoginProfile {
+        Optional<String> findStudentFullNameByUserId(Long userId);
+
+        Optional<String> findLecturerFullNameByUserId(Long userId);
+    }
+
     /** Hợp đồng dữ liệu nhập học; không đưa entity/repository của people ra module khác. */
     interface Admission {
         AdmissionCohortInfo requireCohort(Long cohortId);

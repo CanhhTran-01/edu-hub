@@ -21,7 +21,8 @@ public class AdmissionSpreadsheetReader {
     public static final int HEADER_ROW_INDEX = 4;
 
     public static final List<String> HEADERS = Arrays.stream(AdmissionSpreadsheetColumn.values())
-            .map(AdmissionSpreadsheetColumn::headerTitle).toList();
+            .map(AdmissionSpreadsheetColumn::headerTitle)
+            .toList();
 
     public List<AdmissionImportRow> parse(MultipartFile file, AdmissionImportScope expectedScope) {
         // validate file trước khi xử lý

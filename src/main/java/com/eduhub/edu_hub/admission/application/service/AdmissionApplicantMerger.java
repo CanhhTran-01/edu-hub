@@ -46,9 +46,7 @@ public class AdmissionApplicantMerger {
                         && identityPolicy.hasSameApplicantData(existingApplicant, incomingApplicant)) continue;
 
                 // ngược lại, đánh CONFLICT, gán số dòng mới và thêm vào danh sách để Admin thấy
-                setApplicantStatus(
-                        incomingApplicant
-                );
+                setApplicantStatus(incomingApplicant);
                 incomingApplicant.setRowNumber(nextRowNumber++);
                 existingApplicants.add(incomingApplicant);
 
@@ -74,8 +72,7 @@ public class AdmissionApplicantMerger {
         return existingApplicants;
     }
 
-    private void setApplicantStatus(
-            AdmissionApplicant applicant) {
+    private void setApplicantStatus(AdmissionApplicant applicant) {
         applicant.setState(AdmissionApplicantStatus.CONFLICT);
         applicant.setErrorMessage("Không ghi đè hồ sơ đã nhập học thành công");
     }

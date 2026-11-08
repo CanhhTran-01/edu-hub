@@ -6,10 +6,13 @@ import lombok.Data;
 @Data
 @Builder
 public class LoginResponse {
+    @Builder.Default
+    private String tokenType = "Bearer";
+
     private String accessToken;
     private String refreshToken;
-    private String tokenType = "Bearer";
+
     private long expiresIn;
-    private UserInfoResponse user;
     private boolean requirePasswordChange;
+    private UserInfoResponse user;
 }

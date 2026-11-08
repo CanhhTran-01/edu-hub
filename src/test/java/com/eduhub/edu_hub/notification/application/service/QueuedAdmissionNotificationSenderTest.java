@@ -7,8 +7,8 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.eduhub.edu_hub.identity.api.dto.response.AccountNotificationResponse;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
-import com.eduhub.edu_hub.identity.application.result.AccountNotificationResult;
 import com.eduhub.edu_hub.notification.domain.enums.AdmissionNotificationKind;
 import com.eduhub.edu_hub.notification.domain.enums.NotificationStatus;
 import com.eduhub.edu_hub.notification.domain.model.QueuedAdmissionNotification;
@@ -34,7 +34,7 @@ class QueuedAdmissionNotificationSenderTest {
     void stopsAfterFourFailedDeliveriesAndLogsTerminalFailureOnlyOnce() {
         QueuedAdmissionNotification row = pending();
         when(identity.sendStudentAccountNotification(10L, "12345"))
-                .thenReturn(new AccountNotificationResult(10L, false, "EMAIL_SEND_FAILED"));
+                .thenReturn(new AccountNotificationResponse(10L, false, "EMAIL_SEND_FAILED"));
         Logger logger = (Logger) LoggerFactory.getLogger(QueuedAdmissionNotificationSender.class);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
@@ -68,7 +68,7 @@ class QueuedAdmissionNotificationSenderTest {
     void lateAsyncKickoffCannotRetryAnAlreadyFailedInitialDelivery() {
         var row = pending();
         when(identity.sendStudentAccountNotification(10L, "12345"))
-                .thenReturn(new AccountNotificationResult(10L, false, "EMAIL_SEND_FAILED"));
+                .thenReturn(new AccountNotificationResponse(10L, false, "EMAIL_SEND_FAILED"));
         sender.sendInitialAttempt(1L);
         row.setNextAttemptAt(LocalDateTime.MIN);
         sender.sendInitialAttempt(1L);
@@ -82,7 +82,7 @@ class QueuedAdmissionNotificationSenderTest {
         row.setState(NotificationStatus.FAILED);
         row.setFailureCount(3);
         when(identity.sendStudentAccountNotification(10L, "12345"))
-                .thenReturn(new AccountNotificationResult(10L, true, null));
+                .thenReturn(new AccountNotificationResponse(10L, true, null));
         sender.sendScheduledAttempt(1L);
         sender.sendScheduledAttempt(1L);
         assertThat(row.getState()).isEqualTo(NotificationStatus.SENT);
@@ -108,7 +108,7 @@ class QueuedAdmissionNotificationSenderTest {
         notification.setKind(AdmissionNotificationKind.RE_ENROLLMENT);
         notification.setRecipient("returning@example.com");
         when(identity.sendStudentAdmissionNotification(10L, "returning@example.com"))
-                .thenReturn(new AccountNotificationResult(10L, true, null));
+                .thenReturn(new AccountNotificationResponse(10L, true, null));
 
         sender.sendInitialAttempt(1L);
 
@@ -124,7 +124,7 @@ class QueuedAdmissionNotificationSenderTest {
     void scheduledAttemptRecoversPendingNotificationsWhoseAsyncKickoffWasLost() {
         var notification = pending();
         when(identity.sendStudentAccountNotification(10L, "12345"))
-                .thenReturn(new AccountNotificationResult(10L, true, null));
+                .thenReturn(new AccountNotificationResponse(10L, true, null));
 
         sender.sendScheduledAttempt(1L);
 
