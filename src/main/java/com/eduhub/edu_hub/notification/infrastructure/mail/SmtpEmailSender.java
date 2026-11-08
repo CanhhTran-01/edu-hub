@@ -1,6 +1,6 @@
 package com.eduhub.edu_hub.notification.infrastructure.mail;
 
-import com.eduhub.edu_hub.notification.application.result.RenderedEmail;
+import com.eduhub.edu_hub.notification.infrastructure.template.RenderedEmail;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import java.nio.charset.StandardCharsets;

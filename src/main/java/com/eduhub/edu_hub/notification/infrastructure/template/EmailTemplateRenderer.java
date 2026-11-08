@@ -1,8 +1,7 @@
 package com.eduhub.edu_hub.notification.infrastructure.template;
 
-import com.eduhub.edu_hub.notification.application.command.SendAccountEmailCommand;
-import com.eduhub.edu_hub.notification.application.command.SendAdmissionConfirmationEmailCommand;
-import com.eduhub.edu_hub.notification.application.result.RenderedEmail;
+import com.eduhub.edu_hub.notification.api.dto.request.SendAccountEmailRequest;
+import com.eduhub.edu_hub.notification.api.dto.request.SendAdmissionConfirmationEmailRequest;
 import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
 import com.eduhub.edu_hub.notification.infrastructure.config.NotificationMailSettings;
 import java.util.Locale;
@@ -23,26 +22,26 @@ public class EmailTemplateRenderer {
         this.mailSettings = mailSettings;
     }
 
-    public RenderedEmail renderAccountEmail(SendAccountEmailCommand command) {
-        validateAccountEmailCommand(command);
-        return renderEmailTemplate(command.templateType(), command.username(), command.temporaryPassword());
+    public RenderedEmail renderAccountEmail(SendAccountEmailRequest request) {
+        validateAccountEmailRequest(request);
+        return renderEmailTemplate(request.templateType(), request.username(), request.temporaryPassword());
     }
 
-    public RenderedEmail renderAdmissionConfirmationEmail(SendAdmissionConfirmationEmailCommand command) {
-        return renderEmailTemplate(EmailTemplateType.ADMISSION_CONFIRMED, command.username(), null);
+    public RenderedEmail renderAdmissionConfirmationEmail(SendAdmissionConfirmationEmailRequest request) {
+        return renderEmailTemplate(EmailTemplateType.ADMISSION_CONFIRMED, request.username(), null);
     }
 
-    private void validateAccountEmailCommand(SendAccountEmailCommand command) {
-        if (command.templateType() != EmailTemplateType.ACCOUNT_CREATED
-                && command.templateType() != EmailTemplateType.PASSWORD_RESET) {
+    private void validateAccountEmailRequest(SendAccountEmailRequest request) {
+        if (request.templateType() != EmailTemplateType.ACCOUNT_CREATED
+                && request.templateType() != EmailTemplateType.PASSWORD_RESET) {
             throw new IllegalArgumentException("Account email requires an explicit account template type");
         }
 
-        if (command.temporaryPassword() == null || command.temporaryPassword().isBlank()) {
+        if (request.temporaryPassword() == null || request.temporaryPassword().isBlank()) {
             throw new IllegalArgumentException("Temporary password is required");
         }
 
-        if (command.templateType() == EmailTemplateType.ACCOUNT_CREATED && trimToNull(command.username()) == null) {
+        if (request.templateType() == EmailTemplateType.ACCOUNT_CREATED && trimToNull(request.username()) == null) {
             throw new IllegalArgumentException("New account email requires a username");
         }
     }
@@ -80,8 +79,8 @@ public class EmailTemplateRenderer {
         return templateContext;
     }
 
-    private String trimToNull(String value) {
-        return value == null || value.isBlank() ? null : value.strip();
+    private String trimToNull(String text) {
+        return text == null || text.isBlank() ? null : text.strip();
     }
 
     private record EmailTemplateDefinition(String templateName, String subjectTitle) {}

@@ -1,11 +1,12 @@
 package com.eduhub.edu_hub.admission.application.service;
 
+import com.eduhub.edu_hub.admission.application.exception.AdmissionEnrollmentException;
 import com.eduhub.edu_hub.admission.domain.enums.AdmissionApplicantStatus;
 import com.eduhub.edu_hub.admission.domain.model.StudentAdmission;
 import com.eduhub.edu_hub.admission.domain.policy.AdmissionIdentityPolicy;
 import com.eduhub.edu_hub.admission.domain.repository.AdmissionApplicantRepository;
 import com.eduhub.edu_hub.admission.domain.repository.StudentAdmissionRepository;
-import com.eduhub.edu_hub.notification.application.command.QueueAdmissionNotificationCommand;
+import com.eduhub.edu_hub.notification.api.dto.request.QueueAdmissionNotificationRequest;
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.application.facade.dto.AdmissionStudentRegistration;
@@ -22,18 +23,19 @@ public class AdmissionApplicantEnrollmentService {
     private final NotificationFacade.AdmissionQueue notificationQueue;
     private final PeopleFacade.Admission peopleAdmissionFacade;
     private final AdmissionIdentityPolicy identityPolicy;
-    private final AdmissionConfirmationLease confirmationLease;
+    private final AdmissionConfirmationLeaseService confirmationLease;
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void enroll(Long planId, String confirmationToken, Long applicantId) {
         var plan = confirmationLease.requireActiveConfirmation(planId, confirmationToken);
         var applicant = applicantRepository.findById(applicantId).orElseThrow();
-        if (!applicant.getPlan().getId().equals(planId)) throw new BaseException(ErrorCode.VALIDATION_ERROR);
+        if (!applicant.getPlan().getId().equals(planId))
+            throw new AdmissionEnrollmentException(ErrorCode.VALIDATION_ERROR);
         if (!applicant.isPendingEnrollment()) return;
         var existingAdmission = studentAdmissionRepository.findByApplicationCode(applicant.getApplicationCode());
         if (existingAdmission.isPresent()) {
             if (!identityPolicy.hasSameApplicantData(applicant, existingAdmission.get()))
-                throw new BaseException(ErrorCode.ADMISSION_APPLICATION_CONFLICT);
+                throw new AdmissionEnrollmentException(ErrorCode.ADMISSION_APPLICATION_CONFLICT);
             applicant.setStudentId(existingAdmission.get().getStudentId());
             applicant.setReuseAccount(true);
             applicant.setState(AdmissionApplicantStatus.EXISTING);
@@ -68,7 +70,7 @@ public class AdmissionApplicantEnrollmentService {
                 .entranceScore(applicant.getEntranceScore())
                 .build();
         studentAdmissionRepository.saveAndFlush(admission);
-        notificationQueue.enqueueAdmissionNotification(QueueAdmissionNotificationCommand.builder()
+        notificationQueue.enqueueAdmissionNotification(QueueAdmissionNotificationRequest.builder()
                 .admissionId(admission.getId())
                 .studentId(studentId)
                 .recipient(applicant.getEmail())

@@ -9,9 +9,9 @@ import com.eduhub.edu_hub.identity.domain.model.RefreshToken;
 import com.eduhub.edu_hub.identity.domain.model.User;
 import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
-import com.eduhub.edu_hub.notification.application.command.SendAccountEmailCommand;
+import com.eduhub.edu_hub.notification.api.dto.request.SendAccountEmailRequest;
+import com.eduhub.edu_hub.notification.api.dto.response.EmailDeliveryResponse;
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
-import com.eduhub.edu_hub.notification.application.result.EmailDeliveryResult;
 import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
@@ -63,10 +63,10 @@ class AdminUserNotificationTest {
     @Test
     void resetExplicitlySelectsTheResetTemplateAndIncludesTargetUsername() {
         when(immediateEmailNotifications.sendAccountEmail(any()))
-                .thenReturn(EmailDeliveryResult.builder().sent(true).build());
+                .thenReturn(EmailDeliveryResponse.builder().sent(true).build());
         service.resetPassword(authenticatedJwt, 2L);
         verify(immediateEmailNotifications)
-                .sendAccountEmail(SendAccountEmailCommand.builder()
+                .sendAccountEmail(SendAccountEmailRequest.builder()
                         .recipient("student@example.com")
                         .username("CNTT080101")
                         .temporaryPassword("new-temporary-password")
@@ -80,7 +80,7 @@ class AdminUserNotificationTest {
     void repeatedResetDoesNotReplaceOfficialHistoryWithTemporaryPassword() {
         target.setFirstLogin(true);
         when(immediateEmailNotifications.sendAccountEmail(any()))
-                .thenReturn(EmailDeliveryResult.builder().sent(true).build());
+                .thenReturn(EmailDeliveryResponse.builder().sent(true).build());
         service.resetPassword(authenticatedJwt, 2L);
         assertThat(target.getPreviousPasswordHash()).isEqualTo("older-official-hash");
     }
@@ -89,7 +89,7 @@ class AdminUserNotificationTest {
     @ValueSource(strings = {"EMAIL_SEND_FAILED", "EMAIL_TEMPLATE_RENDER_FAILED"})
     void failedDeliveryStillThrowsTheErrorUsedToRollBackPasswordReset(String error) {
         when(immediateEmailNotifications.sendAccountEmail(any()))
-                .thenReturn(EmailDeliveryResult.builder().error(error).build());
+                .thenReturn(EmailDeliveryResponse.builder().error(error).build());
         assertThatThrownBy(() -> service.resetPassword(authenticatedJwt, 2L))
                 .isInstanceOfSatisfying(BaseException.class, failure -> assertThat(failure.getErrorCode())
                         .isEqualTo(ErrorCode.PASSWORD_EMAIL_FAILED));

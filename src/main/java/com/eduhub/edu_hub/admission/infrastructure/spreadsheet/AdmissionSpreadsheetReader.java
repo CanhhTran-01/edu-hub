@@ -1,7 +1,6 @@
 package com.eduhub.edu_hub.admission.infrastructure.spreadsheet;
 
-import com.eduhub.edu_hub.admission.application.command.AdmissionImportRow;
-import com.eduhub.edu_hub.admission.application.command.AdmissionImportScope;
+import com.eduhub.edu_hub.admission.application.exception.AdmissionSpreadsheetException;
 import com.eduhub.edu_hub.admission.infrastructure.config.AdmissionSettings;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
@@ -24,7 +23,7 @@ public class AdmissionSpreadsheetReader {
             .map(AdmissionSpreadsheetColumn::headerTitle)
             .toList();
 
-    public List<AdmissionImportRow> parse(MultipartFile file, AdmissionImportScope expectedScope) {
+    public List<AdmissionSpreadsheetApplicant> parse(MultipartFile file, AdmissionSpreadsheetScope expectedScope) {
         // validate file trước khi xử lý
         validateUploadedFile(file);
 
@@ -46,7 +45,7 @@ public class AdmissionSpreadsheetReader {
         } catch (BaseException exception) {
             throw exception;
         } catch (IOException | RuntimeException exception) {
-            throw new BaseException(ErrorCode.ADMISSION_IMPORT_INVALID);
+            throw new AdmissionSpreadsheetException(ErrorCode.ADMISSION_IMPORT_INVALID, exception);
         }
     }
 
@@ -55,20 +54,20 @@ public class AdmissionSpreadsheetReader {
                 || file.isEmpty()
                 || file.getOriginalFilename() == null
                 || !file.getOriginalFilename().toLowerCase(Locale.ROOT).endsWith(".xlsx")) {
-            throw new BaseException(ErrorCode.ADMISSION_IMPORT_INVALID);
+            throw new AdmissionSpreadsheetException(ErrorCode.ADMISSION_IMPORT_INVALID);
         }
     }
 
     private Sheet requireSingleSheetWithinRowLimit(Workbook workbook) {
         // phải đúng 1 sheet
         if (workbook.getNumberOfSheets() != 1) {
-            throw new BaseException(ErrorCode.ADMISSION_IMPORT_INVALID);
+            throw new AdmissionSpreadsheetException(ErrorCode.ADMISSION_IMPORT_INVALID);
         }
 
         // Không tính khối thông tin chung và hàng header vào giới hạn số dòng hồ sơ.
         Sheet sheet = workbook.getSheetAt(0);
         if (sheet.getLastRowNum() - HEADER_ROW_INDEX > admissionSettings.getMaxImportRows()) {
-            throw new BaseException(ErrorCode.ADMISSION_IMPORT_INVALID);
+            throw new AdmissionSpreadsheetException(ErrorCode.ADMISSION_IMPORT_INVALID);
         }
         return sheet;
     }
@@ -78,20 +77,20 @@ public class AdmissionSpreadsheetReader {
         Map<String, Integer> indexesByHeader = new HashMap<>(); // key=tên cột, value=chỉ số vị trí của cột (từ 0)
         Row headerRow = sheet.getRow(HEADER_ROW_INDEX);
         if (headerRow == null) {
-            throw new BaseException(ErrorCode.ADMISSION_IMPORT_INVALID);
+            throw new AdmissionSpreadsheetException(ErrorCode.ADMISSION_IMPORT_INVALID);
         }
 
         // duyệt từng ô của hàng header để dựng chỉ số
         for (Cell headerCell : headerRow) {
             if (headerCell.getCellType() == CellType.FORMULA || headerCell.getCellType() == CellType.ERROR) {
-                throw new BaseException(ErrorCode.ADMISSION_IMPORT_INVALID);
+                throw new AdmissionSpreadsheetException(ErrorCode.ADMISSION_IMPORT_INVALID);
             }
             String headerTitle = TextsNormalizer.normalizeKey(cellFormatter.formatCellValue(headerCell));
             AdmissionSpreadsheetColumn column = AdmissionSpreadsheetColumn.fromHeaderTitle(headerTitle);
             String canonicalTitle = column == null ? headerTitle : TextsNormalizer.normalizeKey(column.headerTitle());
             if (indexesByHeader.put(canonicalTitle, headerCell.getColumnIndex()) != null) {
                 // phát hiện cột trùng tên, nhả lỗi
-                throw new BaseException(ErrorCode.ADMISSION_IMPORT_INVALID);
+                throw new AdmissionSpreadsheetException(ErrorCode.ADMISSION_IMPORT_INVALID);
             }
             if (column != null) columnIndexes.put(column, headerCell.getColumnIndex());
         }
@@ -100,13 +99,14 @@ public class AdmissionSpreadsheetReader {
         if (!columnIndexes
                 .keySet()
                 .containsAll(Arrays.asList(AdmissionSpreadsheetColumn.values()).subList(0, 4))) {
-            throw new BaseException(ErrorCode.ADMISSION_IMPORT_INVALID);
+            throw new AdmissionSpreadsheetException(ErrorCode.ADMISSION_IMPORT_INVALID);
         }
         return columnIndexes;
     }
 
-    private List<AdmissionImportRow> readApplicantRows(Sheet sheet, AdmissionSpreadsheetRowParser rowParser) {
-        List<AdmissionImportRow> importRows = new ArrayList<>();
+    private List<AdmissionSpreadsheetApplicant> readApplicantRows(
+            Sheet sheet, AdmissionSpreadsheetRowParser rowParser) {
+        List<AdmissionSpreadsheetApplicant> spreadsheetApplicants = new ArrayList<>();
 
         // đọc từng dòng dữ liệu
         for (int rowIndex = HEADER_ROW_INDEX + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
@@ -114,8 +114,8 @@ public class AdmissionSpreadsheetReader {
 
             // bỏ qua dòng trống
             if (row == null || rowParser.isBlankRow(row)) continue;
-            importRows.add(rowParser.parseApplicantRow(row));
+            spreadsheetApplicants.add(rowParser.parseApplicantRow(row));
         }
-        return importRows;
+        return spreadsheetApplicants;
     }
 }

@@ -1,10 +1,10 @@
 package com.eduhub.edu_hub.admission.infrastructure.spreadsheet;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
-import com.eduhub.edu_hub.admission.application.command.AdmissionImportRow;
-import com.eduhub.edu_hub.admission.application.command.AdmissionImportScope;
 import com.eduhub.edu_hub.admission.application.exception.AdmissionImportScopeException;
+import com.eduhub.edu_hub.admission.application.exception.AdmissionSpreadsheetException;
 import com.eduhub.edu_hub.admission.domain.enums.AdmissionApplicantStatus;
 import com.eduhub.edu_hub.admission.infrastructure.config.AdmissionSettings;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
@@ -21,10 +21,26 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 
 class AdmissionSpreadsheetReaderTest {
-    private static final AdmissionImportScope SCOPE = new AdmissionImportScope("CNTT", "Công nghệ thông tin", "CT8");
+    private static final AdmissionSpreadsheetScope SCOPE =
+            new AdmissionSpreadsheetScope("CNTT", "Công nghệ thông tin", "CT8");
     private final AdmissionSpreadsheetReader parser = new AdmissionSpreadsheetReader(new AdmissionSettings());
+
+    @Test
+    void preservesTheOriginalCauseWhenTheUploadedFileCannotBeRead() throws Exception {
+        IOException readFailure = new IOException("Không đọc được file tải lên");
+        MultipartFile uploadedFile = mock(MultipartFile.class);
+        when(uploadedFile.getOriginalFilename()).thenReturn("students.xlsx");
+        when(uploadedFile.getInputStream()).thenThrow(readFailure);
+
+        assertThatThrownBy(() -> parser.parse(uploadedFile, SCOPE))
+                .isInstanceOfSatisfying(AdmissionSpreadsheetException.class, exception -> {
+                    assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ADMISSION_IMPORT_INVALID);
+                    assertThat(exception.getCause()).isSameAs(readFailure);
+                });
+    }
 
     @Test
     void acceptsNullableContactsAndKeepsLeadingZeroInCitizenId() throws Exception {
@@ -56,7 +72,7 @@ class AdmissionSpreadsheetReaderTest {
                     .setCellValue(12345678903D);
             var parsed = parser.parse(file(workbook), SCOPE);
             assertThat(parsed)
-                    .extracting(AdmissionImportRow::getState)
+                    .extracting(AdmissionSpreadsheetApplicant::getState)
                     .containsExactly(
                             AdmissionApplicantStatus.VALID,
                             AdmissionApplicantStatus.INVALID,
@@ -96,11 +112,13 @@ class AdmissionSpreadsheetReaderTest {
                 new ByteArrayInputStream(new AdmissionSpreadsheetTemplateWriter().writeTemplate(SCOPE)))) {
             assertThat(workbook.getNumberOfSheets()).isEqualTo(1);
             var sheet = workbook.getSheetAt(0);
-            assertThat(sheet.getRow(0).getCell(0).getStringCellValue()).isEqualTo("ma_nganh");
-            assertThat(sheet.getRow(0).getCell(1).getStringCellValue()).isEqualTo("CNTT");
+            assertThat(sheet.getSheetName()).isEqualTo("Sinh viên trúng tuyển");
+            assertThat(sheet.getRow(0).getCell(0).getStringCellValue()).isEqualTo("Sinh viên trúng tuyển");
+            assertThat(sheet.getRow(1).getCell(0).getStringCellValue()).isEqualTo("Tên ngành");
             assertThat(sheet.getRow(1).getCell(1).getStringCellValue()).isEqualTo("Công nghệ thông tin");
-            assertThat(sheet.getRow(2).getCell(0).getStringCellValue()).isEqualTo("ma_khoa");
-            assertThat(sheet.getRow(2).getCell(1).getStringCellValue()).isEqualTo("CT8");
+            assertThat(sheet.getRow(2).getCell(0).getStringCellValue()).isEqualTo("Mã ngành");
+            assertThat(sheet.getRow(2).getCell(1).getStringCellValue()).isEqualTo("CNTT");
+            assertThat(sheet.getRow(3).getPhysicalNumberOfCells()).isZero();
             assertThat(IntStream.range(0, 8)
                             .mapToObj(index -> sheet.getRow(4).getCell(index).getStringCellValue())
                             .toList())
@@ -116,6 +134,62 @@ class AdmissionSpreadsheetReaderTest {
             assertThat(sheet.getColumnStyle(1).getDataFormatString()).isEqualTo("@");
             assertThat(sheet.getColumnStyle(7).getDataFormatString()).isEqualTo("@");
             assertThat(sheet.getPaneInformation().getHorizontalSplitPosition()).isEqualTo((short) 5);
+        }
+    }
+
+    @Test
+    void importsApplicantsFromTheNewTemplateUsingTheSelectedCohort() throws Exception {
+        try (var workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(new AdmissionSpreadsheetTemplateWriter().writeTemplate(SCOPE)))) {
+            row(workbook.getSheetAt(0), 1, "HS01", "012345678901", "Nguyễn Văn An", "25");
+            var selectedScope = new AdmissionSpreadsheetScope("CNTT", "Công nghệ thông tin", "CT9");
+            assertThat(parser.parse(file(workbook), selectedScope))
+                    .singleElement()
+                    .satisfies(applicant -> {
+                        assertThat(applicant.getState()).isEqualTo(AdmissionApplicantStatus.VALID);
+                        assertThat(applicant.getRowNumber()).isEqualTo(6);
+                        assertThat(applicant.getCitizenId()).isEqualTo("012345678901");
+                    });
+        }
+    }
+
+    @Test
+    void rejectsTheNewTemplateWhenItsMajorDiffersFromTheSelectedMajor() throws Exception {
+        try (var workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(new AdmissionSpreadsheetTemplateWriter().writeTemplate(SCOPE)))) {
+            workbook.getSheetAt(0).getRow(2).getCell(1).setCellValue("ATTT");
+            assertThatThrownBy(() -> parser.parse(file(workbook), SCOPE))
+                    .isInstanceOfSatisfying(AdmissionImportScopeException.class, exception -> {
+                        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ADMISSION_IMPORT_SCOPE_MISMATCH);
+                        assertThat(exception.getErrors()).singleElement().satisfies(detail -> {
+                            assertThat(detail.getField()).isEqualTo("majorCode");
+                            assertThat(detail.getMessage()).contains("ATTT", "CNTT");
+                        });
+                    });
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1})
+    void stillRequiresTheMajorLabelAndCodeInTheNewTemplate(int columnIndex) throws Exception {
+        try (var workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(new AdmissionSpreadsheetTemplateWriter().writeTemplate(SCOPE)))) {
+            workbook.getSheetAt(0).getRow(2).getCell(columnIndex).setBlank();
+            assertThatThrownBy(() -> parser.parse(file(workbook), SCOPE))
+                    .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
+                            .isEqualTo(ErrorCode.ADMISSION_IMPORT_METADATA_REQUIRED));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2, 3})
+    void rejectsFormulasAnywhereAboveTheNewTemplateHeader(int rowIndex) throws Exception {
+        try (var workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(new AdmissionSpreadsheetTemplateWriter().writeTemplate(SCOPE)))) {
+            workbook.getSheetAt(0).getRow(rowIndex).createCell(2).setCellFormula("1+1");
+            assertThatThrownBy(() -> parser.parse(file(workbook), SCOPE))
+                    .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
+                            .isEqualTo(ErrorCode.ADMISSION_IMPORT_INVALID));
         }
     }
 
@@ -185,7 +259,7 @@ class AdmissionSpreadsheetReaderTest {
             row(sheet, 1, "HS01", "012345678901", "Nguyễn Văn An", "25");
             assertThat(parser.parse(file(workbook), SCOPE))
                     .singleElement()
-                    .extracting(AdmissionImportRow::getState)
+                    .extracting(AdmissionSpreadsheetApplicant::getState)
                     .isEqualTo(AdmissionApplicantStatus.VALID);
         }
     }
@@ -207,7 +281,7 @@ class AdmissionSpreadsheetReaderTest {
             row(workbook.getSheetAt(0), 1, "HS01", "012345678901", "Nguyễn Văn An", "25");
             row(workbook.getSheetAt(0), 3, "HS02", "012345678902", "Trần Văn Bình", "24");
             assertThat(parser.parse(file(workbook), SCOPE))
-                    .extracting(AdmissionImportRow::getRowNumber)
+                    .extracting(AdmissionSpreadsheetApplicant::getRowNumber)
                     .containsExactly(6, 8);
         }
     }
@@ -341,7 +415,7 @@ class AdmissionSpreadsheetReaderTest {
             row(sheet, 1, "HS01", "012345678901", "Nguyễn Văn An", "25", invalidDate);
             row(sheet, 2, "HS02", "012345678902", "Trần Văn Bình", "24", "03/02/2001");
             assertThat(parser.parse(file(workbook), SCOPE))
-                    .extracting(AdmissionImportRow::getState)
+                    .extracting(AdmissionSpreadsheetApplicant::getState)
                     .containsExactly(AdmissionApplicantStatus.INVALID, AdmissionApplicantStatus.VALID);
         }
     }
@@ -356,7 +430,7 @@ class AdmissionSpreadsheetReaderTest {
                     .setCellFormula("1+1");
             row(sheet, 2, "HS02", "012345678902", "Trần Văn Bình", "24");
             assertThat(parser.parse(file(workbook), SCOPE))
-                    .extracting(AdmissionImportRow::getState)
+                    .extracting(AdmissionSpreadsheetApplicant::getState)
                     .containsExactly(AdmissionApplicantStatus.INVALID, AdmissionApplicantStatus.VALID);
         }
     }

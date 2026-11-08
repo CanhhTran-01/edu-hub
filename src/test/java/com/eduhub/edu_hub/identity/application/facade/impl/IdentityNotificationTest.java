@@ -14,10 +14,10 @@ import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.RoleRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
 import com.eduhub.edu_hub.identity.infrastructure.config.PasswordSettings;
-import com.eduhub.edu_hub.notification.application.command.SendAccountEmailCommand;
-import com.eduhub.edu_hub.notification.application.command.SendAdmissionConfirmationEmailCommand;
+import com.eduhub.edu_hub.notification.api.dto.request.SendAccountEmailRequest;
+import com.eduhub.edu_hub.notification.api.dto.request.SendAdmissionConfirmationEmailRequest;
+import com.eduhub.edu_hub.notification.api.dto.response.EmailDeliveryResponse;
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
-import com.eduhub.edu_hub.notification.application.result.EmailDeliveryResult;
 import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,13 +60,14 @@ class IdentityNotificationTest {
     @Test
     void delegatesOnlyAfterAccountChecksAndKeepsDeliveryErrorContract() {
         when(immediateEmailNotifications.sendAccountEmail(any()))
-                .thenReturn(
-                        EmailDeliveryResult.builder().error("EMAIL_SEND_FAILED").build());
+                .thenReturn(EmailDeliveryResponse.builder()
+                        .error("EMAIL_SEND_FAILED")
+                        .build());
         var result = identity.sendStudentAccountNotification(7L);
         assertThat(result.emailSent()).isFalse();
         assertThat(result.emailError()).isEqualTo("EMAIL_SEND_FAILED");
         verify(immediateEmailNotifications)
-                .sendAccountEmail(new SendAccountEmailCommand(
+                .sendAccountEmail(new SendAccountEmailRequest(
                         "student@example.com", "CNTT080101", "configured-temp", EmailTemplateType.ACCOUNT_CREATED));
     }
 
@@ -102,13 +103,13 @@ class IdentityNotificationTest {
         user.setStatus(UserStatus.LOCKED);
         user.setFirstLogin(false);
         when(immediateEmailNotifications.sendAdmissionConfirmationEmail(any()))
-                .thenReturn(EmailDeliveryResult.builder().sent(true).build());
+                .thenReturn(EmailDeliveryResponse.builder().sent(true).build());
         assertThat(identity.sendStudentAdmissionNotification(7L, "new@example.com")
                         .emailSent())
                 .isTrue();
         verify(immediateEmailNotifications)
                 .sendAdmissionConfirmationEmail(
-                        new SendAdmissionConfirmationEmailCommand("new@example.com", "CNTT080101"));
+                        new SendAdmissionConfirmationEmailRequest("new@example.com", "CNTT080101"));
         verifyNoMoreInteractions(immediateEmailNotifications);
         assertThat(user.getStatus()).isEqualTo(UserStatus.LOCKED);
         assertThat(user.isFirstLogin()).isFalse();

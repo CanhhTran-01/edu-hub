@@ -4,12 +4,14 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import com.eduhub.edu_hub.admission.application.command.AdmissionCommands.PrepareClassesCommand;
+import com.eduhub.edu_hub.admission.api.dto.request.PrepareAdmissionClassesRequest;
 import com.eduhub.edu_hub.admission.application.service.AdmissionClassPreparationService;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -20,10 +22,7 @@ class AdministrativeClassControllerTest {
 
     @BeforeEach
     void setup() {
-        mvc = MockMvcBuilders.standaloneSetup(new AdministrativeClassController(
-                        org.mapstruct.factory.Mappers.getMapper(
-                                com.eduhub.edu_hub.admission.api.mapper.AdmissionApiMapper.class),
-                        classes))
+        mvc = MockMvcBuilders.standaloneSetup(new AdministrativeClassController(classes))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -49,7 +48,7 @@ class AdministrativeClassControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
-        verify(classes).prepareClasses(new PrepareClassesCommand(1L, 0, 2, null, false, false, null));
+        verify(classes).prepareClasses(new PrepareAdmissionClassesRequest(1L, 0, 2, null, false, false, null));
     }
 
     @Test
@@ -65,5 +64,24 @@ class AdministrativeClassControllerTest {
                                 """))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(classes);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"null", "[]"})
+    void preservesTheDifferenceBetweenAutomaticReuseAndCreatingAllClasses(String existingClassIdsJson)
+            throws Exception {
+        mvc.perform(post("/api/v1/administrative-classes/from-admission-plan")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                                """
+                                {"planId":1,"expectedRevision":0,"classCount":2,"existingClassIds":%s,
+                                 "acceptReserve":false,"acceptBelowMinimum":false}
+                                """
+                                        .formatted(existingClassIdsJson)))
+                .andExpect(status().isOk());
+
+        verify(classes)
+                .prepareClasses(new PrepareAdmissionClassesRequest(
+                        1L, 0, 2, existingClassIdsJson.equals("null") ? null : List.of(), false, false, null));
     }
 }

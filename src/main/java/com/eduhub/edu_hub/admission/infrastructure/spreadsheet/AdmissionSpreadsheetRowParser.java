@@ -2,7 +2,6 @@ package com.eduhub.edu_hub.admission.infrastructure.spreadsheet;
 
 import static com.eduhub.edu_hub.admission.infrastructure.spreadsheet.AdmissionSpreadsheetColumn.*;
 
-import com.eduhub.edu_hub.admission.application.command.AdmissionImportRow;
 import com.eduhub.edu_hub.admission.domain.enums.AdmissionApplicantStatus;
 import com.eduhub.edu_hub.shared.text.TextsNormalizer;
 import java.math.BigDecimal;
@@ -21,8 +20,9 @@ final class AdmissionSpreadsheetRowParser {
     private final Map<AdmissionSpreadsheetColumn, Integer> columnIndexes;
     private final DataFormatter cellFormatter;
 
-    AdmissionImportRow parseApplicantRow(Row row) {
-        AdmissionImportRow applicant = AdmissionImportRow.builder().build();
+    AdmissionSpreadsheetApplicant parseApplicantRow(Row row) {
+        AdmissionSpreadsheetApplicant applicant =
+                AdmissionSpreadsheetApplicant.builder().build();
 
         // Lưu đúng số dòng vật lý trong Excel để Admin tìm được hồ sơ lỗi.
         applicant.setRowNumber(row.getRowNum() + 1);
@@ -45,7 +45,7 @@ final class AdmissionSpreadsheetRowParser {
         return true;
     }
 
-    private void populatePersonalInformation(Row row, AdmissionImportRow applicant) {
+    private void populatePersonalInformation(Row row, AdmissionSpreadsheetApplicant applicant) {
         applicant.setApplicationCode(TextsNormalizer.normalizeKey(readCellText(row, APPLICATION_CODE)));
         applicant.setCitizenId(readCitizenId(row));
         applicant.setFullName(TextsNormalizer.normalizeOptionalText(readCellText(row, FULL_NAME)));

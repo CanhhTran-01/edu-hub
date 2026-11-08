@@ -17,8 +17,8 @@ import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.RoleRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
 import com.eduhub.edu_hub.identity.infrastructure.config.PasswordSettings;
-import com.eduhub.edu_hub.notification.application.command.SendAccountEmailCommand;
-import com.eduhub.edu_hub.notification.application.command.SendAdmissionConfirmationEmailCommand;
+import com.eduhub.edu_hub.notification.api.dto.request.SendAccountEmailRequest;
+import com.eduhub.edu_hub.notification.api.dto.request.SendAdmissionConfirmationEmailRequest;
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
 import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
@@ -102,7 +102,7 @@ public class IdentityFacadeImpl implements IdentityFacade {
             return new AccountNotificationResponse(userId, false, "ACCOUNT_EMAIL_MISSING");
         }
 
-        var delivery = immediateEmailNotifications.sendAccountEmail(SendAccountEmailCommand.builder()
+        var delivery = immediateEmailNotifications.sendAccountEmail(SendAccountEmailRequest.builder()
                 .recipient(user.getEmail())
                 .username(user.getUsername())
                 .temporaryPassword(passwordSettings.getInitialPassword())
@@ -169,7 +169,7 @@ public class IdentityFacadeImpl implements IdentityFacade {
             return new AccountNotificationResponse(userId, false, "ACCOUNT_EMAIL_MISSING");
         }
         var delivery = immediateEmailNotifications.sendAdmissionConfirmationEmail(
-                SendAdmissionConfirmationEmailCommand.builder()
+                SendAdmissionConfirmationEmailRequest.builder()
                         .recipient(recipient)
                         .username(account.username())
                         .build());

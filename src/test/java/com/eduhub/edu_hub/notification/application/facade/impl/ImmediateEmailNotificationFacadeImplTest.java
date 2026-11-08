@@ -4,12 +4,12 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-import com.eduhub.edu_hub.notification.application.command.SendAccountEmailCommand;
-import com.eduhub.edu_hub.notification.application.command.SendAdmissionConfirmationEmailCommand;
-import com.eduhub.edu_hub.notification.application.result.RenderedEmail;
+import com.eduhub.edu_hub.notification.api.dto.request.SendAccountEmailRequest;
+import com.eduhub.edu_hub.notification.api.dto.request.SendAdmissionConfirmationEmailRequest;
 import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
 import com.eduhub.edu_hub.notification.infrastructure.mail.SmtpEmailSender;
 import com.eduhub.edu_hub.notification.infrastructure.template.EmailTemplateRenderer;
+import com.eduhub.edu_hub.notification.infrastructure.template.RenderedEmail;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mail.MailSendException;
@@ -38,7 +38,7 @@ class ImmediateEmailNotificationFacadeImplTest {
 
     @Test
     void reportsAccountDeliveryWithoutExposingTransportDetails() {
-        var result = facade.sendAccountEmail(SendAccountEmailCommand.builder()
+        var result = facade.sendAccountEmail(SendAccountEmailRequest.builder()
                 .recipient("student@example.com")
                 .username("CNTT080101")
                 .temporaryPassword("12345")
@@ -52,7 +52,7 @@ class ImmediateEmailNotificationFacadeImplTest {
     @Test
     void returnsFailureInsteadOfInterruptingAccountCreation() {
         doThrow(new MailSendException("SMTP unavailable")).when(mail).sendEmail("student@example.com", accountEmail);
-        var result = facade.sendAccountEmail(SendAccountEmailCommand.builder()
+        var result = facade.sendAccountEmail(SendAccountEmailRequest.builder()
                 .recipient("student@example.com")
                 .temporaryPassword("temporary")
                 .templateType(EmailTemplateType.PASSWORD_RESET)
@@ -63,7 +63,7 @@ class ImmediateEmailNotificationFacadeImplTest {
 
     @Test
     void reEnrollmentUsesConfirmationWithoutInitialPassword() {
-        var result = facade.sendAdmissionConfirmationEmail(SendAdmissionConfirmationEmailCommand.builder()
+        var result = facade.sendAdmissionConfirmationEmail(SendAdmissionConfirmationEmailRequest.builder()
                 .recipient("student@example.com")
                 .username("CNTT080101")
                 .build());
@@ -75,7 +75,7 @@ class ImmediateEmailNotificationFacadeImplTest {
     @Test
     void renderFailureReturnsASeparateErrorWithoutCallingSmtp() {
         when(templates.renderAccountEmail(any())).thenThrow(new IllegalStateException("Template unavailable"));
-        var result = facade.sendAccountEmail(SendAccountEmailCommand.builder()
+        var result = facade.sendAccountEmail(SendAccountEmailRequest.builder()
                 .recipient("student@example.com")
                 .username("CNTT080101")
                 .temporaryPassword("12345")

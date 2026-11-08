@@ -1,20 +1,22 @@
 package com.eduhub.edu_hub.admission.application.service;
 
-import com.eduhub.edu_hub.admission.application.command.AdmissionImportScope;
-import com.eduhub.edu_hub.admission.application.mapper.AdmissionApplicantMapper;
-import com.eduhub.edu_hub.admission.application.result.AdmissionResults.PlanResult;
-import com.eduhub.edu_hub.admission.application.validator.AdmissionApplicantValidator;
+import com.eduhub.edu_hub.admission.api.dto.request.ImportAdmissionApplicantsRequest;
+import com.eduhub.edu_hub.admission.api.dto.response.AdmissionPlanResponse;
+import com.eduhub.edu_hub.admission.application.exception.AdmissionPlanException;
+import com.eduhub.edu_hub.admission.application.mapper.AdmissionApplicantImportMapper;
 import com.eduhub.edu_hub.admission.domain.enums.AdmissionApplicantStatus;
 import com.eduhub.edu_hub.admission.domain.enums.AdmissionPlanStatus;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionApplicant;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionPlan;
 import com.eduhub.edu_hub.admission.domain.model.StudentAdmission;
+import com.eduhub.edu_hub.admission.domain.policy.AdmissionApplicantMergePolicy;
+import com.eduhub.edu_hub.admission.domain.policy.AdmissionApplicantValidationPolicy;
 import com.eduhub.edu_hub.admission.domain.policy.AdmissionIdentityPolicy;
 import com.eduhub.edu_hub.admission.domain.policy.AdmissionPlanPolicy;
 import com.eduhub.edu_hub.admission.domain.repository.AdmissionApplicantRepository;
-import com.eduhub.edu_hub.admission.domain.repository.AdmissionPlanRepository;
 import com.eduhub.edu_hub.admission.domain.repository.StudentAdmissionRepository;
 import com.eduhub.edu_hub.admission.infrastructure.spreadsheet.AdmissionSpreadsheetReader;
+import com.eduhub.edu_hub.admission.infrastructure.spreadsheet.AdmissionSpreadsheetScope;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
@@ -22,6 +24,7 @@ import com.eduhub.edu_hub.people.application.facade.dto.AdmissionStudentInfo;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.text.TextsNormalizer;
+import java.time.LocalDate;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -29,13 +32,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class AdmissionImportService {
-    private final AdmissionPlanRepository planRepository;
+    private final AdmissionPlanLockService planLockService;
     private final AdmissionApplicantRepository applicantRepository;
     private final StudentAdmissionRepository studentAdmissionRepository;
     private final PeopleFacade.Admission peopleAdmissionFacade;
@@ -43,20 +45,20 @@ public class AdmissionImportService {
     private final CurriculumFacade.Majors majorCatalogFacade;
     private final AdmissionSpreadsheetReader spreadsheetReader;
     private final AdmissionIdentityPolicy identityPolicy;
-    private final AdmissionApplicantValidator applicantValidator;
-    private final AdmissionApplicantMerger applicantMerger;
-    private final AdmissionApplicantMapper applicantMapper;
+    private final AdmissionApplicantValidationPolicy applicantValidationPolicy;
+    private final AdmissionApplicantMergePolicy applicantMergePolicy;
+    private final AdmissionApplicantImportMapper applicantMapper;
     private final AdmissionPlanQueryService planQueryService;
 
     @Transactional
-    public PlanResult importApplicants(Long planId, long expectedRevision, MultipartFile file) {
+    public AdmissionPlanResponse importApplicants(Long planId, ImportAdmissionApplicantsRequest request) {
 
         // lấy plan và khóa lại: pessimistic lock và optimistic lock thủ công
-        AdmissionPlan plan = AdmissionPlanLoader.lockPlanAtRevision(planRepository, planId, expectedRevision);
+        AdmissionPlan plan = planLockService.lockPlanAtRevision(planId, request.expectedRevision());
 
         // đang tạo sinh viên thì không cho upload lại
         if (plan.getState() == AdmissionPlanStatus.CONFIRMING) {
-            throw new BaseException(ErrorCode.ADMISSION_INVALID_STATE);
+            throw new AdmissionPlanException(ErrorCode.ADMISSION_INVALID_STATE);
         }
 
         // Ngành/khóa của plan là nguồn chính thức. File chỉ cung cấp thông tin đối chiếu,
@@ -66,14 +68,14 @@ public class AdmissionImportService {
         var cohort = peopleAdmissionFacade.requireCohort(plan.getCohortId());
         List<AdmissionApplicant> importedApplicants = new ArrayList<>(spreadsheetReader
                 .parse(
-                        file,
-                        AdmissionImportScope.builder()
+                        request.file(),
+                        AdmissionSpreadsheetScope.builder()
                                 .majorCode(major.majorCode())
                                 .majorName(major.majorName())
                                 .cohortCode(cohort.cohortCode())
                                 .build())
                 .stream()
-                .map(applicantMapper::fromImportRow)
+                .map(applicantMapper::fromSpreadsheetApplicant)
                 .toList());
 
         // Lấy dòng cũ của plan, kiểm tra có ai nhập học thành công (ENROLLED) chưa
@@ -88,7 +90,7 @@ public class AdmissionImportService {
 
             if (applicant.getState() == AdmissionApplicantStatus.INVALID) continue;
 
-            List<String> validationErrors = applicantValidator.validate(applicant);
+            List<String> validationErrors = applicantValidationPolicy.validateApplicant(applicant, LocalDate.now());
             if (!validationErrors.isEmpty())
                 setApplicantStatus(applicant, AdmissionApplicantStatus.INVALID, String.join("; ", validationErrors));
         }
@@ -114,7 +116,8 @@ public class AdmissionImportService {
                             .map(AdmissionApplicant::getApplicationCode)
                             .distinct()
                             .toList())
-                    .forEach(value -> existingAdmissionsByApplicationCode.put(value.getApplicationCode(), value));
+                    .forEach(existingAdmission -> existingAdmissionsByApplicationCode.put(
+                            existingAdmission.getApplicationCode(), existingAdmission));
 
             //  Lưu trước các StudentAdmission theo CCCD để truy vấn, tránh N+1 query
             // dùng để biết người này đã có trong hệ thống chưa ?
@@ -123,9 +126,9 @@ public class AdmissionImportService {
                             .map(AdmissionApplicant::getCitizenId)
                             .distinct()
                             .toList())
-                    .forEach(value -> existingStudentsByCitizenId
-                            .computeIfAbsent(value.getCitizenId(), key -> new ArrayList<>())
-                            .add(value));
+                    .forEach(existingStudent -> existingStudentsByCitizenId
+                            .computeIfAbsent(existingStudent.getCitizenId(), citizenId -> new ArrayList<>())
+                            .add(existingStudent));
         }
 
         // phân loại validRows thành: mới, đã tồn tại (EXISTING), hoặc xung đột (CONFLICT)
@@ -248,7 +251,7 @@ public class AdmissionImportService {
         // Khi kế hoạch đã có người nhập học thành công, không được xóa sạch dữ liệu cũ mà phải gộp.
         if (hasEnrolledApplicants) {
             importedApplicants =
-                    applicantMerger.mergePreservingEnrolledApplicants(existingApplicants, importedApplicants);
+                    applicantMergePolicy.mergePreservingEnrolledApplicants(existingApplicants, importedApplicants);
         } else {
             // Xóa toàn bộ dòng import cũ của kế hoạch rồi import lại từ đầu
             applicantRepository.deleteByPlan_Id(planId);
@@ -287,7 +290,7 @@ public class AdmissionImportService {
                 importedApplicants.size(),
                 plan.getTotalStudents());
 
-        return planQueryService.buildPlanResult(plan);
+        return planQueryService.buildPlanResponse(plan);
     }
 
     private void setApplicantStatus(

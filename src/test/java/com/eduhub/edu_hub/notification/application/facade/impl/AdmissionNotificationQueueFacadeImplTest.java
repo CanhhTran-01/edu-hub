@@ -4,9 +4,9 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-import com.eduhub.edu_hub.notification.application.command.QueueAdmissionNotificationCommand;
+import com.eduhub.edu_hub.notification.api.dto.request.QueueAdmissionNotificationRequest;
+import com.eduhub.edu_hub.notification.api.dto.response.AdmissionNotificationResponse;
 import com.eduhub.edu_hub.notification.application.event.AdmissionNotificationQueued;
-import com.eduhub.edu_hub.notification.application.facade.dto.AdmissionNotificationInfo;
 import com.eduhub.edu_hub.notification.domain.enums.AdmissionNotificationKind;
 import com.eduhub.edu_hub.notification.domain.enums.NotificationStatus;
 import com.eduhub.edu_hub.notification.domain.model.QueuedAdmissionNotification;
@@ -37,7 +37,7 @@ class AdmissionNotificationQueueFacadeImplTest {
 
     @Test
     void storesOnlySourceIdsAndQueuesInitialAccountDelivery() {
-        assertThat(facade.enqueueAdmissionNotification(QueueAdmissionNotificationCommand.builder()
+        assertThat(facade.enqueueAdmissionNotification(QueueAdmissionNotificationRequest.builder()
                         .admissionId(2L)
                         .studentId(3L)
                         .recipient("student@example.com")
@@ -55,7 +55,7 @@ class AdmissionNotificationQueueFacadeImplTest {
 
     @Test
     void missingEmailIsSkippedWithoutConsumingRetries() {
-        facade.enqueueAdmissionNotification(QueueAdmissionNotificationCommand.builder()
+        facade.enqueueAdmissionNotification(QueueAdmissionNotificationRequest.builder()
                 .admissionId(2L)
                 .studentId(3L)
                 .reEnrollment(true)
@@ -90,7 +90,7 @@ class AdmissionNotificationQueueFacadeImplTest {
         when(notifications.findByAdmissionIdInAndDeletedFalseOrderById(List.of(501L)))
                 .thenReturn(List.of(secondBatch));
         var result = facade.findNotificationsByAdmissionIds(ids);
-        assertThat(result).extracting(AdmissionNotificationInfo::id).containsExactly(5L, 9L);
+        assertThat(result).extracting(AdmissionNotificationResponse::id).containsExactly(5L, 9L);
         assertThat(result.getFirst().failureCount()).isEqualTo(4);
         assertThat(result.getFirst().error()).isEqualTo("EMAIL_SEND_FAILED");
         verify(notifications, times(2)).findByAdmissionIdInAndDeletedFalseOrderById(anyList());
@@ -110,7 +110,7 @@ class AdmissionNotificationQueueFacadeImplTest {
                 .saveAndFlush(any());
 
         assertThatThrownBy(() -> facade.enqueueAdmissionNotification(
-                        new QueueAdmissionNotificationCommand(2L, 3L, "student@example.com", false)))
+                        new QueueAdmissionNotificationRequest(2L, 3L, "student@example.com", false)))
                 .isInstanceOf(IllegalStateException.class);
         verifyNoInteractions(events);
     }

@@ -2,6 +2,7 @@ package com.eduhub.edu_hub.admission.domain.policy;
 
 import static com.eduhub.edu_hub.admission.domain.policy.AdmissionDuplicateNamePolicy.MAX_SAME_NAME_PER_CLASS;
 
+import com.eduhub.edu_hub.admission.application.exception.AdmissionPlanException;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionApplicant;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionPlanClass;
 import com.eduhub.edu_hub.shared.exception.*;
@@ -34,7 +35,7 @@ public class SerpentineClassAllocator {
                                 .sum()
                         != applicants.size()) {
             // Tổng chỗ còn lại của các lớp phải bằng đúng số thí sinh cần phân.
-            throw new BaseException(ErrorCode.ADMISSION_INVALID_CAPACITY);
+            throw new AdmissionPlanException(ErrorCode.ADMISSION_INVALID_CAPACITY);
         }
 
         // Điểm đầu vào giảm dần, bằng điểm thì xếp theo fullName tăng dần

@@ -1,9 +1,9 @@
 package com.eduhub.edu_hub.notification.application.facade.impl;
 
-import com.eduhub.edu_hub.notification.application.command.QueueAdmissionNotificationCommand;
+import com.eduhub.edu_hub.notification.api.dto.request.QueueAdmissionNotificationRequest;
+import com.eduhub.edu_hub.notification.api.dto.response.AdmissionNotificationResponse;
 import com.eduhub.edu_hub.notification.application.event.AdmissionNotificationQueued;
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
-import com.eduhub.edu_hub.notification.application.facade.dto.AdmissionNotificationInfo;
 import com.eduhub.edu_hub.notification.domain.enums.AdmissionNotificationKind;
 import com.eduhub.edu_hub.notification.domain.enums.NotificationStatus;
 import com.eduhub.edu_hub.notification.domain.model.QueuedAdmissionNotification;
@@ -29,50 +29,50 @@ public class AdmissionNotificationQueueFacadeImpl implements NotificationFacade.
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public Long enqueueAdmissionNotification(QueueAdmissionNotificationCommand command) {
+    public Long enqueueAdmissionNotification(QueueAdmissionNotificationRequest request) {
         // Tham gia transaction của bên gọi: không lưu hàng đợi hay gửi mail nếu nhập học rollback.
-        QueuedAdmissionNotification queuedNotification = createQueuedNotification(command);
+        QueuedAdmissionNotification queuedNotification = createQueuedNotification(request);
         notificationRepository.saveAndFlush(queuedNotification);
 
         eventPublisher.publishEvent(new AdmissionNotificationQueued(queuedNotification.getId()));
         return queuedNotification.getId();
     }
 
-    private QueuedAdmissionNotification createQueuedNotification(QueueAdmissionNotificationCommand command) {
+    private QueuedAdmissionNotification createQueuedNotification(QueueAdmissionNotificationRequest request) {
         return QueuedAdmissionNotification.builder()
-                .admissionId(command.admissionId())
-                .studentId(command.studentId())
-                .recipient(command.recipient())
+                .admissionId(request.admissionId())
+                .studentId(request.studentId())
+                .recipient(request.recipient())
                 .nextAttemptAt(LocalDateTime.now(ZoneOffset.UTC))
                 .kind(
-                        command.reEnrollment()
+                        request.reEnrollment()
                                 ? AdmissionNotificationKind.RE_ENROLLMENT
                                 : AdmissionNotificationKind.INITIAL_ACCOUNT)
-                .state(command.recipient() == null ? NotificationStatus.SKIPPED : NotificationStatus.PENDING)
-                .lastError(command.recipient() == null ? "NO_EMAIL" : null)
+                .state(request.recipient() == null ? NotificationStatus.SKIPPED : NotificationStatus.PENDING)
+                .lastError(request.recipient() == null ? "NO_EMAIL" : null)
                 .build();
     }
 
     @Override
-    public List<AdmissionNotificationInfo> findNotificationsByAdmissionIds(List<Long> admissionIds) {
+    public List<AdmissionNotificationResponse> findNotificationsByAdmissionIds(List<Long> admissionIds) {
 
         var distinctAdmissionIds = admissionIds.stream().distinct().toList();
-        List<AdmissionNotificationInfo> notificationInfos = new ArrayList<>();
+        List<AdmissionNotificationResponse> notificationResponses = new ArrayList<>();
 
         for (int offset = 0; offset < distinctAdmissionIds.size(); offset += QUERY_BATCH_SIZE) {
             notificationRepository
                     .findByAdmissionIdInAndDeletedFalseOrderById(distinctAdmissionIds.subList(
                             offset, Math.min(offset + QUERY_BATCH_SIZE, distinctAdmissionIds.size())))
                     .stream()
-                    .map(this::toAdmissionNotificationInfo)
-                    .forEach(notificationInfos::add);
+                    .map(this::toAdmissionNotificationResponse)
+                    .forEach(notificationResponses::add);
         }
-        notificationInfos.sort(Comparator.comparing(AdmissionNotificationInfo::id));
-        return List.copyOf(notificationInfos);
+        notificationResponses.sort(Comparator.comparing(AdmissionNotificationResponse::id));
+        return List.copyOf(notificationResponses);
     }
 
-    private AdmissionNotificationInfo toAdmissionNotificationInfo(QueuedAdmissionNotification notification) {
-        return AdmissionNotificationInfo.builder()
+    private AdmissionNotificationResponse toAdmissionNotificationResponse(QueuedAdmissionNotification notification) {
+        return AdmissionNotificationResponse.builder()
                 .id(notification.getId())
                 .admissionId(notification.getAdmissionId())
                 .state(notification.getState().name())

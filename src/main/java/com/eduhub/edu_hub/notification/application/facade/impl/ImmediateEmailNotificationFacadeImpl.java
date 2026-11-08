@@ -1,12 +1,12 @@
 package com.eduhub.edu_hub.notification.application.facade.impl;
 
-import com.eduhub.edu_hub.notification.application.command.SendAccountEmailCommand;
-import com.eduhub.edu_hub.notification.application.command.SendAdmissionConfirmationEmailCommand;
+import com.eduhub.edu_hub.notification.api.dto.request.SendAccountEmailRequest;
+import com.eduhub.edu_hub.notification.api.dto.request.SendAdmissionConfirmationEmailRequest;
+import com.eduhub.edu_hub.notification.api.dto.response.EmailDeliveryResponse;
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
-import com.eduhub.edu_hub.notification.application.result.EmailDeliveryResult;
-import com.eduhub.edu_hub.notification.application.result.RenderedEmail;
 import com.eduhub.edu_hub.notification.infrastructure.mail.SmtpEmailSender;
 import com.eduhub.edu_hub.notification.infrastructure.template.EmailTemplateRenderer;
+import com.eduhub.edu_hub.notification.infrastructure.template.RenderedEmail;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,17 +28,17 @@ public class ImmediateEmailNotificationFacadeImpl implements NotificationFacade.
     private final EmailTemplateRenderer templateRenderer;
 
     @Override
-    public EmailDeliveryResult sendAccountEmail(SendAccountEmailCommand command) {
-        return renderAndSendEmail(command.recipient(), () -> templateRenderer.renderAccountEmail(command));
+    public EmailDeliveryResponse sendAccountEmail(SendAccountEmailRequest request) {
+        return renderAndSendEmail(request.recipient(), () -> templateRenderer.renderAccountEmail(request));
     }
 
     @Override
-    public EmailDeliveryResult sendAdmissionConfirmationEmail(SendAdmissionConfirmationEmailCommand command) {
+    public EmailDeliveryResponse sendAdmissionConfirmationEmail(SendAdmissionConfirmationEmailRequest request) {
         return renderAndSendEmail(
-                command.recipient(), () -> templateRenderer.renderAdmissionConfirmationEmail(command));
+                request.recipient(), () -> templateRenderer.renderAdmissionConfirmationEmail(request));
     }
 
-    private EmailDeliveryResult renderAndSendEmail(String recipientEmail, Supplier<RenderedEmail> emailRenderer) {
+    private EmailDeliveryResponse renderAndSendEmail(String recipientEmail, Supplier<RenderedEmail> emailRenderer) {
 
         // Supplier trì hoãn việc render: lambda chỉ chạy khi gọi get() bên dưới,
         // nên lỗi template sẽ bị bắt bởi try/catch này thay vì nổ ở phía gọi.
@@ -54,7 +54,7 @@ public class ImmediateEmailNotificationFacadeImpl implements NotificationFacade.
             log.warn(
                     "Notification email rendering failed: failureType={}",
                     exception.getClass().getSimpleName());
-            return EmailDeliveryResult.builder()
+            return EmailDeliveryResponse.builder()
                     .sent(false)
                     .error("EMAIL_TEMPLATE_RENDER_FAILED")
                     .build();
@@ -64,16 +64,16 @@ public class ImmediateEmailNotificationFacadeImpl implements NotificationFacade.
         return sendRenderedEmail(recipientEmail, renderedEmail);
     }
 
-    private EmailDeliveryResult sendRenderedEmail(String recipientEmail, RenderedEmail renderedEmail) {
+    private EmailDeliveryResponse sendRenderedEmail(String recipientEmail, RenderedEmail renderedEmail) {
         try {
             smtpEmailSender.sendEmail(recipientEmail, renderedEmail);
-            return EmailDeliveryResult.builder().sent(true).build();
+            return EmailDeliveryResponse.builder().sent(true).build();
         } catch (MailException exception) {
             // Chỉ log loại lỗi; không ghi recipient, nội dung mail hoặc mật khẩu.
             log.warn(
                     "Notification email delivery failed: failureType={}",
                     exception.getClass().getSimpleName());
-            return EmailDeliveryResult.builder()
+            return EmailDeliveryResponse.builder()
                     .sent(false)
                     .error("EMAIL_SEND_FAILED")
                     .build();

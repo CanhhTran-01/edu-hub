@@ -1,5 +1,6 @@
 package com.eduhub.edu_hub.admission.domain.policy;
 
+import com.eduhub.edu_hub.admission.application.exception.AdmissionPlanException;
 import com.eduhub.edu_hub.admission.domain.enums.AdmissionPlanStatus;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionPlan;
 import com.eduhub.edu_hub.shared.exception.*;
@@ -13,7 +14,7 @@ public final class AdmissionPlanPolicy {
         if (plan.getState() == AdmissionPlanStatus.CONFIRMED
                 || plan.getState() == AdmissionPlanStatus.CONFIRMING
                 || plan.getState() == AdmissionPlanStatus.PARTIALLY_CONFIRMED)
-            throw new BaseException(ErrorCode.ADMISSION_INVALID_STATE);
+            throw new AdmissionPlanException(ErrorCode.ADMISSION_INVALID_STATE);
     }
 
     public static void incrementRevision(AdmissionPlan plan) {

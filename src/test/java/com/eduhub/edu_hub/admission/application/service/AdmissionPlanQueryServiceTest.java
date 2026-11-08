@@ -35,9 +35,9 @@ class AdmissionPlanQueryServiceTest {
             new AdmissionCapacityPolicy(),
             rooms,
             new AdmissionScoreBalancePolicy(),
-            new com.eduhub.edu_hub.admission.application.mapper.AdmissionPlanAssembler(),
+            new com.eduhub.edu_hub.admission.api.mapper.AdmissionPlanResponseMapper(),
             org.mapstruct.factory.Mappers.getMapper(
-                    com.eduhub.edu_hub.admission.application.mapper.AdmissionScenarioMapper.class));
+                    com.eduhub.edu_hub.admission.api.mapper.AdmissionScenarioResponseMapper.class));
 
     @ParameterizedTest
     @CsvSource({"1,0", "2,0", "3,0", "4,1", "5,1"})
@@ -46,7 +46,7 @@ class AdmissionPlanQueryServiceTest {
         for (int i = 0; i < count; i++) {
             names.add(i % 2 == 0 ? "Nguyễn Văn An" : "  NGUYỄN   VĂN AN ");
         }
-        var response = view.buildPlanResult(prepare(names));
+        var response = view.buildPlanResponse(prepare(names));
         var warnings = response.warnings().stream()
                 .filter(value -> value.contains("trùng họ tên"))
                 .toList();
@@ -66,7 +66,7 @@ class AdmissionPlanQueryServiceTest {
                 "Trần Văn Bình",
                 "Trần Văn Bình",
                 "Trần Văn Bình"));
-        var warnings = view.buildPlanResult(plan).warnings().stream()
+        var warnings = view.buildPlanResponse(plan).warnings().stream()
                 .filter(value -> value.contains("trùng họ tên"))
                 .toList();
         assertThat(warnings).singleElement().satisfies(value -> assertThat(value)
@@ -82,7 +82,7 @@ class AdmissionPlanQueryServiceTest {
                         new AdmissionClassPrefix(2L, "CNTT", "Công nghệ thông tin", "CT"),
                         new AdmissionClassPrefix(4L, "DIENTU", "Cơ điện tử", "CT"),
                         new AdmissionClassPrefix(5L, "ATTT", "An toàn thông tin", "AT")));
-        assertThat(view.buildPlanResult(plan).warnings().stream()
+        assertThat(view.buildPlanResponse(plan).warnings().stream()
                         .filter(value -> value.startsWith("Tiền tố lớp"))
                         .toList())
                 .singleElement()

@@ -1,7 +1,7 @@
 package com.eduhub.edu_hub.admission.domain.policy;
 
+import com.eduhub.edu_hub.admission.application.exception.AdmissionPlanException;
 import com.eduhub.edu_hub.admission.domain.model.ClassDivisionScenario;
-import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.text.TextsNormalizer;
 import java.util.ArrayList;
@@ -17,7 +17,7 @@ public class AdmissionCapacityPolicy {
                 || reserveCapacity < 0
                 || maxCapacity > 99
                 || reserveCapacity > 99 - maxCapacity) {
-            throw new BaseException(ErrorCode.ADMISSION_INVALID_CAPACITY);
+            throw new AdmissionPlanException(ErrorCode.ADMISSION_INVALID_CAPACITY);
         }
     }
 
@@ -25,7 +25,7 @@ public class AdmissionCapacityPolicy {
             int totalStudents, int minCapacity, int maxCapacity, int reserveCapacity, long suitableRoomCount) {
 
         validateCapacityLimits(minCapacity, maxCapacity, reserveCapacity);
-        if (totalStudents < 0) throw new BaseException(ErrorCode.VALIDATION_ERROR);
+        if (totalStudents < 0) throw new AdmissionPlanException(ErrorCode.VALIDATION_ERROR);
 
         if (totalStudents == 0) return List.of();
         if (divideRoundUp(totalStudents, maxCapacity + reserveCapacity) > 99) return List.of();
@@ -95,12 +95,12 @@ public class AdmissionCapacityPolicy {
             boolean recommended) {
 
         validateCapacityLimits(minCapacity, maxCapacity, reserveCapacity);
-        if (totalStudents < 0 || classCount < 1) throw new BaseException(ErrorCode.VALIDATION_ERROR);
+        if (totalStudents < 0 || classCount < 1) throw new AdmissionPlanException(ErrorCode.VALIDATION_ERROR);
 
         // phân phối đều total thành count phần bằng nhau nhất, danh sách theo thứ tự giảm dần
         List<Integer> targetClassSizes = distributeEvenly(totalStudents, classCount);
         if (targetClassSizes.getFirst() > maxCapacity + reserveCapacity)
-            throw new BaseException(ErrorCode.CLASS_CAPACITY_EXCEEDED);
+            throw new AdmissionPlanException(ErrorCode.CLASS_CAPACITY_EXCEEDED);
 
         List<String> warnings = new ArrayList<>();
         boolean hasUnderfilledClass = targetClassSizes.getLast() < minCapacity;
@@ -141,7 +141,7 @@ public class AdmissionCapacityPolicy {
         if ((scenario.reserveUsed() > 0 && !acceptReserve)
                 || (scenario.belowMinimum()
                         && (!acceptBelowMinimum || TextsNormalizer.normalizeOptionalText(reason) == null))) {
-            throw new BaseException(ErrorCode.ADMISSION_WARNING_CONFIRMATION_REQUIRED);
+            throw new AdmissionPlanException(ErrorCode.ADMISSION_WARNING_CONFIRMATION_REQUIRED);
         }
     }
 

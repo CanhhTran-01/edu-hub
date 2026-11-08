@@ -1,7 +1,8 @@
 package com.eduhub.edu_hub.admission.application.service;
 
-import com.eduhub.edu_hub.admission.application.command.AdmissionCommands.ConfirmEnrollmentCommand;
-import com.eduhub.edu_hub.admission.application.result.AdmissionResults.ConfirmationResult;
+import com.eduhub.edu_hub.admission.api.dto.request.ConfirmAdmissionEnrollmentRequest;
+import com.eduhub.edu_hub.admission.api.dto.response.AdmissionConfirmationResponse;
+import com.eduhub.edu_hub.admission.application.exception.AdmissionEnrollmentException;
 import com.eduhub.edu_hub.admission.domain.enums.AdmissionApplicantStatus;
 import com.eduhub.edu_hub.admission.domain.enums.AdmissionPlanStatus;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionApplicant;
@@ -34,11 +35,11 @@ public class AdmissionConfirmationService {
     private final PeopleFacade.Admission peopleAdmissionFacade;
     private final AdmissionPlanQueryService planQueryService;
     private final AdmissionApplicantEnrollmentService enrollmentService;
-    private final AdmissionConfirmationLease confirmationLease;
+    private final AdmissionConfirmationLeaseService confirmationLease;
     private final TransactionTemplate transactionTemplate;
 
-    public ConfirmationResult confirmEnrollment(Long planId, ConfirmEnrollmentCommand command) {
-        ConfirmationBatch confirmationBatch = executeInTransaction(() -> prepareConfirmationBatch(planId, command));
+    public AdmissionConfirmationResponse confirmEnrollment(Long planId, ConfirmAdmissionEnrollmentRequest request) {
+        ConfirmationBatch confirmationBatch = executeInTransaction(() -> prepareConfirmationBatch(planId, request));
         // Mỗi hồ sơ một transaction: một người lỗi không rollback những người đã nhập học thành công.
         for (Long applicantId : confirmationBatch.applicantIds()) {
             try {
@@ -71,26 +72,27 @@ public class AdmissionConfirmationService {
             }
         }
         return executeInTransaction(
-                () -> completeConfirmationBatch(planId, confirmationBatch.confirmationToken(), command));
+                () -> completeConfirmationBatch(planId, confirmationBatch.confirmationToken(), request));
     }
 
-    private ConfirmationBatch prepareConfirmationBatch(Long planId, ConfirmEnrollmentCommand command) {
+    private ConfirmationBatch prepareConfirmationBatch(Long planId, ConfirmAdmissionEnrollmentRequest request) {
         var plan = planRepository
                 .findForUpdate(planId)
-                .orElseThrow(() -> new BaseException(ErrorCode.ADMISSION_PLAN_NOT_FOUND));
+                .orElseThrow(() -> new AdmissionEnrollmentException(ErrorCode.ADMISSION_PLAN_NOT_FOUND));
         if (plan.getState() == AdmissionPlanStatus.CONFIRMED) return new ConfirmationBatch(null, List.of());
-        if (plan.getRevision() != command.expectedRevision()) throw new BaseException(ErrorCode.ADMISSION_STALE_PLAN);
+        if (plan.getRevision() != request.expectedRevision())
+            throw new AdmissionEnrollmentException(ErrorCode.ADMISSION_STALE_PLAN);
         boolean confirmationLeaseExpired = plan.getState() == AdmissionPlanStatus.CONFIRMING
                 && plan.getProcessingUntil() != null
                 && !plan.getProcessingUntil().isAfter(LocalDateTime.now(ZoneOffset.UTC));
         if (plan.getState() != AdmissionPlanStatus.PREVIEWED
                 && plan.getState() != AdmissionPlanStatus.PARTIALLY_CONFIRMED
-                && !confirmationLeaseExpired) throw new BaseException(ErrorCode.ADMISSION_INVALID_STATE);
+                && !confirmationLeaseExpired) throw new AdmissionEnrollmentException(ErrorCode.ADMISSION_INVALID_STATE);
         var planApplicants = applicantRepository.findByPlan_IdOrderByRowNumber(planId);
         var plannedClasses = planClassRepository.findByPlan_IdOrderByPosition(planId);
         if (plannedClasses.isEmpty() || planApplicants.stream().noneMatch(AdmissionApplicant::isIncludedInPlan))
-            throw new BaseException(ErrorCode.ADMISSION_INVALID_STATE);
-        validateProjectedClassSizes(plan, planApplicants, plannedClasses, command);
+            throw new AdmissionEnrollmentException(ErrorCode.ADMISSION_INVALID_STATE);
+        validateProjectedClassSizes(plan, planApplicants, plannedClasses, request);
         Map<Long, Integer> classPositionsById = new HashMap<>();
         plannedClasses.forEach(plannedClass ->
                 classPositionsById.put(plannedClass.getAdministrativeClassId(), plannedClass.getPosition()));
@@ -105,7 +107,7 @@ public class AdmissionConfirmationService {
         String confirmationToken = UUID.randomUUID().toString();
         plan.setConfirmationToken(confirmationToken);
         plan.setState(AdmissionPlanStatus.CONFIRMING);
-        plan.setExceptionReason(TextsNormalizer.normalizeOptionalText(command.reason()));
+        plan.setExceptionReason(TextsNormalizer.normalizeOptionalText(request.reason()));
         AdmissionPlanPolicy.incrementRevision(plan);
         confirmationLease.extendConfirmationLease(plan);
         return new ConfirmationBatch(confirmationToken, pendingApplicantIds);
@@ -115,7 +117,7 @@ public class AdmissionConfirmationService {
             AdmissionPlan plan,
             List<AdmissionApplicant> planApplicants,
             List<AdmissionPlanClass> plannedClasses,
-            ConfirmEnrollmentCommand command) {
+            ConfirmAdmissionEnrollmentRequest request) {
         var allowedClassIds = plannedClasses.stream()
                 .map(AdmissionPlanClass::getAdministrativeClassId)
                 .collect(java.util.stream.Collectors.toSet());
@@ -123,7 +125,7 @@ public class AdmissionConfirmationService {
                 .filter(AdmissionApplicant::isIncludedInPlan)
                 .anyMatch(applicant -> applicant.getAdministrativeClassId() == null
                         || !allowedClassIds.contains(applicant.getAdministrativeClassId())))
-            throw new BaseException(ErrorCode.ADMISSION_INVALID_STATE);
+            throw new AdmissionEnrollmentException(ErrorCode.ADMISSION_INVALID_STATE);
         for (var plannedClass : plannedClasses.stream()
                 .sorted(Comparator.comparing(AdmissionPlanClass::getAdministrativeClassId))
                 .toList()) {
@@ -133,7 +135,7 @@ public class AdmissionConfirmationService {
                     || administrativeClass.getReserveCapacity() != plan.getReserveCapacity()
                     || !administrativeClass.getMajorId().equals(plan.getMajorId())
                     || !administrativeClass.getCohortId().equals(plan.getCohortId()))
-                throw new BaseException(ErrorCode.ADMISSION_DATA_CHANGED);
+                throw new AdmissionEnrollmentException(ErrorCode.ADMISSION_DATA_CHANGED);
             long projectedClassSize = planApplicants.stream()
                     .filter(AdmissionApplicant::isIncludedInPlan)
                     .filter(applicant -> administrativeClass.getId().equals(applicant.getAdministrativeClassId()))
@@ -143,25 +145,25 @@ public class AdmissionConfirmationService {
                     .filter(applicant -> administrativeClass.getId().equals(applicant.getAdministrativeClassId()))
                     .count();
             if (administrativeClass.getCurrentSize() != enrolledCount)
-                throw new BaseException(ErrorCode.ADMISSION_DATA_CHANGED);
+                throw new AdmissionEnrollmentException(ErrorCode.ADMISSION_DATA_CHANGED);
             if (projectedClassSize > plan.getMaxCapacity() + plan.getReserveCapacity())
-                throw new BaseException(ErrorCode.CLASS_CAPACITY_EXCEEDED);
-            if ((projectedClassSize > plan.getMaxCapacity() && !command.acceptReserve())
+                throw new AdmissionEnrollmentException(ErrorCode.CLASS_CAPACITY_EXCEEDED);
+            if ((projectedClassSize > plan.getMaxCapacity() && !request.acceptReserve())
                     || (projectedClassSize < plan.getMinCapacity()
-                            && (!command.acceptBelowMinimum()
-                                    || TextsNormalizer.normalizeOptionalText(command.reason()) == null)))
-                throw new BaseException(ErrorCode.ADMISSION_WARNING_CONFIRMATION_REQUIRED);
+                            && (!request.acceptBelowMinimum()
+                                    || TextsNormalizer.normalizeOptionalText(request.reason()) == null)))
+                throw new AdmissionEnrollmentException(ErrorCode.ADMISSION_WARNING_CONFIRMATION_REQUIRED);
         }
     }
 
-    private ConfirmationResult completeConfirmationBatch(
-            Long planId, String confirmationToken, ConfirmEnrollmentCommand command) {
+    private AdmissionConfirmationResponse completeConfirmationBatch(
+            Long planId, String confirmationToken, ConfirmAdmissionEnrollmentRequest request) {
         var plan = planRepository.findForUpdate(planId).orElseThrow();
         var planApplicants = applicantRepository.findByPlan_IdOrderByRowNumber(planId);
         if (confirmationToken != null) {
             confirmationLease.requireActiveConfirmation(plan, confirmationToken);
             boolean hasPendingApplicants = planApplicants.stream().anyMatch(AdmissionApplicant::isPendingEnrollment);
-            boolean hasUnderfilledClasses = !command.acceptBelowMinimum()
+            boolean hasUnderfilledClasses = !request.acceptBelowMinimum()
                     && planClassRepository.findByPlan_IdOrderByPosition(planId).stream()
                             .anyMatch(plannedClass -> planApplicants.stream()
                                             .filter(AdmissionApplicant::isIncludedInPlan)
@@ -182,7 +184,7 @@ public class AdmissionConfirmationService {
             AdmissionPlanPolicy.incrementRevision(plan);
             log.info("Finished admission confirmation: planId={}, state={}", planId, plan.getState());
         }
-        return ConfirmationResult.builder()
+        return AdmissionConfirmationResponse.builder()
                 .planId(planId)
                 .revision(plan.getRevision())
                 .state(plan.getState().name())
@@ -195,7 +197,7 @@ public class AdmissionConfirmationService {
                 .skipped((int) planApplicants.stream()
                         .filter(applicant -> applicant.getState() == AdmissionApplicantStatus.EXISTING)
                         .count())
-                .applicants(planQueryService.buildApplicantResults(planApplicants))
+                .applicants(planQueryService.buildApplicantResponses(planApplicants))
                 .build();
     }
 

@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-import com.eduhub.edu_hub.notification.application.result.RenderedEmail;
+import com.eduhub.edu_hub.notification.infrastructure.template.RenderedEmail;
 import jakarta.mail.Multipart;
 import jakarta.mail.Part;
 import jakarta.mail.Session;

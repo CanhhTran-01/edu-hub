@@ -8,7 +8,7 @@ import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.model.User;
 import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
-import com.eduhub.edu_hub.notification.application.command.SendAccountEmailCommand;
+import com.eduhub.edu_hub.notification.api.dto.request.SendAccountEmailRequest;
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
 import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
 import com.eduhub.edu_hub.shared.common.PageResponse;
@@ -93,7 +93,7 @@ public class AdminUserService {
         // NOTE: Chỉ revoke refresh token; access token đã phát vẫn được Resource Server chấp nhận đến exp.
         // TODO(ACCESS_TOKEN_REVOCATION): Đồng bộ với đổi mật khẩu/logout khi triển khai thu hồi jti bằng Redis;
         // hiện không kiểm tra phiên DB trên mọi API nên chưa bảo đảm kết thúc ngay toàn bộ truy cập cũ.
-        var delivery = immediateEmailNotifications.sendAccountEmail(SendAccountEmailCommand.builder()
+        var delivery = immediateEmailNotifications.sendAccountEmail(SendAccountEmailRequest.builder()
                 .recipient(target.getEmail())
                 .username(target.getUsername())
                 .temporaryPassword(temporaryPassword)

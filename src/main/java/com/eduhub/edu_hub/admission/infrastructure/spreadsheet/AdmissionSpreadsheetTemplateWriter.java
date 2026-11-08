@@ -3,7 +3,7 @@ package com.eduhub.edu_hub.admission.infrastructure.spreadsheet;
 import static com.eduhub.edu_hub.admission.infrastructure.spreadsheet.AdmissionSpreadsheetReader.HEADERS;
 import static com.eduhub.edu_hub.admission.infrastructure.spreadsheet.AdmissionSpreadsheetReader.HEADER_ROW_INDEX;
 
-import com.eduhub.edu_hub.admission.application.command.AdmissionImportScope;
+import com.eduhub.edu_hub.admission.application.exception.AdmissionSpreadsheetException;
 import com.eduhub.edu_hub.shared.exception.*;
 import java.io.*;
 import org.apache.poi.ss.usermodel.*;
@@ -12,18 +12,17 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class AdmissionSpreadsheetTemplateWriter {
-    public byte[] writeTemplate(AdmissionImportScope importScope) {
+
+    public byte[] writeTemplate(AdmissionSpreadsheetScope spreadsheetScope) {
         try (var workbook = new XSSFWorkbook();
                 var outputStream = new ByteArrayOutputStream()) {
 
-            Sheet sheet = workbook.createSheet("Sinh vien trung tuyen");
+            Sheet sheet = workbook.createSheet("Sinh viên trúng tuyển");
 
-            writeMetadataRow(sheet, 0, "ma_nganh", importScope.majorCode());
-            writeMetadataRow(sheet, 1, "ten_nganh", importScope.majorName());
-            writeMetadataRow(sheet, 2, "ma_khoa", importScope.cohortCode());
-            sheet.createRow(3)
-                    .createCell(0)
-                    .setCellValue("Giữ nguyên ma_nganh/ma_khoa; nhập danh sách sinh viên từ dòng 6.");
+            sheet.createRow(0).createCell(0).setCellValue("Sinh viên trúng tuyển");
+            writeMetadataRow(sheet, 1, "Tên ngành", spreadsheetScope.majorName());
+            writeMetadataRow(sheet, 2, "Mã ngành", spreadsheetScope.majorCode());
+            sheet.createRow(3);
 
             Row headerRow = sheet.createRow(HEADER_ROW_INDEX);
             for (int columnIndex = 0; columnIndex < HEADERS.size(); columnIndex++) {
@@ -48,7 +47,7 @@ public class AdmissionSpreadsheetTemplateWriter {
             return outputStream.toByteArray();
 
         } catch (IOException exception) {
-            throw new BaseException(ErrorCode.UNEXPECTED_ERROR);
+            throw new AdmissionSpreadsheetException(ErrorCode.UNEXPECTED_ERROR, exception);
         }
     }
 

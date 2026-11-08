@@ -2,11 +2,12 @@ package com.eduhub.edu_hub.admission.application.service;
 
 import static com.eduhub.edu_hub.admission.domain.policy.AdmissionDuplicateNamePolicy.MAX_SAME_NAME_PER_CLASS;
 
-import com.eduhub.edu_hub.admission.application.mapper.AdmissionPlanAssembler;
-import com.eduhub.edu_hub.admission.application.mapper.AdmissionScenarioMapper;
-import com.eduhub.edu_hub.admission.application.result.AdmissionResults.ApplicantResult;
-import com.eduhub.edu_hub.admission.application.result.AdmissionResults.ClassResult;
-import com.eduhub.edu_hub.admission.application.result.AdmissionResults.PlanResult;
+import com.eduhub.edu_hub.admission.api.dto.response.AdmissionApplicantResponse;
+import com.eduhub.edu_hub.admission.api.dto.response.AdmissionClassPreviewResponse;
+import com.eduhub.edu_hub.admission.api.dto.response.AdmissionPlanResponse;
+import com.eduhub.edu_hub.admission.api.mapper.AdmissionPlanResponseMapper;
+import com.eduhub.edu_hub.admission.api.mapper.AdmissionScenarioResponseMapper;
+import com.eduhub.edu_hub.admission.application.exception.AdmissionPlanException;
 import com.eduhub.edu_hub.admission.domain.enums.AdmissionPlanStatus;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionApplicant;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionPlan;
@@ -38,10 +39,10 @@ public class AdmissionPlanQueryService {
     private final AdmissionCapacityPolicy capacityPolicy;
     private final SchedulingFacade.RoomCapacity roomCapacityFacade;
     private final AdmissionScoreBalancePolicy scoreBalancePolicy;
-    private final AdmissionPlanAssembler planAssembler;
-    private final AdmissionScenarioMapper scenarioMapper;
+    private final AdmissionPlanResponseMapper planResponseMapper;
+    private final AdmissionScenarioResponseMapper scenarioResponseMapper;
 
-    public PlanResult buildPlanResult(AdmissionPlan plan) {
+    public AdmissionPlanResponse buildPlanResponse(AdmissionPlan plan) {
         var planApplicants = applicantRepository.findByPlan_IdOrderByRowNumber(plan.getId());
         var plannedClasses = planClassRepository.findByPlan_IdOrderByPosition(plan.getId());
         var classesById = peopleAdmissionFacade
@@ -51,14 +52,14 @@ public class AdmissionPlanQueryService {
                 .stream()
                 .collect(Collectors.toMap(AdmissionClassInfo::getId, Function.identity()));
         var studentsById = findStudentsById(planApplicants);
-        List<ClassResult> classResults = new ArrayList<>();
+        List<AdmissionClassPreviewResponse> classResponses = new ArrayList<>();
         List<BigDecimal> classAverageScores = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         var classPrefixes = peopleAdmissionFacade.findClassPrefixes();
         var majorClassPrefix = classPrefixes.stream()
                 .filter(classPrefix -> classPrefix.majorId().equals(plan.getMajorId()))
                 .findFirst()
-                .orElseThrow(() -> new BaseException(ErrorCode.INVALID_STUDENT_CODE_MAJOR));
+                .orElseThrow(() -> new AdmissionPlanException(ErrorCode.INVALID_STUDENT_CODE_MAJOR));
         var majorsWithSamePrefix = classPrefixes.stream()
                 .filter(classPrefix -> !classPrefix.majorId().equals(plan.getMajorId())
                         && classPrefix.prefix().equals(majorClassPrefix.prefix()))
@@ -72,7 +73,7 @@ public class AdmissionPlanQueryService {
         }
         for (var plannedClass : plannedClasses) {
             var administrativeClass = classesById.get(plannedClass.getAdministrativeClassId());
-            if (administrativeClass == null) throw new BaseException(ErrorCode.ADMISSION_CLASS_UNAVAILABLE);
+            if (administrativeClass == null) throw new AdmissionPlanException(ErrorCode.ADMISSION_CLASS_UNAVAILABLE);
             var assignedApplicants = planApplicants.stream()
                     .filter(AdmissionApplicant::isIncludedInPlan)
                     .filter(applicant -> administrativeClass.getId().equals(applicant.getAdministrativeClassId()))
@@ -99,7 +100,7 @@ public class AdmissionPlanQueryService {
                 warnings.add("Lớp " + administrativeClass.getClassName() + " dưới tối thiểu");
             if (projectedClassSize > plan.getMaxCapacity())
                 warnings.add("Lớp " + administrativeClass.getClassName() + " dùng dự phòng");
-            classResults.add(ClassResult.builder()
+            classResponses.add(AdmissionClassPreviewResponse.builder()
                     .id(administrativeClass.getId())
                     .className(administrativeClass.getClassName())
                     .targetSize(plannedClass.getTargetSize())
@@ -129,23 +130,25 @@ public class AdmissionPlanQueryService {
             warnings.add("Không đủ phạm vi 99 lớp để cấp định danh cho số sinh viên này");
         if (plan.getSelectedClassCount() != null && suitableRoomCount < plan.getSelectedClassCount())
             warnings.add("Số phòng đủ sức chứa M + R ít hơn số lớp đã chọn");
-        return planAssembler.toPlanResult(
+        return planResponseMapper.toPlanResponse(
                 plan,
-                classResults,
+                classResponses,
                 planApplicants.stream()
-                        .map(applicant ->
-                                planAssembler.toApplicantResult(applicant, studentsById.get(applicant.getStudentId())))
+                        .map(applicant -> planResponseMapper.toApplicantResponse(
+                                applicant, studentsById.get(applicant.getStudentId())))
                         .toList(),
-                scenarios.stream().map(scenarioMapper::toScenarioResult).toList(),
+                scenarios.stream()
+                        .map(scenarioResponseMapper::toScenarioResponse)
+                        .toList(),
                 scoreBalancePolicy.calculateAverageScoreGap(classAverageScores),
                 warnings);
     }
 
-    public List<ApplicantResult> buildApplicantResults(List<AdmissionApplicant> planApplicants) {
+    public List<AdmissionApplicantResponse> buildApplicantResponses(List<AdmissionApplicant> planApplicants) {
         var studentsById = findStudentsById(planApplicants);
         return planApplicants.stream()
                 .map(applicant ->
-                        planAssembler.toApplicantResult(applicant, studentsById.get(applicant.getStudentId())))
+                        planResponseMapper.toApplicantResponse(applicant, studentsById.get(applicant.getStudentId())))
                 .toList();
     }
 
