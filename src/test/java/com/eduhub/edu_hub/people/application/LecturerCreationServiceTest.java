@@ -90,7 +90,6 @@ class LecturerCreationServiceTest {
         verify(identity).createLecturerAccountWithoutNotification(command.capture());
         assertThat(command.getValue().username()).isEqualTo("GV000001");
         assertThat(command.getValue().email()).isEqualTo("a@example.test");
-        assertThat(command.getValue().initialPassword()).isEqualTo("12345");
         verify(lecturers).save(savedLecturer);
     }
 
@@ -103,7 +102,7 @@ class LecturerCreationServiceTest {
         var order = inOrder(lecturers, identity, transactionManager, queries);
         order.verify(lecturers).saveAndFlush(any(Lecturer.class));
         order.verify(transactionManager).commit(any());
-        order.verify(identity).sendLecturerAccountNotification(2L, "12345");
+        order.verify(identity).sendLecturerAccountNotification(2L);
         order.verify(lecturers).save(savedLecturer);
         order.verify(transactionManager).commit(any());
         order.verify(queries).findById(3L);
@@ -120,7 +119,7 @@ class LecturerCreationServiceTest {
 
         assertThatThrownBy(() -> service.create(request)).isInstanceOf(TransactionSystemException.class);
 
-        verify(identity, never()).sendLecturerAccountNotification(any(), anyString());
+        verify(identity, never()).sendLecturerAccountNotification(any());
         verifyNoInteractions(queries);
     }
 
@@ -134,7 +133,7 @@ class LecturerCreationServiceTest {
         assertThatThrownBy(() -> service.create(request)).isInstanceOf(DataIntegrityViolationException.class);
 
         verify(transactionManager).rollback(any());
-        verify(identity, never()).sendLecturerAccountNotification(any(), anyString());
+        verify(identity, never()).sendLecturerAccountNotification(any());
         verifyNoInteractions(queries);
     }
 
@@ -149,7 +148,7 @@ class LecturerCreationServiceTest {
 
         assertThat(response.warnings()).containsExactly("Trùng họ tên và ngày sinh; cần kiểm tra thủ công");
         verify(lecturers).saveAndFlush(any(Lecturer.class));
-        verify(identity).sendLecturerAccountNotification(2L, "12345");
+        verify(identity).sendLecturerAccountNotification(2L);
     }
 
     @Test
@@ -224,8 +223,7 @@ class LecturerCreationServiceTest {
     void resendUsesExistingAccountWithoutGeneratingCode() {
         var lecturer = existingLecturer();
         when(lecturers.findByIdAndDeletedFalse(3L)).thenReturn(Optional.of(lecturer));
-        when(identity.sendLecturerAccountNotification(2L, "12345"))
-                .thenReturn(new AccountNotificationResponse(2L, true, null));
+        when(identity.sendLecturerAccountNotification(2L)).thenReturn(new AccountNotificationResponse(2L, true, null));
 
         var response = service.resend(3L);
 
@@ -246,7 +244,7 @@ class LecturerCreationServiceTest {
                 .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
                         .isEqualTo(ErrorCode.LECTURER_NOT_FOUND));
 
-        verify(identity, never()).sendLecturerAccountNotification(any(), anyString());
+        verify(identity, never()).sendLecturerAccountNotification(any());
         verifyNoInteractions(transactionManager, codes);
     }
 
@@ -260,7 +258,7 @@ class LecturerCreationServiceTest {
                 .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
                         .isEqualTo(ErrorCode.USER_NOT_FOUND));
 
-        verify(identity, never()).sendLecturerAccountNotification(any(), anyString());
+        verify(identity, never()).sendLecturerAccountNotification(any());
         verifyNoInteractions(transactionManager, codes);
     }
 
@@ -276,7 +274,7 @@ class LecturerCreationServiceTest {
             return savedLecturer;
         });
         when(lecturers.findByIdAndDeletedFalse(3L)).thenAnswer(call -> Optional.of(savedLecturer));
-        when(identity.sendLecturerAccountNotification(eq(2L), anyString()))
+        when(identity.sendLecturerAccountNotification(eq(2L)))
                 .thenReturn(new AccountNotificationResponse(2L, emailSent, emailError));
         when(queries.findById(3L))
                 .thenReturn(LecturerResponse.builder()

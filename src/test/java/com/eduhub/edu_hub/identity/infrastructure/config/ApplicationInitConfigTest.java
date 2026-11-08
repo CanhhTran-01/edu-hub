@@ -41,7 +41,7 @@ class ApplicationInitConfigTest {
         assertThat(account.getUsername()).isEqualTo("sysadmin");
         assertThat(account.getRole().getRoleName()).isEqualTo("SYSTEM_ADMIN");
         assertThat(account.getStatus()).isEqualTo(UserStatus.ACTIVE);
-        assertThat(account.isFirstLogin()).isFalse();
+        assertThat(account.isFirstLogin()).isTrue();
         assertThat(account.getEmail()).isNull();
         assertThat(account.getPasswordHash()).isNotEqualTo("sysadmin@123");
         assertThat(passwordEncoder.matches("sysadmin@123", account.getPasswordHash()))

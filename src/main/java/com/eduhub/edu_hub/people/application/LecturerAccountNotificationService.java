@@ -18,7 +18,7 @@ public class LecturerAccountNotificationService {
     private final IdentityFacade identityFacade;
     private final TransactionTemplate transactionTemplate;
 
-    public LecturerNotificationResponse send(Long lecturerId, String initialPassword) {
+    public LecturerNotificationResponse send(Long lecturerId) {
 
         var lecturer = lecturerRepository
                 .findByIdAndDeletedFalse(lecturerId)
@@ -31,8 +31,7 @@ public class LecturerAccountNotificationService {
         // TODO: Có thể chuyển gửi email sang Spring Event + @Async,
         //  @TransactionalEventListener(AFTER_COMMIT), kết hợp Outbox Pattern khi cần.
 
-        AccountNotificationResponse result =
-                identityFacade.sendLecturerAccountNotification(lecturer.getUserId(), initialPassword);
+        AccountNotificationResponse result = identityFacade.sendLecturerAccountNotification(lecturer.getUserId());
 
         AccountNotificationStatus status =
                 result.emailSent() ? AccountNotificationStatus.SENT : AccountNotificationStatus.FAILED;

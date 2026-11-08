@@ -30,6 +30,10 @@ public class User extends BaseEntity {
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
+    // Chỉ giữ một mật khẩu chính thức trước đó, mật khẩu khởi tạo/reset không được ghi vào đây.
+    @Column(name = "previous_password_hash")
+    private String previousPasswordHash;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;

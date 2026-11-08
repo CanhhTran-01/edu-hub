@@ -33,7 +33,7 @@ class QueuedAdmissionNotificationSenderTest {
     @Test
     void stopsAfterFourFailedDeliveriesAndLogsTerminalFailureOnlyOnce() {
         QueuedAdmissionNotification row = pending();
-        when(identity.sendStudentAccountNotification(10L, "12345"))
+        when(identity.sendStudentAccountNotification(10L))
                 .thenReturn(new AccountNotificationResponse(10L, false, "EMAIL_SEND_FAILED"));
         Logger logger = (Logger) LoggerFactory.getLogger(QueuedAdmissionNotificationSender.class);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
@@ -52,7 +52,7 @@ class QueuedAdmissionNotificationSenderTest {
             sender.sendInitialAttempt(1L);
             assertThat(row.getState()).isEqualTo(NotificationStatus.FAILED);
             assertThat(row.getFailureCount()).isEqualTo(4);
-            verify(identity, times(4)).sendStudentAccountNotification(10L, "12345");
+            verify(identity, times(4)).sendStudentAccountNotification(10L);
             assertThat(appender.list.stream()
                             .filter(event -> event.getLevel() == Level.WARN
                                     && event.getFormattedMessage().contains("permanently failed"))
@@ -67,13 +67,13 @@ class QueuedAdmissionNotificationSenderTest {
     @Test
     void lateAsyncKickoffCannotRetryAnAlreadyFailedInitialDelivery() {
         var row = pending();
-        when(identity.sendStudentAccountNotification(10L, "12345"))
+        when(identity.sendStudentAccountNotification(10L))
                 .thenReturn(new AccountNotificationResponse(10L, false, "EMAIL_SEND_FAILED"));
         sender.sendInitialAttempt(1L);
         row.setNextAttemptAt(LocalDateTime.MIN);
         sender.sendInitialAttempt(1L);
         assertThat(row.getFailureCount()).isEqualTo(1);
-        verify(identity).sendStudentAccountNotification(10L, "12345");
+        verify(identity).sendStudentAccountNotification(10L);
     }
 
     @Test
@@ -81,13 +81,12 @@ class QueuedAdmissionNotificationSenderTest {
         var row = pending();
         row.setState(NotificationStatus.FAILED);
         row.setFailureCount(3);
-        when(identity.sendStudentAccountNotification(10L, "12345"))
-                .thenReturn(new AccountNotificationResponse(10L, true, null));
+        when(identity.sendStudentAccountNotification(10L)).thenReturn(new AccountNotificationResponse(10L, true, null));
         sender.sendScheduledAttempt(1L);
         sender.sendScheduledAttempt(1L);
         assertThat(row.getState()).isEqualTo(NotificationStatus.SENT);
         assertThat(row.getFailureCount()).isEqualTo(3);
-        verify(identity).sendStudentAccountNotification(10L, "12345");
+        verify(identity).sendStudentAccountNotification(10L);
     }
 
     @Test
@@ -123,8 +122,7 @@ class QueuedAdmissionNotificationSenderTest {
     @Test
     void scheduledAttemptRecoversPendingNotificationsWhoseAsyncKickoffWasLost() {
         var notification = pending();
-        when(identity.sendStudentAccountNotification(10L, "12345"))
-                .thenReturn(new AccountNotificationResponse(10L, true, null));
+        when(identity.sendStudentAccountNotification(10L)).thenReturn(new AccountNotificationResponse(10L, true, null));
 
         sender.sendScheduledAttempt(1L);
 
@@ -136,7 +134,7 @@ class QueuedAdmissionNotificationSenderTest {
     @Test
     void deliveryExceptionSchedulesRetryAndSynchronizesTheFailureWithoutLoggingSensitiveContext() {
         var notification = pending();
-        when(identity.sendStudentAccountNotification(10L, "12345"))
+        when(identity.sendStudentAccountNotification(10L))
                 .thenThrow(new IllegalStateException("sensitive account details"));
         Logger logger = (Logger) LoggerFactory.getLogger(QueuedAdmissionNotificationSender.class);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();

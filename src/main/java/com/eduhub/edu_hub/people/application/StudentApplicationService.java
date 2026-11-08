@@ -48,8 +48,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Slf4j
 @Transactional(readOnly = true)
 public class StudentApplicationService {
-    private static final String INITIAL_PASSWORD = "12345";
-
     private final StudentRepository studentRepository;
     private final CurriculumFacade.Majors majors;
     private final AdministrativeClassRepository administrativeClassRepository;
@@ -71,7 +69,7 @@ public class StudentApplicationService {
         //  Không khôi phục endpoint resend hoặc reset bộ đếm để vượt giới hạn của luồng nhập học.
 
         AccountNotificationResponse notification = created.hasEmail()
-                ? identityFacade.sendStudentAccountNotification(created.userId(), INITIAL_PASSWORD)
+                ? identityFacade.sendStudentAccountNotification(created.userId())
                 : new AccountNotificationResponse(created.userId(), false, "ACCOUNT_EMAIL_MISSING");
 
         AccountNotificationStatus notificationStatus = !created.hasEmail()
@@ -119,7 +117,7 @@ public class StudentApplicationService {
                 && studentRepository.existsByFullNameIgnoreCaseAndDateOfBirthAndDeletedFalse(
                         fullName, request.getDateOfBirth());
         Long userId = identityFacade.createStudentAccountWithoutNotification(
-                new CreateStudentAccountRequest(studentCode, email, INITIAL_PASSWORD, true));
+                new CreateStudentAccountRequest(studentCode, email));
         Student student = new Student();
         student.setUserId(userId);
         student.setAdministrativeClass(administrativeClass);

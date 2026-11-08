@@ -1,6 +1,7 @@
 package com.eduhub.edu_hub.identity.application.service;
 
 import com.eduhub.edu_hub.identity.application.exception.IdentityAuthenticationException;
+import com.eduhub.edu_hub.identity.domain.enums.AccessTokenPurpose;
 import com.eduhub.edu_hub.identity.domain.model.User;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.nio.charset.StandardCharsets;
@@ -30,19 +31,26 @@ public class TokenService {
     private final JwtDecoder jwtDecoder;
 
     public String generateAccessToken(User user, Long sessionId, Instant issuedAt, Instant expiresAt) {
-        // TODO(FIRST_LOGIN): Khi refactor đổi mật khẩu, phát JWT hạn chế cho tài khoản first-login và chặn API nghiệp
-        // vụ.
-        JwtClaimsSet claims = JwtClaimsSet.builder()
+
+        // tạo claims cho JWT
+        JwtClaimsSet.Builder claims = JwtClaimsSet.builder()
                 .subject(user.getUsername())
                 .claim("uid", user.getId())
                 .claim("sid", sessionId)
-                .claim("role", user.getRole().getRoleName())
+                .claim(
+                        AccessTokenPurpose.CLAIM_NAME,
+                        (user.isFirstLogin() ? AccessTokenPurpose.PASSWORD_CHANGE : AccessTokenPurpose.ACCESS).name())
                 .issuedAt(issuedAt)
-                .expiresAt(expiresAt)
-                .build();
+                .expiresAt(expiresAt);
+
+        // JWT first-login không mang authority nghiệp vụ, chỉ hai API được SecurityConfig cho phép dùng nó.
+        if (!user.isFirstLogin()) claims.claim("role", user.getRole().getRoleName());
+
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).type("JWT").build();
         try {
-            return jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+            return jwtEncoder
+                    .encode(JwtEncoderParameters.from(header, claims.build()))
+                    .getTokenValue();
         } catch (JwtEncodingException exception) {
             throw new IdentityAuthenticationException(ErrorCode.UNEXPECTED_ERROR, exception);
         }
@@ -60,7 +68,7 @@ public class TokenService {
     /**
      * Đọc danh tính từ Jwt đã được Resource Server xác thực, không gọi decoder lần nữa.
      * Jwt phải lấy từ SecurityContext, không dựng từ body hoặc JWT chưa kiểm tra chữ ký.
-     * Khi permitAll chưa bắt buộc đăng nhập, principal có thể null và phải trả lỗi 401.
+     * Kiểm tra null tại ranh giới service để không phụ thuộc việc controller được gọi qua security chain hay trực tiếp.
      */
     public TokenClaims requireAuthenticatedClaims(Jwt authenticatedJwt) {
         if (authenticatedJwt == null

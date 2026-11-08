@@ -24,7 +24,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 @RequiredArgsConstructor
 public class LecturerCreationService {
-    private static final String INITIAL_PASSWORD = "12345";
     private static final int MAX_REASON_LENGTH = 500;
 
     private final LecturerRepository lecturerRepository;
@@ -43,7 +42,7 @@ public class LecturerCreationService {
         }
 
         // Gửi thông báo sau khi transaction tạo tài khoản và hồ sơ đã commit.
-        LecturerNotificationResponse notification = accountNotificationService.send(created.id(), INITIAL_PASSWORD);
+        LecturerNotificationResponse notification = accountNotificationService.send(created.id());
         return new CreateLecturerResponse(
                 lecturerApplicationService.findById(created.id()),
                 created.warnings(),
@@ -53,7 +52,7 @@ public class LecturerCreationService {
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public LecturerNotificationResponse resend(Long id) {
-        return accountNotificationService.send(id, INITIAL_PASSWORD);
+        return accountNotificationService.send(id);
     }
 
     private CreatedLecturer createInTransaction(CreateLecturerRequest request) {
@@ -73,7 +72,7 @@ public class LecturerCreationService {
 
         String lecturerCode = lecturerCodeGenerator.generate();
         Long userId = identityFacade.createLecturerAccountWithoutNotification(
-                new CreateLecturerAccountRequest(lecturerCode, email, INITIAL_PASSWORD));
+                new CreateLecturerAccountRequest(lecturerCode, email));
 
         Lecturer lecturer = new Lecturer();
         lecturer.setLecturerCode(lecturerCode);

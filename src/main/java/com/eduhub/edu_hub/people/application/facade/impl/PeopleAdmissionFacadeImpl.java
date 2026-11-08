@@ -27,7 +27,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class PeopleAdmissionFacadeImpl implements PeopleFacade.Admission {
-    private static final String INITIAL_PASSWORD = "12345";
     private final StudentRepository students;
     private final AdministrativeClassRepository classes;
     private final CohortRepository cohorts;
@@ -138,7 +137,7 @@ public class PeopleAdmissionFacadeImpl implements PeopleFacade.Admission {
             if (students.existsByStudentCode(code) || identity.existsByUsername(code))
                 throw new BaseException(ErrorCode.DUPLICATE_STUDENT_CODE);
             Long userId = identity.createStudentAccountWithoutNotification(
-                    new CreateStudentAccountRequest(code, request.email(), INITIAL_PASSWORD, true));
+                    new CreateStudentAccountRequest(code, request.email()));
             student = Student.builder()
                     .studentCode(code)
                     .userId(userId)

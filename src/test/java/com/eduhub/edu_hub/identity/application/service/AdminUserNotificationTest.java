@@ -20,6 +20,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 class AdminUserNotificationTest {
@@ -34,7 +35,9 @@ class AdminUserNotificationTest {
             .build();
     private final NotificationFacade.ImmediateEmail immediateEmailNotifications =
             mock(NotificationFacade.ImmediateEmail.class);
-    private final AdminUserService service = new AdminUserService(users, sessions, tokens, immediateEmailNotifications);
+    private final AdminUserService service =
+            new AdminUserService(users, sessions, tokens, immediateEmailNotifications, new BCryptPasswordEncoder(4));
+    private User target;
 
     @BeforeEach
     void accounts() {
@@ -43,7 +46,7 @@ class AdminUserNotificationTest {
         actor.setStatus(UserStatus.ACTIVE);
         var session = new RefreshToken();
         session.setUser(actor);
-        var target = new User();
+        target = new User();
         target.setId(2L);
         target.setUsername("CNTT080101");
         target.setEmail("student@example.com");
@@ -51,7 +54,9 @@ class AdminUserNotificationTest {
                 .thenReturn(new TokenService.TokenClaims(1L, 3L, "admin"));
         when(users.findByUsernameAndDeletedFalse("admin")).thenReturn(Optional.of(actor));
         when(sessions.findByIdAndRevokedFalse(3L)).thenReturn(Optional.of(session));
-        when(users.findById(2L)).thenReturn(Optional.of(target));
+        target.setPasswordHash("current-official-hash");
+        target.setPreviousPasswordHash("older-official-hash");
+        when(users.findByIdForUpdate(2L)).thenReturn(Optional.of(target));
         when(tokens.newRefreshToken()).thenReturn("new-temporary-password");
     }
 
@@ -67,6 +72,17 @@ class AdminUserNotificationTest {
                         .temporaryPassword("new-temporary-password")
                         .templateType(EmailTemplateType.PASSWORD_RESET)
                         .build());
+        assertThat(target.isFirstLogin()).isTrue();
+        assertThat(target.getPreviousPasswordHash()).isEqualTo("current-official-hash");
+    }
+
+    @Test
+    void repeatedResetDoesNotReplaceOfficialHistoryWithTemporaryPassword() {
+        target.setFirstLogin(true);
+        when(immediateEmailNotifications.sendAccountEmail(any()))
+                .thenReturn(EmailDeliveryResult.builder().sent(true).build());
+        service.resetPassword(authenticatedJwt, 2L);
+        assertThat(target.getPreviousPasswordHash()).isEqualTo("older-official-hash");
     }
 
     @ParameterizedTest

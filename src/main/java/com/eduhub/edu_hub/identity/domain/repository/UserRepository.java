@@ -28,6 +28,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByUsernameForUpdate(@Param("username") String username);
 
     @EntityGraph(attributePaths = "role")
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select user from User user where user.id = :userId and user.deleted = false")
+    Optional<User> findByIdForUpdate(@Param("userId") Long userId);
+
+    @EntityGraph(attributePaths = "role")
     Page<User> findByDeletedFalseAndUsernameContainingIgnoreCase(String username, Pageable pageable);
 
     long countByDeletedFalseAndStatusAndRole_RoleName(UserStatus status, String roleName);

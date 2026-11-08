@@ -11,7 +11,6 @@ SELECT seed.username, seed.email,
        CURRENT_TIMESTAMP AT TIME ZONE 'UTC', CURRENT_TIMESTAMP AT TIME ZONE 'UTC',
        'postman-seed', 'postman-seed'
 FROM (VALUES
-    ('postman_system_admin', 'postman-system-admin@example.test', 'SYSTEM_ADMIN'),
     ('postman_academic_admin', 'postman-academic-admin@example.test', 'ACADEMIC_ADMIN'),
     ('postman_lecturer', 'postman-lecturer@example.test', 'LECTURER'),
     ('postman_student', 'postman-student@example.test', 'STUDENT')

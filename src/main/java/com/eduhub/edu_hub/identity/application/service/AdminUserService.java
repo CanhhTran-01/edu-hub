@@ -19,7 +19,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,7 +32,7 @@ public class AdminUserService {
     private final RefreshTokenRepository sessions;
     private final TokenService tokens;
     private final NotificationFacade.ImmediateEmail immediateEmailNotifications;
-    private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+    private final PasswordEncoder encoder;
 
     @Transactional(readOnly = true)
     public PageResponse<UserInfoResponse> search(Jwt authenticatedJwt, String keyword, int page, int size) {
@@ -77,15 +77,22 @@ public class AdminUserService {
     @Transactional
     public void resetPassword(Jwt authenticatedJwt, Long id) {
         User admin = actor(authenticatedJwt);
-        User target = target(id);
+        User target =
+                users.findByIdForUpdate(id).orElseThrow(() -> new IdentityAccountException(ErrorCode.USER_NOT_FOUND));
         if (target.getEmail() == null || target.getEmail().isBlank()) {
             throw new IdentityAccountException(ErrorCode.ACCOUNT_EMAIL_MISSING);
         }
         String temporaryPassword = tokens.newRefreshToken();
+        // Khóa cùng User như đổi mật khẩu để không ghi đè lịch sử khi hai thao tác chạy đồng thời.
+        // Reset liên tiếp chỉ thay mật khẩu tạm, vẫn giữ mật khẩu chính thức gần nhất.
+        if (!target.isFirstLogin()) target.setPreviousPasswordHash(target.getPasswordHash());
         target.setPasswordHash(encoder.encode(temporaryPassword));
         target.setFirstLogin(true);
         target.setPasswordChangedAt(LocalDateTime.now(ZoneOffset.UTC));
         revoke(target);
+        // NOTE: Chỉ revoke refresh token; access token đã phát vẫn được Resource Server chấp nhận đến exp.
+        // TODO(ACCESS_TOKEN_REVOCATION): Đồng bộ với đổi mật khẩu/logout khi triển khai thu hồi jti bằng Redis;
+        // hiện không kiểm tra phiên DB trên mọi API nên chưa bảo đảm kết thúc ngay toàn bộ truy cập cũ.
         var delivery = immediateEmailNotifications.sendAccountEmail(SendAccountEmailCommand.builder()
                 .recipient(target.getEmail())
                 .username(target.getUsername())

@@ -6,6 +6,9 @@ jwt:
   refresh-token-lifetime: ${JWT_REFRESH_TOKEN_LIFETIME:7d}
 
 identity:
+  password:
+    minimum-length: ${PASSWORD_MINIMUM_LENGTH:8}
+    initial-password: ${INITIAL_ACCOUNT_PASSWORD}
   authentication:
     max-failed-logins: ${AUTH_MAX_FAILED_LOGINS:5}
     temporary-lock-duration: ${AUTH_TEMPORARY_LOCK_DURATION:15m}

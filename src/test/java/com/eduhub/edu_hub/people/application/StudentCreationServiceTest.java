@@ -100,8 +100,7 @@ class StudentCreationServiceTest {
         when(generator.nextSequence(administrativeClass)).thenReturn(1);
         when(generator.generate(administrativeClass, 1)).thenReturn("CT080101");
         when(identity.createStudentAccountWithoutNotification(any())).thenReturn(20L);
-        when(identity.sendStudentAccountNotification(20L, "12345"))
-                .thenReturn(new AccountNotificationResponse(20L, true, null));
+        when(identity.sendStudentAccountNotification(20L)).thenReturn(new AccountNotificationResponse(20L, true, null));
         when(students.save(any(Student.class))).thenAnswer(invocation -> {
             Student student = invocation.getArgument(0);
             if (student.getId() == null) student.setId(30L);
@@ -116,7 +115,7 @@ class StudentCreationServiceTest {
         assertThat(response.notificationStatus()).isEqualTo("SENT");
         assertThat(response.student().getMajorName()).isEqualTo("Công nghệ thông tin");
         verify(identity).createStudentAccountWithoutNotification(any());
-        verify(identity).sendStudentAccountNotification(20L, "12345");
+        verify(identity).sendStudentAccountNotification(20L);
         verify(students).existsByCitizenIdAndDeletedFalse("012345678901");
     }
 
@@ -137,7 +136,7 @@ class StudentCreationServiceTest {
         when(generator.nextSequence(any())).thenReturn(1);
         when(generator.generate(any(), anyInt())).thenReturn("CT080101");
         when(identity.createStudentAccountWithoutNotification(any())).thenReturn(20L);
-        when(identity.sendStudentAccountNotification(20L, "12345"))
+        when(identity.sendStudentAccountNotification(20L))
                 .thenReturn(new AccountNotificationResponse(20L, false, "EMAIL_SEND_FAILED"));
         when(students.save(any(Student.class))).thenAnswer(invocation -> {
             Student student = invocation.getArgument(0);

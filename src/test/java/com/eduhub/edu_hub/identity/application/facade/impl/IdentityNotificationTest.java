@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import com.eduhub.edu_hub.identity.api.dto.request.CreateLecturerAccountRequest;
+import com.eduhub.edu_hub.identity.api.dto.request.CreateStudentAccountRequest;
 import com.eduhub.edu_hub.identity.application.service.TokenService;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.model.Role;
@@ -11,6 +13,7 @@ import com.eduhub.edu_hub.identity.domain.model.User;
 import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.RoleRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
+import com.eduhub.edu_hub.identity.infrastructure.config.PasswordSettings;
 import com.eduhub.edu_hub.notification.application.command.SendAccountEmailCommand;
 import com.eduhub.edu_hub.notification.application.command.SendAdmissionConfirmationEmailCommand;
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
@@ -25,14 +28,17 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 class IdentityNotificationTest {
     private final UserRepository users = mock(UserRepository.class);
+    private final RoleRepository roles = mock(RoleRepository.class);
     private final NotificationFacade.ImmediateEmail immediateEmailNotifications =
             mock(NotificationFacade.ImmediateEmail.class);
     private final IdentityFacadeImpl identity = new IdentityFacadeImpl(
             users,
-            mock(RoleRepository.class),
+            roles,
             mock(RefreshTokenRepository.class),
             mock(TokenService.class),
-            immediateEmailNotifications);
+            immediateEmailNotifications,
+            new BCryptPasswordEncoder(4),
+            new PasswordSettings(8, "configured-temp"));
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
     private User user;
 
@@ -44,7 +50,7 @@ class IdentityNotificationTest {
         user.setId(7L);
         user.setUsername("CNTT080101");
         user.setEmail("student@example.com");
-        user.setPasswordHash(encoder.encode("12345"));
+        user.setPasswordHash(encoder.encode("configured-temp"));
         user.setFirstLogin(true);
         user.setStatus(UserStatus.ACTIVE);
         user.setRole(role);
@@ -56,12 +62,12 @@ class IdentityNotificationTest {
         when(immediateEmailNotifications.sendAccountEmail(any()))
                 .thenReturn(
                         EmailDeliveryResult.builder().error("EMAIL_SEND_FAILED").build());
-        var result = identity.sendStudentAccountNotification(7L, "12345");
+        var result = identity.sendStudentAccountNotification(7L);
         assertThat(result.emailSent()).isFalse();
         assertThat(result.emailError()).isEqualTo("EMAIL_SEND_FAILED");
         verify(immediateEmailNotifications)
                 .sendAccountEmail(new SendAccountEmailCommand(
-                        "student@example.com", "CNTT080101", "12345", EmailTemplateType.ACCOUNT_CREATED));
+                        "student@example.com", "CNTT080101", "configured-temp", EmailTemplateType.ACCOUNT_CREATED));
     }
 
     @ParameterizedTest
@@ -87,8 +93,7 @@ class IdentityNotificationTest {
                     }
                     default -> throw new IllegalArgumentException(state);
                 };
-        assertThat(identity.sendStudentAccountNotification(7L, "12345").emailError())
-                .isEqualTo(error);
+        assertThat(identity.sendStudentAccountNotification(7L).emailError()).isEqualTo(error);
         verifyNoInteractions(immediateEmailNotifications);
     }
 
@@ -107,6 +112,32 @@ class IdentityNotificationTest {
         verifyNoMoreInteractions(immediateEmailNotifications);
         assertThat(user.getStatus()).isEqualTo(UserStatus.LOCKED);
         assertThat(user.isFirstLogin()).isFalse();
-        assertThat(encoder.matches("12345", user.getPasswordHash())).isTrue();
+        assertThat(encoder.matches("configured-temp", user.getPasswordHash())).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"STUDENT", "LECTURER"})
+    void createsAccountsWithTheSameConfiguredTemporaryPasswordAndMandatoryFirstLogin(String roleName) {
+        Role role = new Role();
+        role.setRoleName(roleName);
+        when(roles.findByRoleNameAndDeletedFalse(roleName)).thenReturn(Optional.of(role));
+        when(users.save(any(User.class))).thenAnswer(invocation -> {
+            User created = invocation.getArgument(0);
+            created.setId(8L);
+            return created;
+        });
+        if (roleName.equals("STUDENT"))
+            identity.createStudentAccountWithoutNotification(
+                    new CreateStudentAccountRequest("new-student", "student@example.com"));
+        else
+            identity.createLecturerAccountWithoutNotification(
+                    new CreateLecturerAccountRequest("new-lecturer", "lecturer@example.com"));
+        var createdAccount = org.mockito.ArgumentCaptor.forClass(User.class);
+        verify(users).save(createdAccount.capture());
+        assertThat(createdAccount.getValue().isFirstLogin()).isTrue();
+        assertThat(createdAccount.getValue().getPreviousPasswordHash()).isNull();
+        assertThat(encoder.matches("configured-temp", createdAccount.getValue().getPasswordHash()))
+                .isTrue();
+        verifyNoInteractions(immediateEmailNotifications);
     }
 }

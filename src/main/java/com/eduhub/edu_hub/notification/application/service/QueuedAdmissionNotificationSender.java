@@ -24,7 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Slf4j
 public class QueuedAdmissionNotificationSender {
-    private static final String INITIAL_ACCOUNT_PASSWORD = "12345";
     private static final int MAX_ERROR_CODE_LENGTH = 255;
 
     private final QueuedAdmissionNotificationRepository notificationRepository;
@@ -87,7 +86,7 @@ public class QueuedAdmissionNotificationSender {
 
         // chọn loại thông báo và gửi đi
         return notification.getKind() == AdmissionNotificationKind.INITIAL_ACCOUNT
-                ? identityFacade.sendStudentAccountNotification(student.getUserId(), INITIAL_ACCOUNT_PASSWORD)
+                ? identityFacade.sendStudentAccountNotification(student.getUserId())
                 : identityFacade.sendStudentAdmissionNotification(student.getUserId(), notification.getRecipient());
     }
 

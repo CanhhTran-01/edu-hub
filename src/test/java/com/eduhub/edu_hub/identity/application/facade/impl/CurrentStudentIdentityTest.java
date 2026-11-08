@@ -7,6 +7,7 @@ import com.eduhub.edu_hub.identity.application.service.TokenService;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.model.*;
 import com.eduhub.edu_hub.identity.domain.repository.*;
+import com.eduhub.edu_hub.identity.infrastructure.config.PasswordSettings;
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import java.time.LocalDateTime;
@@ -16,13 +17,20 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 class CurrentStudentIdentityTest {
     UserRepository users = mock(UserRepository.class);
     RefreshTokenRepository sessions = mock(RefreshTokenRepository.class);
     TokenService tokens = mock(TokenService.class);
     IdentityFacadeImpl facade = new IdentityFacadeImpl(
-            users, mock(RoleRepository.class), sessions, tokens, mock(NotificationFacade.ImmediateEmail.class));
+            users,
+            mock(RoleRepository.class),
+            sessions,
+            tokens,
+            mock(NotificationFacade.ImmediateEmail.class),
+            mock(PasswordEncoder.class),
+            new PasswordSettings(8, "12345"));
     User user;
     RefreshToken session;
 

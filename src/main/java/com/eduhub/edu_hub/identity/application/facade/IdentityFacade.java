@@ -9,11 +9,11 @@ import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
 public interface IdentityFacade {
     Long createLecturerAccountWithoutNotification(CreateLecturerAccountRequest request);
 
-    AccountNotificationResponse sendLecturerAccountNotification(Long userId, String initialPassword);
+    AccountNotificationResponse sendLecturerAccountNotification(Long userId);
 
     Long createStudentAccountWithoutNotification(CreateStudentAccountRequest request);
 
-    AccountNotificationResponse sendStudentAccountNotification(Long userId, String initialPassword);
+    AccountNotificationResponse sendStudentAccountNotification(Long userId);
 
     StudentAccountResponse getStudentAccount(Long userId);
 

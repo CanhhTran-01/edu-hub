@@ -5,9 +5,11 @@ import com.eduhub.edu_hub.identity.domain.enums.RoleName;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.model.Role;
 import com.eduhub.edu_hub.identity.domain.model.User;
+import com.eduhub.edu_hub.identity.domain.policy.PasswordPolicy;
 import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.RoleRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
+import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
@@ -36,6 +38,11 @@ public class ApplicationInitConfig {
             if (username.isBlank() || password.isBlank()) {
                 throw new IdentityConfigurationException(
                         "Username và mật khẩu khởi tạo quản trị hệ thống không được trống");
+            }
+
+            if (password.getBytes(StandardCharsets.UTF_8).length > PasswordPolicy.MAX_PASSWORD_BYTES) {
+                throw new IdentityConfigurationException(
+                        "Mật khẩu khởi tạo quản trị không được vượt quá 72 byte UTF-8");
             }
 
             try {
@@ -69,7 +76,7 @@ public class ApplicationInitConfig {
                     user.setPasswordHash(passwordEncoder.encode(password));
                     user.setRole(role);
                     user.setStatus(UserStatus.ACTIVE);
-                    user.setFirstLogin(false);
+                    user.setFirstLogin(true);
                     userRepository.save(user);
                 });
             } catch (DataIntegrityViolationException exception) {

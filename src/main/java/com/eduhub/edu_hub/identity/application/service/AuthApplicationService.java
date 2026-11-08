@@ -9,7 +9,7 @@ import com.eduhub.edu_hub.identity.domain.enums.RoleName;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.model.RefreshToken;
 import com.eduhub.edu_hub.identity.domain.model.User;
-import com.eduhub.edu_hub.identity.domain.policy.PasswordPolicyValidator;
+import com.eduhub.edu_hub.identity.domain.policy.PasswordPolicy;
 import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
 import com.eduhub.edu_hub.identity.infrastructure.config.AuthenticationSettings;
@@ -39,7 +39,7 @@ public class AuthApplicationService {
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final TokenService tokenService;
-    private final PasswordPolicyValidator passwordPolicyValidator;
+    private final PasswordPolicy passwordPolicy;
     private final PlatformTransactionManager transactionManager;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
@@ -104,6 +104,9 @@ public class AuthApplicationService {
         session.setExpiresAt(now.plus(authenticationSettings.refreshTokenLifetime()));
         session = refreshTokenRepository.saveAndFlush(session);
 
+        // TODO(REFRESH_TOKEN): Khi bổ sung API refresh, phải đọc lại first-Login trong DB để giữ JWT hạn chế;
+        //  không được dùng refresh token của lần đăng nhập đầu tiên để bỏ qua bước đổi mật khẩu.
+
         UserInfoResponse info = UserInfoResponse.builder()
                 .id(user.getId())
                 .username(user.getUsername())
@@ -150,7 +153,8 @@ public class AuthApplicationService {
             if (!LocalDateTime.now(ZoneOffset.UTC).isBefore(token.getExpiresAt())) {
                 throw new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED);
             }
-            if (!token.getId().equals(claims.sessionId()) || !token.getUser().getId().equals(claims.userId())) {
+            if (!token.getId().equals(claims.sessionId())
+                    || !token.getUser().getId().equals(claims.userId())) {
                 throw new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED);
             }
 
@@ -165,43 +169,48 @@ public class AuthApplicationService {
 
     public void changePassword(Jwt authenticatedJwt, ChangePasswordRequest request) {
 
-        // TODO(PASSWORD_CHANGE): Khi refactor đổi mật khẩu cùng JWT hạn chế first-login,
-        //  thống nhất kiểm tra hạn phiên và trạng thái tài khoản
-        //  hiện chưa bổ sung kiểm tra hạn refresh token vào luồng này.
-
         TokenService.TokenClaims claims = tokenService.requireAuthenticatedClaims(authenticatedJwt);
 
+        // Giữ khóa User đến khi cập nhật mật khẩu, lịch sử và mọi refresh token hoàn tất.
+        // Lỗi sai mật khẩu được trả khỏi callback để commit bộ đếm trước khi trả lỗi cho client.
         ErrorCode error = new TransactionTemplate(transactionManager).execute(status -> {
-
             User user = userRepository
-                    .findByUsernameForUpdate(claims.username())
+                    .findByIdForUpdate(claims.userId())
                     .orElseThrow(() -> new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED));
 
-            if (!user.getId().equals(claims.userId())
-                    || user.getStatus() != UserStatus.ACTIVE
-                    || refreshTokenRepository.findByIdAndRevokedFalse(claims.sessionId()).stream()
-                            .noneMatch(session -> session.getUser().getId().equals(user.getId()))) {
-                return ErrorCode.UNAUTHENTICATED;
-            }
-
             LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+
+            boolean hasValidSession = refreshTokenRepository
+                    .findByIdAndRevokedFalse(claims.sessionId())
+                    .filter(session -> session.getUser().getId().equals(user.getId()))
+                    .filter(session -> now.isBefore(session.getExpiresAt()))
+                    .isPresent();
+
+            if (!user.getUsername().equals(claims.username()) || !hasValidSession) return ErrorCode.UNAUTHENTICATED;
+            if (user.getStatus() != UserStatus.ACTIVE) return ErrorCode.ACCOUNT_LOCKED;
             if (user.getLockedUntil() != null && now.isBefore(user.getLockedUntil())) return ErrorCode.ACCOUNT_LOCKED;
 
             clearExpiredTemporaryLock(user, now);
 
             // người dùng có nhập đúng mật khẩu hiện tại hay không, ngoại trừ lần đăng nhập đầu tiên
-            if (!user.isFirstLogin()
-                    && (request.getCurrentPassword() == null
-                            || !passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash()))) {
-                recordFailedAttempt(user, now);
-                return ErrorCode.INVALID_CREDENTIALS;
+            if (!user.isFirstLogin()) {
+                passwordPolicy.validateCurrentPasswordInput(request.getCurrentPassword());
+                if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
+                    recordFailedAttempt(user, now);
+                    return ErrorCode.INVALID_CREDENTIALS;
+                }
             }
 
-            passwordPolicyValidator.validate(
-                    request.getNewPassword(),
-                    request.getConfirmPassword(),
-                    passwordEncoder.matches(request.getNewPassword(), user.getPasswordHash()));
+            // Kiểm tra giới hạn byte trước khi gọi BCrypt.
+            // first-login chỉ bỏ qua mật khẩu hiện tại, không bỏ policy.
+            passwordPolicy.validate(request.getNewPassword(), request.getConfirmPassword(), user.getUsername());
+            passwordPolicy.validatePasswordReuse(
+                    passwordEncoder.matches(request.getNewPassword(), user.getPasswordHash()),
+                    user.getPreviousPasswordHash() != null
+                            && passwordEncoder.matches(request.getNewPassword(), user.getPreviousPasswordHash()));
 
+            // Mật khẩu tạm sau cấp/reset không được đẩy vào lịch sử mật khẩu chính thức.
+            if (!user.isFirstLogin()) user.setPreviousPasswordHash(user.getPasswordHash());
             user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
             user.setPasswordChangedAt(now);
             user.setFirstLogin(false);
@@ -216,6 +225,13 @@ public class AuthApplicationService {
                     .forEach(session -> session.setRevoked(true));
 
             return null;
+
+            // NOTE: Thu hồi cả refresh token hiện tại và các phiên khác; FE phải xóa hai token và đăng nhập lại.
+            // Access token đã phát vẫn hợp lệ đến exp theo quyết định hiện tại, kể cả JWT hạn chế first-login;
+            // endpoint có kiểm tra phiên DB riêng có thể từ chối ngay vì refresh token đã bị revoke.
+
+            // TODO(ACCESS_TOKEN_REVOCATION): Khi đổi chính sách cần thu hồi access token tức thì, phát jti và
+            //  kiểm tra danh sách thu hồi Redis với TTL còn lại trong JwtDecoder; chưa triển khai ở use-case này.
         });
 
         if (error != null) throw new IdentityAuthenticationException(error);

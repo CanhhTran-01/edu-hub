@@ -16,6 +16,7 @@ import com.eduhub.edu_hub.identity.domain.model.User;
 import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.RoleRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
+import com.eduhub.edu_hub.identity.infrastructure.config.PasswordSettings;
 import com.eduhub.edu_hub.notification.application.command.SendAccountEmailCommand;
 import com.eduhub.edu_hub.notification.application.command.SendAdmissionConfirmationEmailCommand;
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
@@ -24,7 +25,7 @@ import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,7 +38,8 @@ public class IdentityFacadeImpl implements IdentityFacade {
     private final RefreshTokenRepository sessions;
     private final TokenService tokens;
     private final NotificationFacade.ImmediateEmail immediateEmailNotifications;
-    private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+    private final PasswordEncoder encoder;
+    private final PasswordSettings passwordSettings;
 
     @Override
     @Transactional
@@ -47,13 +49,12 @@ public class IdentityFacadeImpl implements IdentityFacade {
         }
         Role role = roles.findByRoleNameAndDeletedFalse(RoleName.LECTURER.name())
                 .orElseThrow(() -> new IdentityAccountException(ErrorCode.VALIDATION_ERROR));
-        return save(request.username(), request.email(), request.initialPassword(), role, true)
-                .getId();
+        return saveInitialAccount(request.username(), request.email(), role).getId();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public AccountNotificationResponse sendLecturerAccountNotification(Long userId, String initialPassword) {
+    public AccountNotificationResponse sendLecturerAccountNotification(Long userId) {
 
         User account = user(userId);
 
@@ -64,11 +65,11 @@ public class IdentityFacadeImpl implements IdentityFacade {
             return new AccountNotificationResponse(userId, false, "ACCOUNT_NOT_AVAILABLE");
         }
 
-        if (!encoder.matches(initialPassword, account.getPasswordHash())) {
+        if (!encoder.matches(passwordSettings.getInitialPassword(), account.getPasswordHash())) {
             return new AccountNotificationResponse(userId, false, "INITIAL_PASSWORD_NO_LONGER_VALID");
         }
 
-        return sendStudentAccountNotification(userId, initialPassword);
+        return sendStudentAccountNotification(userId);
     }
 
     @Override
@@ -78,7 +79,7 @@ public class IdentityFacadeImpl implements IdentityFacade {
     }
 
     @Override
-    public AccountNotificationResponse sendStudentAccountNotification(Long userId, String initialPassword) {
+    public AccountNotificationResponse sendStudentAccountNotification(Long userId) {
 
         User user = user(userId);
 
@@ -93,7 +94,7 @@ public class IdentityFacadeImpl implements IdentityFacade {
             return new AccountNotificationResponse(userId, false, "ACCOUNT_NOT_AVAILABLE");
         }
 
-        if (!encoder.matches(initialPassword, user.getPasswordHash())) {
+        if (!encoder.matches(passwordSettings.getInitialPassword(), user.getPasswordHash())) {
             return new AccountNotificationResponse(userId, false, "INITIAL_PASSWORD_NO_LONGER_VALID");
         }
 
@@ -104,7 +105,7 @@ public class IdentityFacadeImpl implements IdentityFacade {
         var delivery = immediateEmailNotifications.sendAccountEmail(SendAccountEmailCommand.builder()
                 .recipient(user.getEmail())
                 .username(user.getUsername())
-                .temporaryPassword(initialPassword)
+                .temporaryPassword(passwordSettings.getInitialPassword())
                 .templateType(EmailTemplateType.ACCOUNT_CREATED)
                 .build());
 
@@ -187,24 +188,19 @@ public class IdentityFacadeImpl implements IdentityFacade {
         Role role = roles.findByRoleNameAndDeletedFalse(RoleName.STUDENT.name())
                 .orElseThrow(() -> new IdentityAccountException(ErrorCode.VALIDATION_ERROR));
 
-        return save(
-                        request.username(),
-                        request.email(),
-                        request.initialPassword(),
-                        role,
-                        request.requirePasswordChange())
-                .getId();
+        return saveInitialAccount(request.username(), request.email(), role).getId();
     }
 
-    private User save(String username, String email, String rawPassword, Role role, boolean firstLogin) {
+    private User saveInitialAccount(String username, String email, Role role) {
         User user = new User();
 
         user.setUsername(username);
         user.setEmail(email);
-        user.setPasswordHash(encoder.encode(rawPassword));
+        // Identity sở hữu nguồn mật khẩu khởi tạo; consumer không được tùy chọn bỏ qua first-login.
+        user.setPasswordHash(encoder.encode(passwordSettings.getInitialPassword()));
         user.setRole(role);
         user.setStatus(UserStatus.ACTIVE);
-        user.setFirstLogin(firstLogin);
+        user.setFirstLogin(true);
 
         return users.save(user);
     }
