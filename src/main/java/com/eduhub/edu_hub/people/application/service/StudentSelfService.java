@@ -4,7 +4,7 @@ import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.curriculum.application.facade.dto.MajorSimpleResponse;
 import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
-import com.eduhub.edu_hub.people.api.dto.request.UpdateMyStudentProfileRequest;
+import com.eduhub.edu_hub.people.api.dto.request.UpdateMyProfileRequest;
 import com.eduhub.edu_hub.people.api.dto.response.StudentResponse;
 import com.eduhub.edu_hub.people.api.mapper.StudentResponseMapper;
 import com.eduhub.edu_hub.people.application.exception.StudentProfileException;
@@ -25,13 +25,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class StudentProfileService {
+public class StudentSelfService {
     private final IdentityFacade identityFacade;
     private final StudentRepository studentRepository;
     private final CurriculumFacade.ReferenceData curriculumReferenceData;
     private final StudentResponseMapper studentResponseMapper;
 
-    public StudentResponse getMyStudentProfile(Jwt authenticatedJwt) {
+    public StudentResponse getMyProfile(Jwt authenticatedJwt) {
         UserInfoResponse currentUser = requireCurrentUser(authenticatedJwt);
         Student student = studentRepository
                 .findByUserIdAndDeletedFalse(currentUser.getId())
@@ -40,7 +40,7 @@ public class StudentProfileService {
     }
 
     @Transactional
-    public StudentResponse updateMyStudentProfile(Jwt authenticatedJwt, UpdateMyStudentProfileRequest request) {
+    public StudentResponse updateMyProfile(Jwt authenticatedJwt, UpdateMyProfileRequest request) {
 
         UserInfoResponse currentUser = requireCurrentUser(authenticatedJwt);
 

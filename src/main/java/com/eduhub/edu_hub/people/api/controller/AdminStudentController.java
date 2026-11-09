@@ -2,11 +2,11 @@ package com.eduhub.edu_hub.people.api.controller;
 
 import com.eduhub.edu_hub.people.api.dto.request.CreateStudentRequest;
 import com.eduhub.edu_hub.people.api.dto.request.StudentSearchRequest;
-import com.eduhub.edu_hub.people.api.dto.request.UpdateStudentRequest;
+import com.eduhub.edu_hub.people.api.dto.request.UpdateStudentProfileRequest;
 import com.eduhub.edu_hub.people.api.dto.response.CreateStudentResponse;
 import com.eduhub.edu_hub.people.api.dto.response.StudentResponse;
+import com.eduhub.edu_hub.people.application.service.StudentAdminUpdateService;
 import com.eduhub.edu_hub.people.application.service.StudentApplicationService;
-import com.eduhub.edu_hub.people.application.service.StudentProfileUpdateService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import jakarta.validation.Valid;
@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AdminStudentController {
     private final StudentApplicationService studentApplicationService;
-    private final StudentProfileUpdateService studentProfileUpdateService;
+    private final StudentAdminUpdateService studentAdminUpdateService;
 
     @GetMapping
     public ApiResponse<PageResponse<StudentResponse>> search(StudentSearchRequest request) {
@@ -51,12 +51,12 @@ public class AdminStudentController {
     @PutMapping("/{id}")
     public ApiResponse<StudentResponse> update(
             @PathVariable Long id,
-            @Valid @RequestBody UpdateStudentRequest request,
+            @Valid @RequestBody UpdateStudentProfileRequest request,
             @AuthenticationPrincipal Jwt authenticatedJwt) {
 
         // TODO(AUTHORIZATION): Giới hạn cho ACADEMIC_ADMIN, không cấp quyền cập nhật cho SYSTEM_ADMIN.
         //  Hiện chưa bật: STUDENT có thể gọi API này để sửa các trường ngoài whitelist của PATCH /students/me.
 
-        return ApiResponse.success(studentProfileUpdateService.updateStudentProfile(authenticatedJwt, id, request));
+        return ApiResponse.success(studentAdminUpdateService.updateStudentProfile(authenticatedJwt, id, request));
     }
 }

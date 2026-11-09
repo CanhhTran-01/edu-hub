@@ -5,7 +5,7 @@ import com.eduhub.edu_hub.curriculum.application.facade.dto.MajorSimpleResponse;
 import com.eduhub.edu_hub.identity.api.dto.response.UserAccountEmailResponse;
 import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
-import com.eduhub.edu_hub.people.api.dto.request.UpdateStudentRequest;
+import com.eduhub.edu_hub.people.api.dto.request.UpdateStudentProfileRequest;
 import com.eduhub.edu_hub.people.api.dto.response.StudentResponse;
 import com.eduhub.edu_hub.people.api.mapper.StudentResponseMapper;
 import com.eduhub.edu_hub.people.application.exception.StudentProfileException;
@@ -30,14 +30,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class StudentProfileUpdateService {
+public class StudentAdminUpdateService {
     private final StudentRepository studentRepository;
     private final IdentityFacade identityFacade;
     private final CurriculumFacade.ReferenceData curriculumReferenceData;
     private final StudentResponseMapper studentResponseMapper;
 
     @Transactional
-    public StudentResponse updateStudentProfile(Jwt authenticatedJwt, Long studentId, UpdateStudentRequest request) {
+    public StudentResponse updateStudentProfile(
+            Jwt authenticatedJwt, Long studentId, UpdateStudentProfileRequest request) {
         if (authenticatedJwt == null) {
             throw new StudentProfileException(ErrorCode.UNAUTHENTICATED);
         }
@@ -84,8 +85,11 @@ public class StudentProfileUpdateService {
 
         // TODO(AUDIT_LOG): Lưu actor, Student ID, các trường thay đổi, lý do, thời điểm và kết quả sau commit.
         //  Không ghi mật khẩu/hash/nội dung email hoặc CCCD đầy đủ vào log/audit.
-        log.info("Updated student profile: actorId={}, studentId={}, reason={}",
-                currentUser.getId(), studentId, updateReason);
+        log.info(
+                "Updated student profile: actorId={}, studentId={}, reason={}",
+                currentUser.getId(),
+                studentId,
+                updateReason);
 
         return mapStudentResponse(savedStudent);
     }

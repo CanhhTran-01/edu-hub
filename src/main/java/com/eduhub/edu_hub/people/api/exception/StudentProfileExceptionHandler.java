@@ -1,7 +1,7 @@
 package com.eduhub.edu_hub.people.api.exception;
 
 import com.eduhub.edu_hub.people.api.controller.AdminStudentController;
-import com.eduhub.edu_hub.people.api.controller.ProfileController;
+import com.eduhub.edu_hub.people.api.controller.StudentSelfController;
 import com.eduhub.edu_hub.people.application.exception.StudentProfileException;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import tools.jackson.databind.exc.MismatchedInputException;
 
-@RestControllerAdvice(assignableTypes = {ProfileController.class, AdminStudentController.class})
+@RestControllerAdvice(assignableTypes = {StudentSelfController.class, AdminStudentController.class})
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class StudentProfileExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)

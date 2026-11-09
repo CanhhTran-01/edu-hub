@@ -6,11 +6,13 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import com.eduhub.edu_hub.people.api.dto.request.UpdateMyStudentProfileRequest;
+import com.eduhub.edu_hub.people.api.dto.request.UpdateMyProfileRequest;
 import com.eduhub.edu_hub.people.api.dto.response.StudentResponse;
 import com.eduhub.edu_hub.people.api.exception.StudentProfileExceptionHandler;
 import com.eduhub.edu_hub.people.application.exception.StudentProfileException;
-import com.eduhub.edu_hub.people.application.service.StudentProfileService;
+import com.eduhub.edu_hub.people.application.service.StudentAdminUpdateService;
+import com.eduhub.edu_hub.people.application.service.StudentApplicationService;
+import com.eduhub.edu_hub.people.application.service.StudentSelfService;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;
 import org.junit.jupiter.api.AfterEach;
@@ -27,8 +29,10 @@ import org.springframework.security.web.method.annotation.AuthenticationPrincipa
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-class ProfileControllerTest {
-    StudentProfileService service = mock(StudentProfileService.class);
+class StudentSelfControllerTest {
+    StudentSelfService service = mock(StudentSelfService.class);
+    StudentApplicationService studentApplicationService = mock(StudentApplicationService.class);
+    StudentAdminUpdateService studentAdminUpdateService = mock(StudentAdminUpdateService.class);
     MockMvc mvc;
     Jwt authenticatedJwt = Jwt.withTokenValue("token")
             .header("alg", "HS256")
@@ -41,7 +45,9 @@ class ProfileControllerTest {
     void setup() {
         SecurityContextHolder.clearContext();
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(authenticatedJwt));
-        mvc = MockMvcBuilders.standaloneSetup(new ProfileController(service))
+        mvc = MockMvcBuilders.standaloneSetup(
+                        new StudentSelfController(service),
+                        new AdminStudentController(studentApplicationService, studentAdminUpdateService))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setControllerAdvice(new StudentProfileExceptionHandler(), new GlobalExceptionHandler())
                 .build();
@@ -54,15 +60,32 @@ class ProfileControllerTest {
 
     @Test
     void getAndPatchResolveLiteralMeRoute() throws Exception {
+        when(service.getMyProfile(authenticatedJwt))
+                .thenReturn(StudentResponse.builder().id(9L).build());
         mvc.perform(get("/api/v1/students/me").header("Authorization", "Bearer token"))
-                .andExpect(status().isOk());
-        verify(service).getMyStudentProfile(authenticatedJwt);
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(9));
+        verify(service).getMyProfile(authenticatedJwt);
         mvc.perform(patch("/api/v1/students/me")
                         .header("Authorization", "Bearer token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"phone\":\"0900000000\"}"))
                 .andExpect(status().isOk());
-        verify(service).updateMyStudentProfile(eq(authenticatedJwt), any());
+        verify(service).updateMyProfile(eq(authenticatedJwt), any());
+        verifyNoInteractions(studentApplicationService, studentAdminUpdateService);
+    }
+
+    @Test
+    void profileByStudentIdUsesTheAdministrativeQueryInsteadOfTheSelfService() throws Exception {
+        when(studentApplicationService.findById(12L))
+                .thenReturn(StudentResponse.builder().id(12L).build());
+
+        mvc.perform(get("/api/v1/students/12"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(12));
+
+        verify(studentApplicationService).findById(12L);
+        verifyNoInteractions(service, studentAdminUpdateService);
     }
 
     @ParameterizedTest
@@ -121,15 +144,15 @@ class ProfileControllerTest {
     @Test
     void missingPrincipalCannotBeReplacedByAnUnverifiedAuthorizationHeader() throws Exception {
         SecurityContextHolder.clearContext();
-        when(service.getMyStudentProfile(null)).thenThrow(new StudentProfileException(ErrorCode.UNAUTHENTICATED));
+        when(service.getMyProfile(null)).thenThrow(new StudentProfileException(ErrorCode.UNAUTHENTICATED));
         mvc.perform(get("/api/v1/students/me").header("Authorization", "Bearer token"))
                 .andExpect(status().isUnauthorized());
-        verify(service).getMyStudentProfile(null);
+        verify(service).getMyProfile(null);
     }
 
     @Test
     void acceptsEmailNormalizesItAndReturnsUpdatedResponse() throws Exception {
-        when(service.updateMyStudentProfile(eq(authenticatedJwt), any()))
+        when(service.updateMyProfile(eq(authenticatedJwt), any()))
                 .thenReturn(
                         StudentResponse.builder().email("student@example.com").build());
         mvc.perform(patch("/api/v1/students/me")
@@ -137,8 +160,8 @@ class ProfileControllerTest {
                         .content("{\"email\":\" Student@Example.COM \"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.email").value("student@example.com"));
-        var requestCaptor = ArgumentCaptor.forClass(UpdateMyStudentProfileRequest.class);
-        verify(service).updateMyStudentProfile(eq(authenticatedJwt), requestCaptor.capture());
+        var requestCaptor = ArgumentCaptor.forClass(UpdateMyProfileRequest.class);
+        verify(service).updateMyProfile(eq(authenticatedJwt), requestCaptor.capture());
         assertThat(requestCaptor.getValue().getEmail()).isEqualTo("student@example.com");
         assertThat(requestCaptor.getValue().hasEmail()).isTrue();
         assertThat(requestCaptor.getValue().hasPhone()).isFalse();
@@ -177,8 +200,8 @@ class ProfileControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":null,\"phone\":null,\"targetGpa\":null}"))
                 .andExpect(status().isOk());
-        var requestCaptor = ArgumentCaptor.forClass(UpdateMyStudentProfileRequest.class);
-        verify(service, times(2)).updateMyStudentProfile(eq(authenticatedJwt), requestCaptor.capture());
+        var requestCaptor = ArgumentCaptor.forClass(UpdateMyProfileRequest.class);
+        verify(service, times(2)).updateMyProfile(eq(authenticatedJwt), requestCaptor.capture());
         var emptyRequest = requestCaptor.getAllValues().getFirst();
         assertThat(emptyRequest.hasEmail()).isFalse();
         assertThat(emptyRequest.hasPhone()).isFalse();

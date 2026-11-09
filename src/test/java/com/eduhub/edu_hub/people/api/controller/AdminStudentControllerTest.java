@@ -17,12 +17,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.eduhub.edu_hub.people.api.dto.request.CreateStudentRequest;
 import com.eduhub.edu_hub.people.api.dto.request.StudentSearchRequest;
-import com.eduhub.edu_hub.people.api.dto.request.UpdateStudentRequest;
+import com.eduhub.edu_hub.people.api.dto.request.UpdateStudentProfileRequest;
 import com.eduhub.edu_hub.people.api.dto.response.CreateStudentResponse;
 import com.eduhub.edu_hub.people.api.dto.response.StudentResponse;
 import com.eduhub.edu_hub.people.api.exception.StudentProfileExceptionHandler;
+import com.eduhub.edu_hub.people.application.service.StudentAdminUpdateService;
 import com.eduhub.edu_hub.people.application.service.StudentApplicationService;
-import com.eduhub.edu_hub.people.application.service.StudentProfileUpdateService;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;
 import java.util.List;
@@ -45,7 +45,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class AdminStudentControllerTest {
     private final StudentApplicationService service = mock(StudentApplicationService.class);
-    private final StudentProfileUpdateService profileUpdateService = mock(StudentProfileUpdateService.class);
+    private final StudentAdminUpdateService profileUpdateService = mock(StudentAdminUpdateService.class);
     private final Jwt authenticatedJwt = Jwt.withTokenValue("test-token")
             .header("alg", "HS256")
             .subject("academic-user")
@@ -107,6 +107,12 @@ class AdminStudentControllerTest {
 
     @Test
     void searchUsesDefaultPaginationWhenQueryParametersAreMissing() throws Exception {
+        when(service.search(any()))
+                .thenReturn(PageResponse.<StudentResponse>builder()
+                        .content(List.of())
+                        .pageSize(20)
+                        .isLast(true)
+                        .build());
         mvc.perform(get("/api/v1/students")).andExpect(status().isOk());
 
         var requestCaptor = ArgumentCaptor.forClass(StudentSearchRequest.class);
@@ -169,7 +175,7 @@ class AdminStudentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.email").value("new@example.com"));
 
-        var requestCaptor = ArgumentCaptor.forClass(UpdateStudentRequest.class);
+        var requestCaptor = ArgumentCaptor.forClass(UpdateStudentProfileRequest.class);
         verify(profileUpdateService).updateStudentProfile(eq(authenticatedJwt), eq(1L), requestCaptor.capture());
         assertThat(requestCaptor.getValue().getEmail()).isEqualTo("new@example.com");
         assertThat(requestCaptor.getValue().getTargetGpa()).isEqualByComparingTo("3.75");
@@ -183,7 +189,7 @@ class AdminStudentControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isOk());
-        var requestCaptor = ArgumentCaptor.forClass(UpdateStudentRequest.class);
+        var requestCaptor = ArgumentCaptor.forClass(UpdateStudentProfileRequest.class);
         verify(profileUpdateService).updateStudentProfile(eq(authenticatedJwt), eq(1L), requestCaptor.capture());
         if (requestBody.contains("   ")) {
             assertThat(requestCaptor.getValue().getEmail()).isEmpty();

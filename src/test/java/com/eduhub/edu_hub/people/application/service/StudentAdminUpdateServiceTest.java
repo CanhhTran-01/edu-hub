@@ -13,7 +13,7 @@ import com.eduhub.edu_hub.identity.api.dto.response.UserAccountEmailResponse;
 import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
 import com.eduhub.edu_hub.identity.application.exception.IdentityAuthenticationException;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
-import com.eduhub.edu_hub.people.api.dto.request.UpdateStudentRequest;
+import com.eduhub.edu_hub.people.api.dto.request.UpdateStudentProfileRequest;
 import com.eduhub.edu_hub.people.api.mapper.StudentResponseMapper;
 import com.eduhub.edu_hub.people.application.exception.StudentProfileException;
 import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
@@ -40,7 +40,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 @ExtendWith(MockitoExtension.class)
-class StudentProfileUpdateServiceTest {
+class StudentAdminUpdateServiceTest {
     private final Jwt authenticatedJwt = Jwt.withTokenValue("test-token")
             .header("alg", "HS256")
             .subject("academic-user")
@@ -61,7 +61,7 @@ class StudentProfileUpdateServiceTest {
     private StudentResponseMapper studentResponseMapper = new StudentResponseMapper();
 
     @InjectMocks
-    private StudentProfileUpdateService service;
+    private StudentAdminUpdateService service;
 
     @Test
     void normalizesEditableFieldsAndPreservesStudentIdentityClassAndAcademicWarning() {
@@ -78,7 +78,7 @@ class StudentProfileUpdateServiceTest {
         prepareProfileResponse(student, "new@example.com");
         when(curriculumReferenceData.findMajorsByIds(Set.of(2L)))
                 .thenReturn(List.of(new MajorSimpleResponse(2L, "CNTT", "Công nghệ thông tin", null)));
-        UpdateStudentRequest request = new UpdateStudentRequest();
+        UpdateStudentProfileRequest request = new UpdateStudentProfileRequest();
         request.setFullName(" Nguyễn Văn Bình ");
         request.setDateOfBirth(LocalDate.of(2005, 2, 3));
         request.setPhone(" 0911111111 ");
@@ -113,7 +113,7 @@ class StudentProfileUpdateServiceTest {
     void nullAndOmittedFieldsKeepExistingValuesAndDoNotWriteAccountEmail() {
         Student student = loadStudent();
         prepareProfileResponse(student, "kept@example.com");
-        UpdateStudentRequest request = new UpdateStudentRequest();
+        UpdateStudentProfileRequest request = new UpdateStudentProfileRequest();
         request.setFullName(null);
         request.setDateOfBirth(null);
         request.setEmail(null);
@@ -138,7 +138,7 @@ class StudentProfileUpdateServiceTest {
     void blankEmailRequestsClearingAtIdentityInsteadOfKeepingTheOldEmail(String blankEmail) {
         Student student = loadStudent();
         prepareProfileResponse(student, null);
-        UpdateStudentRequest request = new UpdateStudentRequest();
+        UpdateStudentProfileRequest request = new UpdateStudentProfileRequest();
         request.setEmail(blankEmail);
 
         assertThat(service.updateStudentProfile(authenticatedJwt, 1L, request).getEmail())
@@ -150,7 +150,7 @@ class StudentProfileUpdateServiceTest {
     @ValueSource(strings = {"-0.01", "4.01", "3.125"})
     void rejectsInvalidTargetGpaBeforeLoadingOrChangingTheProfile(String targetGpa) {
         authenticateCurrentUser();
-        UpdateStudentRequest request = new UpdateStudentRequest();
+        UpdateStudentProfileRequest request = new UpdateStudentProfileRequest();
         request.setTargetGpa(new BigDecimal(targetGpa));
         request.setFullName("Không được ghi khi GPA sai");
 
@@ -164,7 +164,7 @@ class StudentProfileUpdateServiceTest {
     @ValueSource(strings = {"", "   ", "123", "01234567890A", "0123456789012"})
     void rejectsInvalidCitizenIdBeforeAnyWrite(String citizenId) {
         authenticateCurrentUser();
-        UpdateStudentRequest request = new UpdateStudentRequest();
+        UpdateStudentProfileRequest request = new UpdateStudentProfileRequest();
         request.setCitizenId(citizenId);
 
         assertThatThrownBy(() -> service.updateStudentProfile(authenticatedJwt, 1L, request))
@@ -179,7 +179,7 @@ class StudentProfileUpdateServiceTest {
     @Test
     void duplicateCitizenIdDoesNotChangeEmailOrStudentFields() {
         Student student = loadStudent();
-        UpdateStudentRequest request = new UpdateStudentRequest();
+        UpdateStudentProfileRequest request = new UpdateStudentProfileRequest();
         request.setCitizenId("111 111 111 111");
         request.setFullName("Tên mới");
         request.setEmail("new@example.com");
@@ -201,7 +201,7 @@ class StudentProfileUpdateServiceTest {
     @ValueSource(ints = {0, 1})
     void rejectsTodayAndFutureBirthDates(int daysFromToday) {
         authenticateCurrentUser();
-        UpdateStudentRequest request = new UpdateStudentRequest();
+        UpdateStudentProfileRequest request = new UpdateStudentProfileRequest();
         request.setDateOfBirth(LocalDate.now(ZoneOffset.UTC).plusDays(daysFromToday));
 
         assertThatThrownBy(() -> service.updateStudentProfile(authenticatedJwt, 1L, request))
@@ -214,7 +214,7 @@ class StudentProfileUpdateServiceTest {
     @ValueSource(strings = {"", "  ", "\t"})
     void rejectsBlankFullNameWithAFieldError(String fullName) {
         authenticateCurrentUser();
-        UpdateStudentRequest request = new UpdateStudentRequest();
+        UpdateStudentProfileRequest request = new UpdateStudentProfileRequest();
         request.setFullName(fullName);
 
         assertThatThrownBy(() -> service.updateStudentProfile(authenticatedJwt, 1L, request))
@@ -227,7 +227,7 @@ class StudentProfileUpdateServiceTest {
     @CsvSource({"fullName,256", "phone,256", "statusReason,501"})
     void rejectsOversizedFieldsBeforeLoadingTheStudent(String field, int characterCount) {
         authenticateCurrentUser();
-        UpdateStudentRequest request = new UpdateStudentRequest();
+        UpdateStudentProfileRequest request = new UpdateStudentProfileRequest();
         switch (field) {
             case "fullName" -> request.setFullName("x".repeat(characterCount));
             case "phone" -> request.setPhone("1".repeat(characterCount));
@@ -244,7 +244,7 @@ class StudentProfileUpdateServiceTest {
     void missingOrDeletedStudentReturnsNotFound() {
         authenticateCurrentUser();
 
-        assertThatThrownBy(() -> service.updateStudentProfile(authenticatedJwt, 1L, new UpdateStudentRequest()))
+        assertThatThrownBy(() -> service.updateStudentProfile(authenticatedJwt, 1L, new UpdateStudentProfileRequest()))
                 .isInstanceOfSatisfying(StudentProfileException.class, exception -> assertThat(exception.getErrorCode())
                         .isEqualTo(ErrorCode.STUDENT_NOT_FOUND));
         verify(studentRepository, never()).save(any());
@@ -254,7 +254,7 @@ class StudentProfileUpdateServiceTest {
     void emailUpdateRequiresAnAccountLinkAndDoesNotCreateAnAccount() {
         Student student = loadStudent();
         student.setUserId(null);
-        UpdateStudentRequest request = new UpdateStudentRequest();
+        UpdateStudentProfileRequest request = new UpdateStudentProfileRequest();
         request.setEmail("new@example.com");
 
         assertThatThrownBy(() -> service.updateStudentProfile(authenticatedJwt, 1L, request))
@@ -271,7 +271,7 @@ class StudentProfileUpdateServiceTest {
         doThrow(new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED))
                 .when(identityFacade)
                 .updateAccountEmail(101L, "new@example.com");
-        UpdateStudentRequest request = new UpdateStudentRequest();
+        UpdateStudentProfileRequest request = new UpdateStudentProfileRequest();
         request.setEmail("new@example.com");
         request.setFullName("Tên mới");
 
@@ -286,7 +286,7 @@ class StudentProfileUpdateServiceTest {
         Student student = loadStudent();
         student.setUserId(null);
         when(studentRepository.save(student)).thenReturn(student);
-        UpdateStudentRequest request = new UpdateStudentRequest();
+        UpdateStudentProfileRequest request = new UpdateStudentProfileRequest();
         request.setPhone(" 0911111111 ");
 
         var response = service.updateStudentProfile(authenticatedJwt, 1L, request);
@@ -298,7 +298,7 @@ class StudentProfileUpdateServiceTest {
 
     @Test
     void rejectsMissingPrincipalEvenWhenCalledOutsideTheSecurityChain() {
-        assertThatThrownBy(() -> service.updateStudentProfile(null, 1L, new UpdateStudentRequest()))
+        assertThatThrownBy(() -> service.updateStudentProfile(null, 1L, new UpdateStudentProfileRequest()))
                 .isInstanceOfSatisfying(StudentProfileException.class, exception -> assertThat(exception.getErrorCode())
                         .isEqualTo(ErrorCode.UNAUTHENTICATED));
         verifyNoInteractions(studentRepository, identityFacade);
@@ -309,7 +309,7 @@ class StudentProfileUpdateServiceTest {
         when(identityFacade.requireCurrentUser(authenticatedJwt))
                 .thenThrow(new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED));
 
-        assertThatThrownBy(() -> service.updateStudentProfile(authenticatedJwt, 1L, new UpdateStudentRequest()))
+        assertThatThrownBy(() -> service.updateStudentProfile(authenticatedJwt, 1L, new UpdateStudentProfileRequest()))
                 .isInstanceOf(IdentityAuthenticationException.class);
         verifyNoInteractions(studentRepository);
     }

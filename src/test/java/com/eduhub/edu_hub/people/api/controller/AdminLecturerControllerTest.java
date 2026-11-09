@@ -76,7 +76,7 @@ class AdminLecturerControllerTest {
     }
 
     @Test
-    void searchUsesDefaultPaginationAndReturnsMatchingLecturers() throws Exception {
+    void searchUsesDefaultPaginationAndOmitsMessageForMatchingLecturers() throws Exception {
         when(lecturerApplicationService.search(any()))
                 .thenReturn(PageResponse.<LecturerResponse>builder()
                         .content(List.of(LecturerResponse.builder().id(1L).build()))
@@ -88,7 +88,7 @@ class AdminLecturerControllerTest {
 
         mockMvc.perform(get("/api/v1/lecturers"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Success"))
+                .andExpect(jsonPath("$.message").doesNotExist())
                 .andExpect(jsonPath("$.data.content[0].id").value(1));
 
         var requestCaptor = ArgumentCaptor.forClass(LecturerSearchRequest.class);

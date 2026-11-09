@@ -10,17 +10,15 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Size;
-import lombok.Getter;
-
 import java.math.BigDecimal;
-
+import lombok.Getter;
 
 /**
  * DTO nhận request "sinh viên tự cập nhật hồ sơ của mình" (kiểu PATCH một phần).
  * Chỉ cho phép sửa đúng 3 trường: targetGpa, phone, email.
  * Mọi trường khác trong JSON đều bị từ chối (xem rejectUnknownField ở cuối).
  */
-public class UpdateMyStudentProfileRequest {
+public class UpdateMyProfileRequest {
     @Getter
     @DecimalMin(value = "0.0", message = "GPA mục tiêu phải từ 0 đến 4")
     @DecimalMax(value = "4.0", message = "GPA mục tiêu phải từ 0 đến 4")
@@ -48,10 +46,12 @@ public class UpdateMyStudentProfileRequest {
         this.targetGpa = targetGpa;
         targetGpaPresent = true;
     }
+
     public void setPhone(String phone) {
         this.phone = phone;
         phonePresent = true;
     }
+
     public void setEmail(String email) {
         // Chuẩn hóa trước validation, thống nhất với email khi cấp tài khoản; chuỗi trắng là chưa khai báo.
         this.email = TextsNormalizer.normalizeEmail(email);

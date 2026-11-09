@@ -15,7 +15,10 @@ import java.time.LocalDate;
 import lombok.Data;
 
 @Data
-public class UpdateStudentRequest {
+public class UpdateStudentProfileRequest {
+
+    // TODO: cần chỉnh thêm những trường không cho admin sửa (chỉ có cá nhân sinh viên mới sửa)
+
     @Size(max = 255, message = "Họ tên tối đa 255 ký tự")
     private String fullName;
 
@@ -65,7 +68,9 @@ public class UpdateStudentRequest {
     public void rejectUnsupportedField(String field, Object fieldValue) {
         // Từ chối cả key có giá trị null và request trộn field hợp lệ với MSSV/lớp/trường ngoài phạm vi.
         String detail = fieldValue == null ? " (key có giá trị null cũng không được chấp nhận)" : "";
-        throw new StudentProfileException(ErrorCode.VALIDATION_ERROR, field,
+        throw new StudentProfileException(
+                ErrorCode.VALIDATION_ERROR,
+                field,
                 "Trường không được phép cập nhật qua hồ sơ sinh viên: " + field + detail);
     }
 }
