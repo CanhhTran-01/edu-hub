@@ -9,4 +9,6 @@ public class LecturerSearchRequest {
     private String fullName;
     private Long facultyId;
     private String status;
+    private int page = 0;
+    private int size = 20;
 }

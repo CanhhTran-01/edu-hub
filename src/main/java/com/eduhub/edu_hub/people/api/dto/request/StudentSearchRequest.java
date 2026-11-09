@@ -9,4 +9,6 @@ public class StudentSearchRequest {
     private Long cohortId;
     private Long classId;
     private String activityStatus;
+    private int page = 0;
+    private int size = 20;
 }

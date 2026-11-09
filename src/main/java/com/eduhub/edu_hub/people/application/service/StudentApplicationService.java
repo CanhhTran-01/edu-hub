@@ -5,7 +5,6 @@ import com.eduhub.edu_hub.curriculum.application.facade.dto.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.identity.api.dto.request.CreateStudentAccountRequest;
 import com.eduhub.edu_hub.identity.api.dto.response.AccountNotificationResponse;
-import com.eduhub.edu_hub.identity.api.dto.response.UserAccountEmailResponse;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.people.api.dto.request.CreateStudentRequest;
 import com.eduhub.edu_hub.people.api.dto.request.StudentSearchRequest;
@@ -13,9 +12,10 @@ import com.eduhub.edu_hub.people.api.dto.response.CreateStudentResponse;
 import com.eduhub.edu_hub.people.api.dto.response.StudentResponse;
 import com.eduhub.edu_hub.people.api.mapper.StudentResponseMapper;
 import com.eduhub.edu_hub.people.application.code.StudentCodeGenerator;
+import com.eduhub.edu_hub.people.application.exception.ProfileSearchException;
+import com.eduhub.edu_hub.people.application.specification.StudentSpecification;
 import com.eduhub.edu_hub.people.domain.enums.AccountNotificationStatus;
 import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
-import com.eduhub.edu_hub.people.domain.model.Cohort;
 import com.eduhub.edu_hub.people.domain.model.Student;
 import com.eduhub.edu_hub.people.domain.repository.AdministrativeClassRepository;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
@@ -25,10 +25,8 @@ import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.mapper.PageMapper;
 import com.eduhub.edu_hub.shared.text.TextsNormalizer;
-import jakarta.persistence.criteria.Join;
-import jakarta.persistence.criteria.JoinType;
-import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -36,7 +34,6 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,6 +51,32 @@ public class StudentApplicationService {
     private final IdentityFacade identityFacade;
     private final TransactionTemplate transactionTemplate;
     private final StudentResponseMapper studentResponseMapper;
+    private final ProfileAccountEmailService profileAccountEmailService;
+
+    private record CreatedStudent(Long studentId, Long userId, List<String> warnings, boolean hasEmail) {}
+
+    public PageResponse<StudentResponse> search(StudentSearchRequest request) {
+
+        ActivityStatus activityStatus = validateSearchRequest(request);
+
+        var students = studentRepository.findAll(
+                StudentSpecification.fromRequest(request, activityStatus),
+                PageRequest.of(request.getPage(), request.getSize(), Sort.by("id")));
+
+        var majorNamesById = majorNames(students.getContent());
+        var accountEmailsByUserId = profileAccountEmailService.findEmailsByUserIds(
+                students.getContent().stream().map(Student::getUserId).toList());
+
+        return PageMapper.toPageResponse(
+                students.map(student -> toResponse(student, majorNamesById, accountEmailsByUserId)));
+    }
+
+    public StudentResponse findById(Long id) {
+        return studentRepository
+                .findByIdAndDeletedFalse(id)
+                .map(this::toResponse)
+                .orElseThrow(() -> new BaseException(ErrorCode.STUDENT_NOT_FOUND));
+    }
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CreateStudentResponse create(CreateStudentRequest request) {
@@ -68,8 +91,8 @@ public class StudentApplicationService {
         //  Không khôi phục endpoint resend hoặc reset bộ đếm để vượt giới hạn của luồng nhập học.
 
         // TODO(NOTIFICATION_STORAGE): Hiện chỉ trả kết quả lần gửi này trong response, không lưu vào Student
-        // và không tra cứu lại được sau thao tác. Khi có nhu cầu theo dõi/retry, mở rộng nguồn Notification
-        // trước khi tích hợp; không tạo StudentAdmission giả và không thể khôi phục các lần gửi chưa lưu.
+        //  và không tra cứu lại được sau thao tác. Khi có nhu cầu theo dõi/retry, mở rộng nguồn Notification
+        //  trước khi tích hợp; không tạo StudentAdmission giả và không thể khôi phục các lần gửi chưa lưu.
 
         AccountNotificationResponse notification = created.hasEmail()
                 ? identityFacade.sendStudentAccountNotification(created.userId())
@@ -95,7 +118,7 @@ public class StudentApplicationService {
             throw new BaseException(ErrorCode.VALIDATION_ERROR);
         }
 
-        if (citizenId != null && studentRepository.existsByCitizenIdAndDeletedFalse(citizenId)) {
+        if (studentRepository.existsByCitizenIdAndDeletedFalse(citizenId)) {
             throw new BaseException(ErrorCode.DUPLICATE_STUDENT_CITIZEN_ID);
         }
 
@@ -141,6 +164,20 @@ public class StudentApplicationService {
         return new CreatedStudent(saved.getId(), userId, List.copyOf(warnings), email != null);
     }
 
+    private ActivityStatus validateSearchRequest(StudentSearchRequest request) {
+        if (request.getPage() < 0 || request.getSize() < 1) {
+            throw new ProfileSearchException();
+        }
+        if (request.getActivityStatus() != null && !request.getActivityStatus().isBlank()) {
+            try {
+                return ActivityStatus.valueOf(request.getActivityStatus());
+            } catch (IllegalArgumentException exception) {
+                throw new ProfileSearchException();
+            }
+        }
+        return null;
+    }
+
     private void validateClassScope(CreateStudentRequest request, AdministrativeClass administrativeClass) {
         majors.requireMajor(request.getMajorId());
         if (administrativeClass.getMajor() == null
@@ -153,93 +190,12 @@ public class StudentApplicationService {
     }
 
     private String normalizeCitizenId(String citizenId) {
-
-        if (citizenId == null) {
-            throw new BaseException(ErrorCode.VALIDATION_ERROR);
-        }
+        if (citizenId == null) throw new BaseException(ErrorCode.VALIDATION_ERROR);
 
         String normalized = citizenId.replaceAll("\\s+", "");
-
-        if (!normalized.matches("[0-9]{12}")) {
-            throw new BaseException(ErrorCode.VALIDATION_ERROR);
-        }
+        if (!normalized.matches("[0-9]{12}")) throw new BaseException(ErrorCode.VALIDATION_ERROR);
 
         return normalized;
-    }
-
-    private record CreatedStudent(Long studentId, Long userId, List<String> warnings, boolean hasEmail) {}
-
-    public PageResponse<StudentResponse> search(StudentSearchRequest request, int page, int size) {
-        ActivityStatus status = null;
-        if (request.getActivityStatus() != null && !request.getActivityStatus().isBlank()) {
-            try {
-                status = ActivityStatus.valueOf(request.getActivityStatus());
-            } catch (IllegalArgumentException exception) {
-                throw new BaseException(ErrorCode.VALIDATION_ERROR);
-            }
-        }
-        ActivityStatus selectedStatus = status;
-        Specification<Student> filters = (root, query, builder) -> {
-            List<Predicate> predicates = new ArrayList<>();
-            predicates.add(builder.isFalse(root.get("deleted")));
-
-            String keyword = request.getKeyword();
-            if (keyword != null && !keyword.isBlank()) {
-                String pattern = "%" + keyword.toLowerCase(java.util.Locale.ROOT) + "%";
-                predicates.add(builder.or(
-                        builder.like(builder.lower(root.get("studentCode")), pattern),
-                        builder.like(builder.lower(root.get("fullName")), pattern)));
-            }
-
-            if (request.getClassId() != null || request.getMajorId() != null || request.getCohortId() != null) {
-                Join<Student, AdministrativeClass> administrativeClass =
-                        root.join("administrativeClass", JoinType.LEFT);
-                if (request.getClassId() != null) {
-                    predicates.add(builder.equal(administrativeClass.get("id"), request.getClassId()));
-                }
-                if (request.getMajorId() != null) {
-                    predicates.add(
-                            builder.equal(administrativeClass.get("major").get("id"), request.getMajorId()));
-                }
-                if (request.getCohortId() != null) {
-                    Join<AdministrativeClass, Cohort> cohort = administrativeClass.join("cohort", JoinType.LEFT);
-                    predicates.add(builder.equal(cohort.get("id"), request.getCohortId()));
-                }
-            }
-
-            if (selectedStatus != null) {
-                predicates.add(builder.equal(root.get("activityStatus"), selectedStatus));
-            }
-            return builder.and(predicates.toArray(new Predicate[0]));
-        };
-        var students = studentRepository.findAll(
-                filters, PageRequest.of(page, size, Sort.by("id").ascending()));
-        var majorNames = majorNames(students.getContent());
-        var accountEmails = accountEmailsByUserId(students.getContent());
-        return PageMapper.toPageResponse(students.map(student -> toResponse(student, majorNames, accountEmails)));
-    }
-
-    public StudentResponse findById(Long id) {
-        return studentRepository
-                .findByIdAndDeletedFalse(id)
-                .map(this::toResponse)
-                .orElseThrow(() -> new BaseException(ErrorCode.STUDENT_NOT_FOUND));
-    }
-
-    private StudentResponse toResponse(Student student) {
-        return toResponse(student, majorNames(List.of(student)), accountEmailsByUserId(List.of(student)));
-    }
-
-    private Map<Long, String> accountEmailsByUserId(List<Student> students) {
-        var userIds = students.stream()
-                .map(Student::getUserId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-        if (userIds.isEmpty()) return Map.of();
-        // Một lần gọi facade cho cả trang; email null/không có tài khoản đều hiển thị null, không đọc User entity.
-        return identityFacade.findAccountEmailsByUserIds(userIds).stream()
-                .filter(account -> account.email() != null)
-                .collect(Collectors.toMap(UserAccountEmailResponse::userId, UserAccountEmailResponse::email));
     }
 
     private Map<Long, String> majorNames(List<Student> students) {
@@ -254,6 +210,13 @@ public class StudentApplicationService {
         if (ids.isEmpty()) return Map.of();
         return curriculum.findMajorsByIds(ids).stream()
                 .collect(Collectors.toMap(MajorSimpleResponse::id, MajorSimpleResponse::majorName));
+    }
+
+    private StudentResponse toResponse(Student student) {
+        return toResponse(
+                student,
+                majorNames(List.of(student)),
+                profileAccountEmailService.findEmailsByUserIds(Collections.singletonList(student.getUserId())));
     }
 
     private StudentResponse toResponse(

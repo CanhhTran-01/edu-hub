@@ -9,8 +9,6 @@ import com.eduhub.edu_hub.people.application.service.StudentApplicationService;
 import com.eduhub.edu_hub.people.application.service.StudentProfileUpdateService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.PageResponse;
-import com.eduhub.edu_hub.shared.exception.BaseException;
-import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -21,7 +19,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -32,19 +29,12 @@ public class AdminStudentController {
     private final StudentProfileUpdateService studentProfileUpdateService;
 
     @GetMapping
-    public ApiResponse<PageResponse<StudentResponse>> search(
-            StudentSearchRequest request,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-
-        if (page < 0 || size < 1) {
-            throw new BaseException(ErrorCode.VALIDATION_ERROR);
-        }
-
+    public ApiResponse<PageResponse<StudentResponse>> search(StudentSearchRequest request) {
+        PageResponse<StudentResponse> students = studentApplicationService.search(request);
         return ApiResponse.<PageResponse<StudentResponse>>builder()
                 .success(true)
-                .message("Không tìm thấy kết quả")
-                .data(studentApplicationService.search(request, page, size))
+                .message(students.getContent().isEmpty() ? "Không tìm thấy kết quả" : null)
+                .data(students)
                 .build();
     }
 

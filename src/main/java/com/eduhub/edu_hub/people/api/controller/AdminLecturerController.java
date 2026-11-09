@@ -9,8 +9,6 @@ import com.eduhub.edu_hub.people.application.service.LecturerApplicationService;
 import com.eduhub.edu_hub.people.application.service.LecturerCreationService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.PageResponse;
-import com.eduhub.edu_hub.shared.exception.BaseException;
-import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -23,20 +21,13 @@ public class AdminLecturerController {
     private final LecturerCreationService lecturerCreationService;
 
     @GetMapping
-    public ApiResponse<PageResponse<LecturerResponse>> search(
-            LecturerSearchRequest request,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        if (page < 0 || size < 1) throw new BaseException(ErrorCode.VALIDATION_ERROR);
-        PageResponse<LecturerResponse> result = lecturerApplicationService.search(request, page, size);
-        if (result.getContent().isEmpty()) {
-            return ApiResponse.<PageResponse<LecturerResponse>>builder()
-                    .success(true)
-                    .message("Không tìm thấy kết quả")
-                    .data(result)
-                    .build();
-        }
-        return ApiResponse.success(result);
+    public ApiResponse<PageResponse<LecturerResponse>> search(LecturerSearchRequest request) {
+        PageResponse<LecturerResponse> lecturers = lecturerApplicationService.search(request);
+        return ApiResponse.<PageResponse<LecturerResponse>>builder()
+                .success(true)
+                .message(lecturers.getContent().isEmpty() ? "Không tìm thấy kết quả" : null)
+                .data(lecturers)
+                .build();
     }
 
     @GetMapping("/{id}")

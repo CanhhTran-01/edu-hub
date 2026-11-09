@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
@@ -15,12 +16,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.eduhub.edu_hub.people.api.dto.request.CreateStudentRequest;
+import com.eduhub.edu_hub.people.api.dto.request.StudentSearchRequest;
 import com.eduhub.edu_hub.people.api.dto.request.UpdateStudentRequest;
 import com.eduhub.edu_hub.people.api.dto.response.CreateStudentResponse;
 import com.eduhub.edu_hub.people.api.dto.response.StudentResponse;
 import com.eduhub.edu_hub.people.api.exception.StudentProfileExceptionHandler;
 import com.eduhub.edu_hub.people.application.service.StudentApplicationService;
 import com.eduhub.edu_hub.people.application.service.StudentProfileUpdateService;
+import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -64,6 +67,52 @@ class AdminStudentControllerTest {
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void searchBindsPaginationAndAllFiltersIntoTheRequest() throws Exception {
+        when(service.search(any()))
+                .thenReturn(PageResponse.<StudentResponse>builder()
+                        .content(List.of())
+                        .pageNumber(2)
+                        .pageSize(5)
+                        .isLast(true)
+                        .build());
+
+        mvc.perform(get("/api/v1/students")
+                        .param("keyword", "An")
+                        .param("majorId", "2")
+                        .param("cohortId", "8")
+                        .param("classId", "3")
+                        .param("activityStatus", "STUDYING")
+                        .param("page", "2")
+                        .param("size", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content").isEmpty())
+                .andExpect(jsonPath("$.data.pageNumber").value(2))
+                .andExpect(jsonPath("$.data.pageSize").value(5))
+                .andExpect(jsonPath("$.data.last").value(true));
+
+        var requestCaptor = ArgumentCaptor.forClass(StudentSearchRequest.class);
+        verify(service).search(requestCaptor.capture());
+        StudentSearchRequest request = requestCaptor.getValue();
+        assertThat(request.getKeyword()).isEqualTo("An");
+        assertThat(request.getMajorId()).isEqualTo(2L);
+        assertThat(request.getCohortId()).isEqualTo(8L);
+        assertThat(request.getClassId()).isEqualTo(3L);
+        assertThat(request.getActivityStatus()).isEqualTo("STUDYING");
+        assertThat(request.getPage()).isEqualTo(2);
+        assertThat(request.getSize()).isEqualTo(5);
+    }
+
+    @Test
+    void searchUsesDefaultPaginationWhenQueryParametersAreMissing() throws Exception {
+        mvc.perform(get("/api/v1/students")).andExpect(status().isOk());
+
+        var requestCaptor = ArgumentCaptor.forClass(StudentSearchRequest.class);
+        verify(service).search(requestCaptor.capture());
+        assertThat(requestCaptor.getValue().getPage()).isZero();
+        assertThat(requestCaptor.getValue().getSize()).isEqualTo(20);
     }
 
     @ParameterizedTest

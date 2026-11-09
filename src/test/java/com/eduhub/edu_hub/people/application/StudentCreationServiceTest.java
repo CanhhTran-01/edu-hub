@@ -20,6 +20,7 @@ import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.people.api.dto.request.CreateStudentRequest;
 import com.eduhub.edu_hub.people.api.mapper.StudentResponseMapper;
 import com.eduhub.edu_hub.people.application.code.StudentCodeGenerator;
+import com.eduhub.edu_hub.people.application.service.ProfileAccountEmailService;
 import com.eduhub.edu_hub.people.application.service.StudentApplicationService;
 import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
 import com.eduhub.edu_hub.people.domain.model.Cohort;
@@ -78,7 +79,8 @@ class StudentCreationServiceTest {
                 generator,
                 identity,
                 new TransactionTemplate(transactionManager),
-                new StudentResponseMapper());
+                new StudentResponseMapper(),
+                new ProfileAccountEmailService(identity));
 
         Cohort cohort = new Cohort();
         cohort.setId(8L);
