@@ -15,11 +15,9 @@ import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.JwtEncodingException;
-import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -27,8 +25,8 @@ import org.springframework.stereotype.Service;
 public class TokenService {
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final Base64.Encoder URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
+    private static final int RANDOM_SECRET_BYTE_LENGTH = 32;
     private final JwtEncoder jwtEncoder;
-    private final JwtDecoder jwtDecoder;
 
     public String generateAccessToken(User user, Long sessionId, Instant issuedAt, Instant expiresAt) {
 
@@ -56,15 +54,6 @@ public class TokenService {
         }
     }
 
-    /** Đường tương thích của hồ sơ cá nhân qua IdentityFacade; controller Identity dùng principal đã xác thực. */
-    public TokenClaims validateAccessToken(String token) {
-        try {
-            return requireAuthenticatedClaims(jwtDecoder.decode(token));
-        } catch (JwtException | IllegalArgumentException | IdentityAuthenticationException exception) {
-            return null;
-        }
-    }
-
     /**
      * Đọc danh tính từ Jwt đã được Resource Server xác thực, không gọi decoder lần nữa.
      * Jwt phải lấy từ SecurityContext, không dựng từ body hoặc JWT chưa kiểm tra chữ ký.
@@ -86,9 +75,18 @@ public class TokenService {
     public record TokenClaims(long userId, long sessionId, String username) {}
 
     public String newRefreshToken() {
-        byte[] bytes = new byte[32];
-        RANDOM.nextBytes(bytes);
-        return encode(bytes);
+        return generateRandomSecret();
+    }
+
+    /** Mật khẩu reset sinh riêng từng lần; không dùng lại mật khẩu bootstrap hoặc mật khẩu tạm cấu hình. */
+    public String generateTemporaryPassword() {
+        return generateRandomSecret();
+    }
+
+    private String generateRandomSecret() {
+        byte[] randomBytes = new byte[RANDOM_SECRET_BYTE_LENGTH];
+        RANDOM.nextBytes(randomBytes);
+        return encode(randomBytes);
     }
 
     public String hash(String token) {

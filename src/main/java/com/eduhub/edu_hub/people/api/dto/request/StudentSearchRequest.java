@@ -9,5 +9,4 @@ public class StudentSearchRequest {
     private Long cohortId;
     private Long classId;
     private String activityStatus;
-    private String academicWarningStatus;
 }

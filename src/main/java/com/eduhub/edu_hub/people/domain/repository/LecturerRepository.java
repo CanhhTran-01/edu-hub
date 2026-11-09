@@ -15,7 +15,7 @@ public interface LecturerRepository extends JpaRepository<Lecturer, Long>, JpaSp
             "select lecturer.fullName from Lecturer lecturer where lecturer.userId = :userId and lecturer.deleted = false")
     Optional<String> findFullNameByUserId(@Param("userId") Long userId);
 
-    boolean existsByEmailIgnoreCaseAndDeletedFalse(String email);
+    boolean existsByUserIdInAndDeletedFalse(Collection<Long> userIds);
 
     boolean existsByCitizenIdAndDeletedFalse(String citizenId);
 

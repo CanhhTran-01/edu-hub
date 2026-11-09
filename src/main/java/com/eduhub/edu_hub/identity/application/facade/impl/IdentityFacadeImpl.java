@@ -4,16 +4,16 @@ import com.eduhub.edu_hub.identity.api.dto.request.CreateLecturerAccountRequest;
 import com.eduhub.edu_hub.identity.api.dto.request.CreateStudentAccountRequest;
 import com.eduhub.edu_hub.identity.api.dto.response.AccountNotificationResponse;
 import com.eduhub.edu_hub.identity.api.dto.response.StudentAccountResponse;
+import com.eduhub.edu_hub.identity.api.dto.response.UserAccountEmailResponse;
 import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
 import com.eduhub.edu_hub.identity.application.exception.IdentityAccountException;
 import com.eduhub.edu_hub.identity.application.exception.IdentityAuthenticationException;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
-import com.eduhub.edu_hub.identity.application.service.TokenService;
+import com.eduhub.edu_hub.identity.application.service.CurrentUserAuthenticationService;
 import com.eduhub.edu_hub.identity.domain.enums.RoleName;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.model.Role;
 import com.eduhub.edu_hub.identity.domain.model.User;
-import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.RoleRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
 import com.eduhub.edu_hub.identity.infrastructure.config.PasswordSettings;
@@ -22,21 +22,30 @@ import com.eduhub.edu_hub.notification.api.dto.request.SendAdmissionConfirmation
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
 import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import com.eduhub.edu_hub.shared.text.TextsNormalizer;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class IdentityFacadeImpl implements IdentityFacade {
+    private static final int ACCOUNT_EMAIL_QUERY_BATCH_SIZE = 500;
     private final UserRepository users;
     private final RoleRepository roles;
-    private final RefreshTokenRepository sessions;
-    private final TokenService tokens;
+    private final CurrentUserAuthenticationService currentUserAuthenticationService;
     private final NotificationFacade.ImmediateEmail immediateEmailNotifications;
     private final PasswordEncoder encoder;
     private final PasswordSettings passwordSettings;
@@ -115,32 +124,50 @@ public class IdentityFacadeImpl implements IdentityFacade {
 
     @Override
     @Transactional(readOnly = true)
-    public UserInfoResponse requireCurrentUser(String accessToken) {
+    public UserInfoResponse requireCurrentUser(Jwt authenticatedJwt) {
+        return response(currentUserAuthenticationService.requireCurrentUser(authenticatedJwt));
+    }
 
-        // TODO(AUTHENTICATED_PRINCIPAL): Khi refactor hồ sơ cá nhân, chuyển contract People–Identity sang danh tính
-        // đã xác thực từ SecurityContext để bỏ giải mã lại token; hiện giữ tương thích vì ngoài phạm vi login/logout.
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void updateAccountEmail(Long userId, String email) {
 
-        TokenService.TokenClaims claims = tokens.validateAccessToken(accessToken);
-
-        if (claims == null) throw new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED);
-        User current = users.findByUsernameAndDeletedFalse(claims.username())
+        // People xác định User ID từ principal hoặc liên kết hồ sơ đã tải, không nhận User ID tùy chọn từ body.
+        // Với PATCH /me, khóa User sau Student; mọi thay đổi vẫn thuộc transaction hồ sơ do consumer mở.
+        User account = users.findByIdForUpdate(userId)
                 .orElseThrow(() -> new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED));
 
-        LocalDateTime now = java.time.LocalDateTime.now(java.time.ZoneOffset.UTC);
+        String normalizedEmail = TextsNormalizer.normalizeEmail(email);
+        if (!Objects.equals(normalizedEmail, account.getEmail())) {
+            account.setEmail(normalizedEmail);
+            users.save(account);
 
-        boolean validSession = sessions.findByIdAndRevokedFalse(claims.sessionId())
-                .filter(session -> session.getUser().getId().equals(current.getId()))
-                .filter(session -> now.isBefore(session.getExpiresAt()))
-                .isPresent();
-
-        if (!current.getId().equals(claims.userId())
-                || current.getStatus() != UserStatus.ACTIVE
-                || (current.getLockedUntil() != null && now.isBefore(current.getLockedUntil()))
-                || !validSession) {
-            throw new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED);
+            // TODO(AUDIT_LOG): Khi bật audit, ghi thay đổi email sau commit cùng cập nhật hồ sơ cá nhân.
         }
+    }
 
-        return response(current);
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserAccountEmailResponse> findAccountEmailsByUserIds(Set<Long> userIds) {
+        if (userIds.isEmpty()) return List.of();
+        List<Long> sortedUserIds =
+                userIds.stream().filter(Objects::nonNull).sorted().toList();
+        List<UserAccountEmailResponse> accountEmails = new ArrayList<>();
+        // Hồ sơ và tài khoản có vòng đời riêng; không lọc trạng thái/xóa mềm User khi đọc email để hiển thị.
+        for (int startIndex = 0; startIndex < sortedUserIds.size(); startIndex += ACCOUNT_EMAIL_QUERY_BATCH_SIZE) {
+            int endIndex = Math.min(startIndex + ACCOUNT_EMAIL_QUERY_BATCH_SIZE, sortedUserIds.size());
+            accountEmails.addAll(
+                    users.findAccountEmailsByUserIds(new HashSet<>(sortedUserIds.subList(startIndex, endIndex))));
+        }
+        accountEmails.sort(Comparator.comparing(UserAccountEmailResponse::userId));
+        return List.copyOf(accountEmails);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<Long> findUserIdsByEmail(String email) {
+        String normalizedEmail = TextsNormalizer.normalizeEmail(email);
+        return normalizedEmail == null ? Set.of() : users.findUserIdsByEmail(normalizedEmail);
     }
 
     @Override

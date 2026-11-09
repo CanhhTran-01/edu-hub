@@ -9,7 +9,6 @@ import com.eduhub.edu_hub.people.application.code.AdministrativeClassNames;
 import com.eduhub.edu_hub.people.application.code.StudentCodeGenerator;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.application.facade.dto.*;
-import com.eduhub.edu_hub.people.domain.enums.AccountNotificationStatus;
 import com.eduhub.edu_hub.people.domain.model.*;
 import com.eduhub.edu_hub.people.domain.repository.*;
 import com.eduhub.edu_hub.shared.enums.ActivityStatus;
@@ -145,7 +144,6 @@ public class PeopleAdmissionFacadeImpl implements PeopleFacade.Admission {
                     .fullName(request.fullName())
                     .dateOfBirth(request.dateOfBirth())
                     .gender(request.gender())
-                    .email(request.email())
                     .phone(request.phone())
                     .build();
         } else {
@@ -154,21 +152,12 @@ public class PeopleAdmissionFacadeImpl implements PeopleFacade.Admission {
         student.setAdministrativeClass(target);
         student.setEntranceScore(request.entranceScore());
         student.setActivityStatus(ActivityStatus.STUDYING);
-        student.setAccountNotificationStatus(
-                request.email() == null ? AccountNotificationStatus.SKIPPED : AccountNotificationStatus.PENDING);
         // Cùng transaction với hồ sơ nhập học: lỗi ở admission phải rollback cả Student/User/MSSV.
         return AdmissionStudentRegistrationResult.builder()
                 .student(studentInfo(students.saveAndFlush(student)))
                 .reused(reused)
                 .accountLocked(locked)
                 .build();
-    }
-
-    @Transactional(propagation = Propagation.MANDATORY)
-    public void updateNotificationStatus(Long id, AccountNotificationStatus status, String error) {
-        Student student = students.findById(id).orElseThrow(() -> new BaseException(ErrorCode.STUDENT_NOT_FOUND));
-        student.setAccountNotificationStatus(status);
-        student.setAccountNotificationError(error);
     }
 
     private AdministrativeClass lockedClass(Long id) {

@@ -1,16 +1,17 @@
-package com.eduhub.edu_hub.people.application;
+package com.eduhub.edu_hub.people.application.service;
 
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.curriculum.application.facade.dto.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.identity.api.dto.request.CreateStudentAccountRequest;
 import com.eduhub.edu_hub.identity.api.dto.response.AccountNotificationResponse;
+import com.eduhub.edu_hub.identity.api.dto.response.UserAccountEmailResponse;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.people.api.dto.request.CreateStudentRequest;
 import com.eduhub.edu_hub.people.api.dto.request.StudentSearchRequest;
-import com.eduhub.edu_hub.people.api.dto.request.UpdateStudentRequest;
 import com.eduhub.edu_hub.people.api.dto.response.CreateStudentResponse;
 import com.eduhub.edu_hub.people.api.dto.response.StudentResponse;
+import com.eduhub.edu_hub.people.api.mapper.StudentResponseMapper;
 import com.eduhub.edu_hub.people.application.code.StudentCodeGenerator;
 import com.eduhub.edu_hub.people.domain.enums.AccountNotificationStatus;
 import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
@@ -33,19 +34,16 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 @Transactional(readOnly = true)
 public class StudentApplicationService {
     private final StudentRepository studentRepository;
@@ -55,6 +53,7 @@ public class StudentApplicationService {
     private final StudentCodeGenerator studentCodeGenerator;
     private final IdentityFacade identityFacade;
     private final TransactionTemplate transactionTemplate;
+    private final StudentResponseMapper studentResponseMapper;
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CreateStudentResponse create(CreateStudentRequest request) {
@@ -68,6 +67,10 @@ public class StudentApplicationService {
         //  Khi tích hợp hàng đợi thông báo dùng chung, đưa cả luồng này vào scheduler với 3 retry.
         //  Không khôi phục endpoint resend hoặc reset bộ đếm để vượt giới hạn của luồng nhập học.
 
+        // TODO(NOTIFICATION_STORAGE): Hiện chỉ trả kết quả lần gửi này trong response, không lưu vào Student
+        // và không tra cứu lại được sau thao tác. Khi có nhu cầu theo dõi/retry, mở rộng nguồn Notification
+        // trước khi tích hợp; không tạo StudentAdmission giả và không thể khôi phục các lần gửi chưa lưu.
+
         AccountNotificationResponse notification = created.hasEmail()
                 ? identityFacade.sendStudentAccountNotification(created.userId())
                 : new AccountNotificationResponse(created.userId(), false, "ACCOUNT_EMAIL_MISSING");
@@ -75,8 +78,6 @@ public class StudentApplicationService {
         AccountNotificationStatus notificationStatus = !created.hasEmail()
                 ? AccountNotificationStatus.SKIPPED
                 : notification.emailSent() ? AccountNotificationStatus.SENT : AccountNotificationStatus.FAILED;
-
-        recordNotificationResult(created.studentId(), notificationStatus, notification.emailError());
 
         StudentResponse student = findById(created.studentId());
         return new CreateStudentResponse(
@@ -126,13 +127,10 @@ public class StudentApplicationService {
         student.setDateOfBirth(request.getDateOfBirth());
         student.setGender(
                 request.getGender() == null ? null : request.getGender().trim());
-        student.setEmail(email);
         student.setPhone(request.getPhone() == null ? null : request.getPhone().trim());
         student.setCitizenId(citizenId);
         student.setEntranceScore(request.getEntranceScore());
         student.setActivityStatus(ActivityStatus.STUDYING);
-        student.setAccountNotificationStatus(AccountNotificationStatus.PENDING);
-        student.setAccountNotificationError(null);
         Student saved = studentRepository.save(student);
 
         List<String> warnings = new ArrayList<>();
@@ -169,57 +167,7 @@ public class StudentApplicationService {
         return normalized;
     }
 
-    private void recordNotificationResult(Long studentId, AccountNotificationStatus status, String error) {
-
-        TransactionTemplate updateTemplate =
-                new TransactionTemplate(Objects.requireNonNull(transactionTemplate.getTransactionManager()));
-
-        updateTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-
-        updateTemplate.executeWithoutResult(transactionStatus -> {
-            Student student = studentRepository
-                    .findByIdAndDeletedFalse(studentId)
-                    .orElseThrow(() -> new BaseException(ErrorCode.STUDENT_NOT_FOUND));
-            student.setAccountNotificationStatus(status);
-            student.setAccountNotificationError(error);
-            studentRepository.save(student);
-
-            // TODO(AUDIT_LOG): Bổ sung nhật ký gửi lần đầu; retry sẽ qua hàng đợi dùng chung sau.
-        });
-    }
-
     private record CreatedStudent(Long studentId, Long userId, List<String> warnings, boolean hasEmail) {}
-
-    @Transactional
-    public StudentResponse update(Long id, UpdateStudentRequest request) {
-        if (request.getStudentCode() != null) {
-            throw new BaseException(ErrorCode.VALIDATION_ERROR);
-        }
-        Student student = studentRepository
-                .findByIdAndDeletedFalse(id)
-                .orElseThrow(() -> new BaseException(ErrorCode.STUDENT_NOT_FOUND));
-        if (request.getFullName() != null) {
-            if (request.getFullName().isBlank()) {
-                throw new BaseException(ErrorCode.VALIDATION_ERROR);
-            }
-            student.setFullName(request.getFullName().trim());
-        }
-        if (request.getDateOfBirth() != null) student.setDateOfBirth(request.getDateOfBirth());
-        if (request.getEmail() != null) student.setEmail(request.getEmail());
-        if (request.getPhone() != null) student.setPhone(request.getPhone());
-        if (request.getCitizenId() != null) student.setCitizenId(request.getCitizenId());
-        if (request.getTargetGpa() != null) student.setTargetGpa(request.getTargetGpa());
-        updateAcademicWarning(student, request);
-        if (request.getAdministrativeClassId() != null) {
-            AdministrativeClass administrativeClass = administrativeClassRepository
-                    .findByIdAndDeletedFalse(request.getAdministrativeClassId())
-                    .orElseThrow(() -> new BaseException(ErrorCode.VALIDATION_ERROR));
-            student.setAdministrativeClass(administrativeClass);
-        }
-        StudentResponse response = toResponse(studentRepository.save(student));
-        log.info("Updated student profile: studentId={}, reason={}", id, request.getStatusReason());
-        return response;
-    }
 
     public PageResponse<StudentResponse> search(StudentSearchRequest request, int page, int size) {
         ActivityStatus status = null;
@@ -262,16 +210,13 @@ public class StudentApplicationService {
             if (selectedStatus != null) {
                 predicates.add(builder.equal(root.get("activityStatus"), selectedStatus));
             }
-            if (request.getAcademicWarningStatus() != null
-                    && !request.getAcademicWarningStatus().isBlank()) {
-                predicates.add(builder.equal(root.get("academicWarningStatus"), request.getAcademicWarningStatus()));
-            }
             return builder.and(predicates.toArray(new Predicate[0]));
         };
         var students = studentRepository.findAll(
                 filters, PageRequest.of(page, size, Sort.by("id").ascending()));
         var majorNames = majorNames(students.getContent());
-        return PageMapper.toPageResponse(students.map(student -> toResponse(student, majorNames)));
+        var accountEmails = accountEmailsByUserId(students.getContent());
+        return PageMapper.toPageResponse(students.map(student -> toResponse(student, majorNames, accountEmails)));
     }
 
     public StudentResponse findById(Long id) {
@@ -282,7 +227,19 @@ public class StudentApplicationService {
     }
 
     private StudentResponse toResponse(Student student) {
-        return toResponse(student, majorNames(List.of(student)));
+        return toResponse(student, majorNames(List.of(student)), accountEmailsByUserId(List.of(student)));
+    }
+
+    private Map<Long, String> accountEmailsByUserId(List<Student> students) {
+        var userIds = students.stream()
+                .map(Student::getUserId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (userIds.isEmpty()) return Map.of();
+        // Một lần gọi facade cho cả trang; email null/không có tài khoản đều hiển thị null, không đọc User entity.
+        return identityFacade.findAccountEmailsByUserIds(userIds).stream()
+                .filter(account -> account.email() != null)
+                .collect(Collectors.toMap(UserAccountEmailResponse::userId, UserAccountEmailResponse::email));
     }
 
     private Map<Long, String> majorNames(List<Student> students) {
@@ -299,60 +256,9 @@ public class StudentApplicationService {
                 .collect(Collectors.toMap(MajorSimpleResponse::id, MajorSimpleResponse::majorName));
     }
 
-    private void updateAcademicWarning(Student student, UpdateStudentRequest request) {
-        if (request.getAcademicWarningStatus() != null) {
-            String status = normalizeOptionalText(request.getAcademicWarningStatus());
-            if (!Objects.equals(status, student.getAcademicWarningStatus())) {
-                student.setAcademicWarningReason(null);
-            }
-            student.setAcademicWarningStatus(status);
-            if (status == null) {
-                student.setAcademicWarningReason(null);
-                return;
-            }
-        }
-        if (request.getAcademicWarningReason() != null) {
-            String reason = normalizeOptionalText(request.getAcademicWarningReason());
-            if (reason != null && normalizeOptionalText(student.getAcademicWarningStatus()) == null) {
-                throw new BaseException(ErrorCode.VALIDATION_ERROR);
-            }
-            student.setAcademicWarningReason(reason);
-        }
-    }
-
-    private String normalizeOptionalText(String value) {
-        return value == null || value.isBlank() ? null : value.strip();
-    }
-
-    private StudentResponse toResponse(Student student, Map<Long, String> majorNames) {
-        AdministrativeClass administrativeClass = student.getAdministrativeClass();
-        return StudentResponse.builder()
-                .id(student.getId())
-                .studentCode(student.getStudentCode())
-                .fullName(student.getFullName())
-                .dateOfBirth(student.getDateOfBirth())
-                .email(student.getEmail())
-                .phone(student.getPhone())
-                .citizenId(student.getCitizenId())
-                .className(administrativeClass == null ? null : administrativeClass.getClassName())
-                .majorName(
-                        administrativeClass == null || administrativeClass.getMajor() == null
-                                ? null
-                                : majorNames.get(administrativeClass.getMajor().getId()))
-                .cohortCode(
-                        administrativeClass == null
-                                ? null
-                                : administrativeClass.getCohort().getCohortCode())
-                .trainingType(
-                        administrativeClass == null
-                                ? null
-                                : administrativeClass.getTrainingType().name())
-                .entranceScore(student.getEntranceScore())
-                .targetGpa(student.getTargetGpa())
-                .activityStatus(student.getActivityStatus())
-                .academicWarningStatus(student.getAcademicWarningStatus())
-                .academicWarningReason(student.getAcademicWarningReason())
-                .createdAt(student.getCreatedAt())
-                .build();
+    private StudentResponse toResponse(
+            Student student, Map<Long, String> majorNames, Map<Long, String> accountEmailsByUserId) {
+        String accountEmail = student.getUserId() == null ? null : accountEmailsByUserId.get(student.getUserId());
+        return studentResponseMapper.toStudentResponse(student, majorNames, accountEmail);
     }
 }

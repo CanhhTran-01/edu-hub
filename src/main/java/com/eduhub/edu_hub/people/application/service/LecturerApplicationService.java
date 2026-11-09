@@ -1,5 +1,7 @@
-package com.eduhub.edu_hub.people.application;
+package com.eduhub.edu_hub.people.application.service;
 
+import com.eduhub.edu_hub.identity.api.dto.response.UserAccountEmailResponse;
+import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.people.api.dto.request.LecturerSearchRequest;
 import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
 import com.eduhub.edu_hub.people.domain.enums.LecturerStatus;
@@ -16,7 +18,10 @@ import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -29,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class LecturerApplicationService {
     private final LecturerRepository lecturerRepository;
+    private final IdentityFacade identityFacade;
 
     public PageResponse<LecturerResponse> search(LecturerSearchRequest request, int page, int size) {
 
@@ -71,23 +77,26 @@ public class LecturerApplicationService {
             return builder.and(predicates.toArray(new Predicate[0]));
         };
 
-        return PageMapper.toPageResponse(lecturerRepository
-                .findAll(filters, PageRequest.of(page, size, Sort.by("id").ascending()))
-                .map(this::toResponse));
+        var lecturers = lecturerRepository.findAll(
+                filters, PageRequest.of(page, size, Sort.by("id").ascending()));
+        var accountEmails = accountEmailsByUserId(lecturers.getContent());
+        return PageMapper.toPageResponse(lecturers.map(lecturer -> toResponse(lecturer, accountEmails)));
     }
 
     public LecturerResponse findById(Long id) {
         return lecturerRepository
                 .findByIdAndDeletedFalse(id)
-                .map(this::toResponse)
+                .map(lecturer -> toResponse(lecturer, accountEmailsByUserId(List.of(lecturer))))
                 .orElseThrow(() -> new BaseException(ErrorCode.LECTURER_NOT_FOUND));
     }
 
     public List<LecturerResponse> findByIds(Set<Long> ids) {
         if (ids.isEmpty()) return List.of();
         // Không lọc INACTIVE: lớp cũ vẫn cần hiển thị giảng viên từng được phân công.
-        return lecturerRepository.findAllByIdInAndDeletedFalse(ids).stream()
-                .map(this::toResponse)
+        var lecturers = lecturerRepository.findAllByIdInAndDeletedFalse(ids);
+        var accountEmails = accountEmailsByUserId(lecturers);
+        return lecturers.stream()
+                .map(lecturer -> toResponse(lecturer, accountEmails))
                 .toList();
     }
 
@@ -95,19 +104,28 @@ public class LecturerApplicationService {
         return "%" + value.trim().toLowerCase(Locale.ROOT) + "%";
     }
 
-    private LecturerResponse toResponse(Lecturer lecturer) {
+    private Map<Long, String> accountEmailsByUserId(List<Lecturer> lecturers) {
+        var userIds = lecturers.stream()
+                .map(Lecturer::getUserId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (userIds.isEmpty()) return Map.of();
+        return identityFacade.findAccountEmailsByUserIds(userIds).stream()
+                .filter(account -> account.email() != null)
+                .collect(Collectors.toMap(UserAccountEmailResponse::userId, UserAccountEmailResponse::email));
+    }
+
+    private LecturerResponse toResponse(Lecturer lecturer, Map<Long, String> accountEmailsByUserId) {
         Faculty faculty = lecturer.getFaculty();
         return LecturerResponse.builder()
                 .id(lecturer.getId())
                 .lecturerCode(lecturer.getLecturerCode())
                 .fullName(lecturer.getFullName())
-                .email(lecturer.getEmail())
+                .email(lecturer.getUserId() == null ? null : accountEmailsByUserId.get(lecturer.getUserId()))
                 .phone(lecturer.getPhone())
                 .dateOfBirth(lecturer.getDateOfBirth())
                 .citizenId(lecturer.getCitizenId())
                 .facultyId(faculty == null ? null : faculty.getId())
-                .accountNotificationStatus(lecturer.getAccountNotificationStatus())
-                .accountNotificationError(lecturer.getAccountNotificationError())
                 .facultyName(faculty == null || faculty.isDeleted() ? null : faculty.getFacultyName())
                 .status(lecturer.getStatus())
                 .build();

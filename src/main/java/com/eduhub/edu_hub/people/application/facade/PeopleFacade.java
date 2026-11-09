@@ -2,7 +2,6 @@ package com.eduhub.edu_hub.people.application.facade;
 
 import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
 import com.eduhub.edu_hub.people.application.facade.dto.*;
-import com.eduhub.edu_hub.people.domain.enums.AccountNotificationStatus;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -38,8 +37,6 @@ public interface PeopleFacade {
         List<AdmissionStudentInfo> findStudentsByIds(Set<Long> studentIds);
 
         AdmissionStudentRegistrationResult registerStudent(AdmissionStudentRegistration request);
-
-        void updateNotificationStatus(Long studentId, AccountNotificationStatus status, String error);
     }
 
     interface Scheduling {

@@ -1,4 +1,4 @@
-package com.eduhub.edu_hub.people.application;
+package com.eduhub.edu_hub.people.application.service;
 
 import com.eduhub.edu_hub.identity.api.dto.request.CreateLecturerAccountRequest;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
@@ -6,7 +6,6 @@ import com.eduhub.edu_hub.people.api.dto.request.CreateLecturerRequest;
 import com.eduhub.edu_hub.people.api.dto.response.CreateLecturerResponse;
 import com.eduhub.edu_hub.people.api.dto.response.LecturerNotificationResponse;
 import com.eduhub.edu_hub.people.application.code.LecturerCodeGenerator;
-import com.eduhub.edu_hub.people.domain.enums.AccountNotificationStatus;
 import com.eduhub.edu_hub.people.domain.enums.LecturerStatus;
 import com.eduhub.edu_hub.people.domain.model.Lecturer;
 import com.eduhub.edu_hub.people.domain.repository.FacultyRepository;
@@ -42,7 +41,7 @@ public class LecturerCreationService {
         }
 
         // Gửi thông báo sau khi transaction tạo tài khoản và hồ sơ đã commit.
-        LecturerNotificationResponse notification = accountNotificationService.send(created.id());
+        LecturerNotificationResponse notification = accountNotificationService.sendAccountNotification(created.id());
         return new CreateLecturerResponse(
                 lecturerApplicationService.findById(created.id()),
                 created.warnings(),
@@ -52,7 +51,7 @@ public class LecturerCreationService {
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public LecturerNotificationResponse resend(Long id) {
-        return accountNotificationService.send(id);
+        return accountNotificationService.sendAccountNotification(id);
     }
 
     private CreatedLecturer createInTransaction(CreateLecturerRequest request) {
@@ -79,12 +78,10 @@ public class LecturerCreationService {
         lecturer.setUserId(userId);
         lecturer.setFaculty(faculty);
         lecturer.setFullName(fullName);
-        lecturer.setEmail(email);
         lecturer.setCitizenId(citizenId);
         lecturer.setDateOfBirth(request.getDateOfBirth());
         lecturer.setPhone(request.getPhone() == null ? null : request.getPhone().trim());
         lecturer.setStatus(LecturerStatus.ACTIVE);
-        lecturer.setAccountNotificationStatus(AccountNotificationStatus.PENDING);
 
         lecturerRepository.saveAndFlush(lecturer);
 
@@ -104,7 +101,8 @@ public class LecturerCreationService {
     }
 
     private void validateUniqueProfile(String email, String citizenId) {
-        if (lecturerRepository.existsByEmailIgnoreCaseAndDeletedFalse(email)) {
+        var userIdsWithEmail = identityFacade.findUserIdsByEmail(email);
+        if (!userIdsWithEmail.isEmpty() && lecturerRepository.existsByUserIdInAndDeletedFalse(userIdsWithEmail)) {
             throw new BaseException(ErrorCode.DUPLICATE_LECTURER_EMAIL);
         }
         if (citizenId != null && lecturerRepository.existsByCitizenIdAndDeletedFalse(citizenId)) {

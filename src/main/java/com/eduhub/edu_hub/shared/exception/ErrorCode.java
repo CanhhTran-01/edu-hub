@@ -24,6 +24,8 @@ public enum ErrorCode {
     ACCOUNT_EMAIL_MISSING(4007, "Tài khoản chưa có email nhận thông báo", HttpStatus.BAD_REQUEST),
     PASSWORD_EMAIL_FAILED(4008, "Không gửi được email mật khẩu tạm", HttpStatus.BAD_GATEWAY),
     SESSION_EXPIRED(4009, "Phiên làm việc đã hết hạn", HttpStatus.UNAUTHORIZED),
+    DISABLED_ACCOUNT_OPERATION_NOT_ALLOWED(
+            4010, "Tài khoản đã vô hiệu hóa, không thể khóa, mở khóa hoặc đặt lại mật khẩu", HttpStatus.CONFLICT),
 
     // People
     STUDENT_NOT_FOUND(4101, "Không tìm thấy sinh viên", HttpStatus.NOT_FOUND),

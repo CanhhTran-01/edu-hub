@@ -14,14 +14,23 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 
 class TokenServiceTest {
-    private final JwtDecoder jwtDecoder = mock(JwtDecoder.class);
     private final JwtEncoder jwtEncoder = mock(JwtEncoder.class);
-    private final TokenService service = new TokenService(jwtEncoder, jwtDecoder);
+    private final TokenService service = new TokenService(jwtEncoder);
+
+    @Test
+    void temporaryPasswordsAreFreshUrlSafeSecretsWithinBcryptByteLimit() {
+        String firstPassword = service.generateTemporaryPassword();
+        String secondPassword = service.generateTemporaryPassword();
+        assertThat(firstPassword).matches("[A-Za-z0-9_-]{43}");
+        assertThat(secondPassword).isNotEqualTo(firstPassword);
+        assertThat(firstPassword.getBytes(java.nio.charset.StandardCharsets.UTF_8).length)
+                .isLessThanOrEqualTo(72);
+        verifyNoInteractions(jwtEncoder);
+    }
 
     @Test
     void readsAuthenticatedPrincipalWithoutDecodingTokenAgain() {
@@ -33,7 +42,7 @@ class TokenServiceTest {
                 .build();
         assertThat(service.requireAuthenticatedClaims(authenticatedJwt))
                 .isEqualTo(new TokenService.TokenClaims(7L, 9L, "account"));
-        verifyNoInteractions(jwtDecoder, jwtEncoder);
+        verifyNoInteractions(jwtEncoder);
     }
 
     @Test
@@ -42,7 +51,7 @@ class TokenServiceTest {
                 .isInstanceOfSatisfying(
                         IdentityAuthenticationException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.UNAUTHENTICATED));
-        verifyNoInteractions(jwtDecoder, jwtEncoder);
+        verifyNoInteractions(jwtEncoder);
     }
 
     @Test

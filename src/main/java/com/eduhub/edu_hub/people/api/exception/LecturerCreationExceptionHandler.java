@@ -1,6 +1,7 @@
 package com.eduhub.edu_hub.people.api.exception;
 
-import com.eduhub.edu_hub.people.api.controller.LecturerController;
+import com.eduhub.edu_hub.people.api.controller.AdminLecturerController;
+import com.eduhub.edu_hub.people.application.exception.LecturerAccountNotificationException;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
@@ -11,9 +12,16 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(assignableTypes = LecturerController.class)
+@RestControllerAdvice(assignableTypes = AdminLecturerController.class)
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class LecturerCreationExceptionHandler {
+    @ExceptionHandler(LecturerAccountNotificationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccountNotificationException(
+            LecturerAccountNotificationException exception, HttpServletRequest request) {
+        ErrorCode errorCode = exception.getErrorCode();
+        return ResponseEntity.status(errorCode.getHttpStatus())
+                .body(ApiResponse.error(errorCode, request.getRequestURI()));
+    }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponse<Void>> conflict(

@@ -15,7 +15,6 @@ import com.eduhub.edu_hub.notification.domain.model.QueuedAdmissionNotification;
 import com.eduhub.edu_hub.notification.domain.repository.QueuedAdmissionNotificationRepository;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.application.facade.dto.AdmissionStudentInfo;
-import com.eduhub.edu_hub.people.domain.enums.AccountNotificationStatus;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
@@ -102,7 +101,7 @@ class QueuedAdmissionNotificationSenderTest {
     }
 
     @Test
-    void reEnrollmentSendsConfirmationAndSynchronizesStatusWithoutSendingAnInitialPassword() {
+    void reEnrollmentRecordsConfirmationOutcomeWithoutSendingAnInitialPassword() {
         var notification = pending();
         notification.setKind(AdmissionNotificationKind.RE_ENROLLMENT);
         notification.setRecipient("returning@example.com");
@@ -116,7 +115,8 @@ class QueuedAdmissionNotificationSenderTest {
         assertThat(notification.getLastError()).isNull();
         verify(identity).sendStudentAdmissionNotification(10L, "returning@example.com");
         verifyNoMoreInteractions(identity);
-        verify(people).updateNotificationStatus(42L, AccountNotificationStatus.SENT, null);
+        verify(people).findStudentsByIds(java.util.Set.of(42L));
+        verifyNoMoreInteractions(people);
     }
 
     @Test
@@ -128,11 +128,12 @@ class QueuedAdmissionNotificationSenderTest {
 
         assertThat(notification.getState()).isEqualTo(NotificationStatus.SENT);
         assertThat(notification.getFailureCount()).isZero();
-        verify(people).updateNotificationStatus(42L, AccountNotificationStatus.SENT, null);
+        verify(people).findStudentsByIds(java.util.Set.of(42L));
+        verifyNoMoreInteractions(people);
     }
 
     @Test
-    void deliveryExceptionSchedulesRetryAndSynchronizesTheFailureWithoutLoggingSensitiveContext() {
+    void deliveryExceptionRecordsFailureAndSchedulesRetryWithoutLoggingSensitiveContext() {
         var notification = pending();
         when(identity.sendStudentAccountNotification(10L))
                 .thenThrow(new IllegalStateException("sensitive account details"));
@@ -150,7 +151,8 @@ class QueuedAdmissionNotificationSenderTest {
             assertThat(notification.getLastError()).isEqualTo("EMAIL_SEND_FAILED");
             assertThat(notification.getNextAttemptAt())
                     .isBetween(beforeAttempt.plusMinutes(1), afterAttempt.plusMinutes(1));
-            verify(people).updateNotificationStatus(42L, AccountNotificationStatus.FAILED, "EMAIL_SEND_FAILED");
+            verify(people).findStudentsByIds(java.util.Set.of(42L));
+            verifyNoMoreInteractions(people);
             assertThat(appender.list).allSatisfy(event -> {
                 assertThat(event.getFormattedMessage()).doesNotContain("sensitive account details");
                 assertThat(event.getThrowableProxy()).isNull();

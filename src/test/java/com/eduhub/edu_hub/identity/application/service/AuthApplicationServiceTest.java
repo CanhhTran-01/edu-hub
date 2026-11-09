@@ -32,7 +32,6 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
@@ -40,9 +39,8 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
 class AuthApplicationServiceTest {
     private final UserRepository users = mock(UserRepository.class);
     private final RefreshTokenRepository refreshTokens = mock(RefreshTokenRepository.class);
-    private final JwtDecoder jwtDecoder = mock(JwtDecoder.class);
     private final JwtEncoder jwtEncoder = mock(JwtEncoder.class);
-    private final TokenService tokens = new TokenService(jwtEncoder, jwtDecoder);
+    private final TokenService tokens = new TokenService(jwtEncoder);
     private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     private final PasswordEncoder passwordEncoder = spy(new BCryptPasswordEncoder(4));
     private final AuthenticationManager authenticationManager = mock(AuthenticationManager.class);
@@ -78,7 +76,7 @@ class AuthApplicationServiceTest {
         assertThat(session.isRevoked()).isTrue();
         verify(refreshTokens).save(session);
         verify(transactionManager).commit(any());
-        verifyNoInteractions(jwtDecoder, jwtEncoder, users);
+        verifyNoInteractions(jwtEncoder, users);
     }
 
     @ParameterizedTest
@@ -93,7 +91,7 @@ class AuthApplicationServiceTest {
         assertThat(session.isRevoked()).isFalse();
         verify(refreshTokens, never()).save(any());
         verify(transactionManager).rollback(any());
-        verifyNoInteractions(jwtDecoder, jwtEncoder);
+        verifyNoInteractions(jwtEncoder);
     }
 
     @Test
@@ -113,7 +111,7 @@ class AuthApplicationServiceTest {
                 .isInstanceOfSatisfying(
                         IdentityAuthenticationException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.UNAUTHENTICATED));
-        verifyNoInteractions(refreshTokens, users, jwtDecoder, jwtEncoder);
+        verifyNoInteractions(refreshTokens, users, jwtEncoder);
         verify(transactionManager, never()).getTransaction(any());
     }
 
@@ -123,7 +121,7 @@ class AuthApplicationServiceTest {
                 .isInstanceOfSatisfying(
                         IdentityAuthenticationException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.UNAUTHENTICATED));
-        verifyNoInteractions(users, refreshTokens, jwtDecoder, jwtEncoder);
+        verifyNoInteractions(users, refreshTokens, jwtEncoder);
         verify(transactionManager, never()).getTransaction(any());
     }
 
@@ -147,7 +145,7 @@ class AuthApplicationServiceTest {
         assertThat(currentSession.isRevoked()).isTrue();
         assertThat(anotherSession.isRevoked()).isTrue();
         verify(transactionManager).commit(any());
-        verifyNoInteractions(jwtDecoder, jwtEncoder);
+        verifyNoInteractions(jwtEncoder);
     }
 
     @Test

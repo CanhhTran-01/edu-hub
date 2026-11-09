@@ -11,7 +11,6 @@ import com.eduhub.edu_hub.notification.domain.model.QueuedAdmissionNotification;
 import com.eduhub.edu_hub.notification.domain.policy.NotificationRetryPolicy;
 import com.eduhub.edu_hub.notification.domain.repository.QueuedAdmissionNotificationRepository;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
-import com.eduhub.edu_hub.people.domain.enums.AccountNotificationStatus;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import lombok.RequiredArgsConstructor;
@@ -74,7 +73,7 @@ public class QueuedAdmissionNotificationSender {
         }
 
         // Đồng bộ sang module học sinh
-        synchronizeStudentNotificationStatus(notification);
+        // NOTE: Bước đồng bộ này đã được bỏ; trạng thái/lỗi chỉ lưu trên thông báo, không ghi vào Student.
         logDeliveryOutcome(notification);
     }
 
@@ -111,13 +110,6 @@ public class QueuedAdmissionNotificationSender {
                         ? "EMAIL_SEND_FAILED"
                         : errorCode.substring(0, Math.min(MAX_ERROR_CODE_LENGTH, errorCode.length())));
         notification.setNextAttemptAt(attemptTime.plusMinutes(RETRY_DELAY_MINUTES));
-    }
-
-    private void synchronizeStudentNotificationStatus(QueuedAdmissionNotification notification) {
-        peopleAdmissionFacade.updateNotificationStatus(
-                notification.getStudentId(),
-                AccountNotificationStatus.valueOf(notification.getState().name()),
-                notification.getLastError());
     }
 
     private void logDeliveryOutcome(QueuedAdmissionNotification notification) {

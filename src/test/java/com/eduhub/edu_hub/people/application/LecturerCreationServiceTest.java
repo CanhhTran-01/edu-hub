@@ -20,7 +20,9 @@ import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.people.api.dto.request.CreateLecturerRequest;
 import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
 import com.eduhub.edu_hub.people.application.code.LecturerCodeGenerator;
-import com.eduhub.edu_hub.people.domain.enums.AccountNotificationStatus;
+import com.eduhub.edu_hub.people.application.service.LecturerAccountNotificationService;
+import com.eduhub.edu_hub.people.application.service.LecturerApplicationService;
+import com.eduhub.edu_hub.people.application.service.LecturerCreationService;
 import com.eduhub.edu_hub.people.domain.enums.LecturerStatus;
 import com.eduhub.edu_hub.people.domain.model.Faculty;
 import com.eduhub.edu_hub.people.domain.model.Lecturer;
@@ -30,6 +32,7 @@ import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.time.LocalDate;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -55,7 +58,7 @@ class LecturerCreationServiceTest {
     void setup() {
         when(transactionManager.getTransaction(any())).thenAnswer(call -> new SimpleTransactionStatus());
         var transactions = new TransactionTemplate(transactionManager);
-        var notifications = new LecturerAccountNotificationService(lecturers, identity, transactions);
+        var notifications = new LecturerAccountNotificationService(lecturers, identity);
         service = new LecturerCreationService(
                 lecturers, faculties, codes, identity, transactions, queries, notifications);
 
@@ -79,22 +82,20 @@ class LecturerCreationServiceTest {
         assertThat(response.notificationError()).isEqualTo("EMAIL_SEND_FAILED");
         assertThat(response.lecturer().getId()).isEqualTo(3L);
         assertThat(savedLecturer.getFullName()).isEqualTo("Nguyen Van A");
-        assertThat(savedLecturer.getEmail()).isEqualTo("a@example.test");
+        assertThat(response.lecturer().getEmail()).isEqualTo("a@example.test");
         assertThat(savedLecturer.getCitizenId()).isEqualTo("123456");
         assertThat(savedLecturer.getPhone()).isEqualTo("0901234567");
         assertThat(savedLecturer.getStatus()).isEqualTo(LecturerStatus.ACTIVE);
-        assertThat(savedLecturer.getAccountNotificationStatus()).isEqualTo(AccountNotificationStatus.FAILED);
-        assertThat(savedLecturer.getAccountNotificationError()).isEqualTo("EMAIL_SEND_FAILED");
 
         var command = ArgumentCaptor.forClass(CreateLecturerAccountRequest.class);
         verify(identity).createLecturerAccountWithoutNotification(command.capture());
         assertThat(command.getValue().username()).isEqualTo("GV000001");
         assertThat(command.getValue().email()).isEqualTo("a@example.test");
-        verify(lecturers).save(savedLecturer);
+        verify(lecturers, never()).save(any());
     }
 
     @Test
-    void commitsCreationBeforeSendingAndCommitsNotificationBeforeReturning() {
+    void commitsCreationBeforeSendingAndReturnsNotificationWithoutAnotherProfileWrite() {
         prepareCreation(true, null);
 
         var response = service.create(request);
@@ -103,10 +104,9 @@ class LecturerCreationServiceTest {
         order.verify(lecturers).saveAndFlush(any(Lecturer.class));
         order.verify(transactionManager).commit(any());
         order.verify(identity).sendLecturerAccountNotification(2L);
-        order.verify(lecturers).save(savedLecturer);
-        order.verify(transactionManager).commit(any());
         order.verify(queries).findById(3L);
-        verify(transactionManager, times(2)).commit(any());
+        verify(transactionManager, times(1)).commit(any());
+        verify(lecturers, never()).save(any());
         assertThat(response.notificationStatus()).isEqualTo("SENT");
     }
 
@@ -164,7 +164,8 @@ class LecturerCreationServiceTest {
 
     @Test
     void rejectsDuplicateEmailBeforeCreatingAnything() {
-        when(lecturers.existsByEmailIgnoreCaseAndDeletedFalse("a@example.test")).thenReturn(true);
+        when(identity.findUserIdsByEmail("a@example.test")).thenReturn(Set.of(90L));
+        when(lecturers.existsByUserIdInAndDeletedFalse(Set.of(90L))).thenReturn(true);
 
         assertThatThrownBy(() -> service.create(request))
                 .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
@@ -172,6 +173,18 @@ class LecturerCreationServiceTest {
 
         verifyNoInteractions(codes);
         verify(identity, never()).createLecturerAccountWithoutNotification(any());
+    }
+
+    @Test
+    void emailUsedOnlyByAStudentAccountDoesNotBlockLecturerCreation() {
+        prepareCreation(true, null);
+        when(identity.findUserIdsByEmail("a@example.test")).thenReturn(Set.of(90L));
+        when(lecturers.existsByUserIdInAndDeletedFalse(Set.of(90L))).thenReturn(false);
+
+        service.create(request);
+
+        verify(identity).createLecturerAccountWithoutNotification(any());
+        verify(lecturers).existsByUserIdInAndDeletedFalse(Set.of(90L));
     }
 
     @Test
@@ -230,8 +243,8 @@ class LecturerCreationServiceTest {
         assertThat(response.lecturerId()).isEqualTo(3L);
         assertThat(response.lecturerCode()).isEqualTo("GV000001");
         assertThat(response.notificationStatus()).isEqualTo("SENT");
-        assertThat(lecturer.getAccountNotificationStatus()).isEqualTo(AccountNotificationStatus.SENT);
-        verify(lecturers).save(lecturer);
+        verify(lecturers, never()).save(any());
+        verifyNoInteractions(transactionManager);
         verifyNoInteractions(codes, faculties, queries);
         verify(identity, never()).createLecturerAccountWithoutNotification(any());
     }
@@ -280,6 +293,7 @@ class LecturerCreationServiceTest {
                 .thenReturn(LecturerResponse.builder()
                         .id(3L)
                         .lecturerCode("GV000001")
+                        .email("a@example.test")
                         .build());
     }
 

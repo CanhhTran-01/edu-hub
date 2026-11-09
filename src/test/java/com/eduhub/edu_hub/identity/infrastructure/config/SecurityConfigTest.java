@@ -30,8 +30,8 @@ class SecurityConfigTest {
     void authenticatesHs256AndAuthorizesOnlyOrdinaryJwtForBusinessApis(boolean firstLogin) {
         User account = account(firstLogin);
         Instant issuedAt = Instant.now();
-        String encoded = new TokenService(encoder, decoder)
-                .generateAccessToken(account, 9L, issuedAt, issuedAt.plusSeconds(900));
+        String encoded =
+                new TokenService(encoder).generateAccessToken(account, 9L, issuedAt, issuedAt.plusSeconds(900));
         Jwt decoded = decoder.decode(encoded);
         var authentication = configuration
                 .jwtAuthenticationConverter(configuration.jwtGrantedAuthoritiesConverter())
@@ -60,8 +60,8 @@ class SecurityConfigTest {
     void accessTokenRemainsAcceptedAfterPasswordStateChangesUntilExpiry() {
         User account = account(false);
         Instant issuedAt = Instant.now();
-        String encoded = new TokenService(encoder, decoder)
-                .generateAccessToken(account, 9L, issuedAt, issuedAt.plusSeconds(900));
+        String encoded =
+                new TokenService(encoder).generateAccessToken(account, 9L, issuedAt, issuedAt.plusSeconds(900));
         account.setFirstLogin(true);
         account.setPasswordHash("changed-password-hash");
         assertThat(decoder.decode(encoded).getClaimAsString(AccessTokenPurpose.CLAIM_NAME))
@@ -85,7 +85,7 @@ class SecurityConfigTest {
                         "another-unit-test-signing-key-32bytes".getBytes(java.nio.charset.StandardCharsets.UTF_8));
         JwtEncoder otherEncoder = configuration.jwtEncoder(configuration.jwtSigningKey(otherSigningKey));
         Instant issuedAt = Instant.now();
-        String encoded = new TokenService(otherEncoder, decoder)
+        String encoded = new TokenService(otherEncoder)
                 .generateAccessToken(account(false), 9L, issuedAt, issuedAt.plusSeconds(900));
         assertThatThrownBy(() -> decoder.decode(encoded)).isInstanceOf(JwtException.class);
     }

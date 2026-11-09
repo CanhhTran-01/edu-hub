@@ -15,10 +15,12 @@ import com.eduhub.edu_hub.curriculum.application.facade.dto.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.identity.api.dto.response.AccountNotificationResponse;
+import com.eduhub.edu_hub.identity.api.dto.response.UserAccountEmailResponse;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.people.api.dto.request.CreateStudentRequest;
+import com.eduhub.edu_hub.people.api.mapper.StudentResponseMapper;
 import com.eduhub.edu_hub.people.application.code.StudentCodeGenerator;
-import com.eduhub.edu_hub.people.domain.enums.AccountNotificationStatus;
+import com.eduhub.edu_hub.people.application.service.StudentApplicationService;
 import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
 import com.eduhub.edu_hub.people.domain.model.Cohort;
 import com.eduhub.edu_hub.people.domain.model.Student;
@@ -75,7 +77,8 @@ class StudentCreationServiceTest {
                 curriculum,
                 generator,
                 identity,
-                new TransactionTemplate(transactionManager));
+                new TransactionTemplate(transactionManager),
+                new StudentResponseMapper());
 
         Cohort cohort = new Cohort();
         cohort.setId(8L);
@@ -101,6 +104,8 @@ class StudentCreationServiceTest {
         when(generator.generate(administrativeClass, 1)).thenReturn("CT080101");
         when(identity.createStudentAccountWithoutNotification(any())).thenReturn(20L);
         when(identity.sendStudentAccountNotification(20L)).thenReturn(new AccountNotificationResponse(20L, true, null));
+        when(identity.findAccountEmailsByUserIds(Set.of(20L)))
+                .thenReturn(List.of(new UserAccountEmailResponse(20L, "student@test.com")));
         when(students.save(any(Student.class))).thenAnswer(invocation -> {
             Student student = invocation.getArgument(0);
             if (student.getId() == null) student.setId(30L);
@@ -114,6 +119,7 @@ class StudentCreationServiceTest {
 
         assertThat(response.notificationStatus()).isEqualTo("SENT");
         assertThat(response.student().getMajorName()).isEqualTo("Công nghệ thông tin");
+        assertThat(response.student().getEmail()).isEqualTo("student@test.com");
         verify(identity).createStudentAccountWithoutNotification(any());
         verify(identity).sendStudentAccountNotification(20L);
         verify(students).existsByCitizenIdAndDeletedFalse("012345678901");
@@ -131,7 +137,7 @@ class StudentCreationServiceTest {
     }
 
     @Test
-    void emailFailureDoesNotRemoveCreatedStudentAndIsPersistedAsFailed() {
+    void emailFailureKeepsCreatedStudentAndReturnsFailureWithoutAnotherProfileWrite() {
         when(classes.findByIdForStudentCodeUpdate(1L)).thenReturn(Optional.of(administrativeClass));
         when(generator.nextSequence(any())).thenReturn(1);
         when(generator.generate(any(), anyInt())).thenReturn("CT080101");
@@ -149,7 +155,7 @@ class StudentCreationServiceTest {
 
         assertThat(response.notificationStatus()).isEqualTo("FAILED");
         assertThat(response.notificationError()).isEqualTo("EMAIL_SEND_FAILED");
-        verify(students, times(2)).save(any(Student.class));
+        verify(students, times(1)).save(any(Student.class));
     }
 
     private CreateStudentRequest request() {
@@ -175,7 +181,6 @@ class StudentCreationServiceTest {
         student.setStudentCode("CT080101");
         student.setFullName("Nguyễn Văn An");
         student.setAdministrativeClass(administrativeClass);
-        student.setAccountNotificationStatus(AccountNotificationStatus.SENT);
         return student;
     }
 }

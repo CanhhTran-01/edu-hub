@@ -10,6 +10,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.LocalDate;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -31,17 +32,10 @@ public class Lecturer extends BaseEntity {
     @Column(name = "full_name", nullable = false)
     private String fullName;
 
-    private String email;
     private String phone;
 
-    private java.time.LocalDate dateOfBirth;
+    private LocalDate dateOfBirth;
     private String citizenId;
-
-    @Enumerated(EnumType.STRING)
-    private com.eduhub.edu_hub.people.domain.enums.AccountNotificationStatus accountNotificationStatus;
-
-    @Column(columnDefinition = "TEXT")
-    private String accountNotificationError;
 
     @Enumerated(EnumType.STRING)
     private LecturerStatus status;

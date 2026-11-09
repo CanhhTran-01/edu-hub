@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.Set;
 
 public interface CurriculumFacade {
+
     interface ReferenceData {
         List<MajorSimpleResponse> findMajorsByIds(Set<Long> ids);
 

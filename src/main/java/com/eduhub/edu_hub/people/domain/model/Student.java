@@ -1,6 +1,5 @@
 package com.eduhub.edu_hub.people.domain.model;
 
-import com.eduhub.edu_hub.people.domain.enums.AccountNotificationStatus;
 import com.eduhub.edu_hub.shared.common.BaseEntity;
 import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import jakarta.persistence.Column;
@@ -46,8 +45,6 @@ public class Student extends BaseEntity {
 
     private String gender;
 
-    private String email;
-
     private String phone;
 
     @Column(name = "citizen_id")
@@ -56,8 +53,9 @@ public class Student extends BaseEntity {
     @Column(name = "entrance_score")
     private BigDecimal entranceScore;
 
+    // TODO(STUDENT_TARGET_GPA_AI): Khi triển khai AI tư vấn tốt nghiệp, cung cấp mục tiêu qua People facade.
     @Column(name = "target_gpa")
-    private BigDecimal targetGpa;
+    private BigDecimal targetGpa; // null là chưa thiết lập, không tự thay bằng 0.
 
     @Enumerated(EnumType.STRING)
     @Column(name = "activity_status", nullable = false)
@@ -65,13 +63,6 @@ public class Student extends BaseEntity {
 
     @Column(name = "academic_warning_status")
     private String academicWarningStatus;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "account_notification_status")
-    private AccountNotificationStatus accountNotificationStatus;
-
-    @Column(name = "account_notification_error")
-    private String accountNotificationError;
 
     @Column(name = "academic_warning_reason", columnDefinition = "text")
     private String academicWarningReason;

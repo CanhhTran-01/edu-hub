@@ -6,11 +6,10 @@ import static org.mockito.Mockito.*;
 
 import com.eduhub.edu_hub.identity.api.dto.request.CreateLecturerAccountRequest;
 import com.eduhub.edu_hub.identity.api.dto.request.CreateStudentAccountRequest;
-import com.eduhub.edu_hub.identity.application.service.TokenService;
+import com.eduhub.edu_hub.identity.application.service.CurrentUserAuthenticationService;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.model.Role;
 import com.eduhub.edu_hub.identity.domain.model.User;
-import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.RoleRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
 import com.eduhub.edu_hub.identity.infrastructure.config.PasswordSettings;
@@ -34,8 +33,7 @@ class IdentityNotificationTest {
     private final IdentityFacadeImpl identity = new IdentityFacadeImpl(
             users,
             roles,
-            mock(RefreshTokenRepository.class),
-            mock(TokenService.class),
+            mock(CurrentUserAuthenticationService.class),
             immediateEmailNotifications,
             new BCryptPasswordEncoder(4),
             new PasswordSettings(8, "configured-temp"));

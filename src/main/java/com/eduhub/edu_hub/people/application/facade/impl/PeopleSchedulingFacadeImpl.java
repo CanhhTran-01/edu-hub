@@ -1,7 +1,7 @@
 package com.eduhub.edu_hub.people.application.facade.impl;
 
 import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
-import com.eduhub.edu_hub.people.application.LecturerApplicationService;
+import com.eduhub.edu_hub.people.application.service.LecturerApplicationService;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.application.facade.dto.StudentPlanningResponse;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
