@@ -24,7 +24,7 @@ public class CurriculumTeachingSubjectsFacadeImpl implements CurriculumFacade.Te
     @Transactional(propagation = Propagation.MANDATORY)
     public List<SubjectSimpleResponse> requireActiveTeachingSubjects(Set<Long> subjectIds) {
         if (subjectIds.isEmpty()) return List.of();
-        // Khóa đọc theo ID tăng dần, giữ tới hết transaction tạo giảng viên để tránh môn bị ngừng giữa chừng.
+        // Khóa đọc theo ID tăng dần, giữ tới hết transaction tạo/cập nhật giảng viên để tránh môn bị ngừng giữa chừng.
         List<Subject> teachingSubjects = subjectRepository.findAllByIdInAndDeletedFalseOrderByIdAsc(subjectIds);
         if (teachingSubjects.size() != subjectIds.size()) {
             throw new TeachingSubjectException(ErrorCode.SUBJECT_NOT_FOUND);

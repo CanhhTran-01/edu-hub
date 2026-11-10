@@ -9,17 +9,21 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.eduhub.edu_hub.curriculum.application.exception.TeachingSubjectException;
 import com.eduhub.edu_hub.people.api.dto.request.CreateLecturerRequest;
 import com.eduhub.edu_hub.people.api.dto.request.LecturerSearchRequest;
+import com.eduhub.edu_hub.people.api.dto.request.UpdateLecturerProfileRequest;
 import com.eduhub.edu_hub.people.api.dto.response.CreateLecturerResponse;
 import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
-import com.eduhub.edu_hub.people.api.exception.LecturerCreationExceptionHandler;
+import com.eduhub.edu_hub.people.api.exception.LecturerProfileExceptionHandler;
+import com.eduhub.edu_hub.people.application.exception.LecturerProfileException;
 import com.eduhub.edu_hub.people.application.exception.ProfileCreationException;
 import com.eduhub.edu_hub.people.application.exception.ProfileSearchException;
+import com.eduhub.edu_hub.people.application.service.LecturerAdminUpdateService;
 import com.eduhub.edu_hub.people.application.service.LecturerApplicationService;
 import com.eduhub.edu_hub.people.application.service.LecturerCreationService;
 import com.eduhub.edu_hub.people.domain.enums.LecturerStatus;
@@ -31,9 +35,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -45,14 +51,15 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class AdminLecturerControllerTest {
     private final LecturerApplicationService lecturerApplicationService = mock(LecturerApplicationService.class);
     private final LecturerCreationService lecturerCreationService = mock(LecturerCreationService.class);
+    private final LecturerAdminUpdateService lecturerAdminUpdateService = mock(LecturerAdminUpdateService.class);
     private final Jwt authenticatedJwt = Jwt.withTokenValue("test-token")
             .header("alg", "HS256")
             .subject("academic-admin")
             .build();
-    private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(
-                    new AdminLecturerController(lecturerApplicationService, lecturerCreationService))
+    private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new AdminLecturerController(
+                    lecturerApplicationService, lecturerCreationService, lecturerAdminUpdateService))
             .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
-            .setControllerAdvice(new LecturerCreationExceptionHandler(), new GlobalExceptionHandler())
+            .setControllerAdvice(new LecturerProfileExceptionHandler(), new GlobalExceptionHandler())
             .build();
 
     @BeforeEach
@@ -132,6 +139,176 @@ class AdminLecturerControllerTest {
     void noLongerExposesResendEndpoint() throws Exception {
         mockMvc.perform(post("/api/v1/lecturers/1/account-notification/resend")).andExpect(status().isNotFound());
         verifyNoInteractions(lecturerCreationService);
+    }
+
+    @Test
+    void updatePassesAuthenticatedPrincipalAndNewSubjectListWithNormalizedEmail() throws Exception {
+        when(lecturerAdminUpdateService.updateLecturerProfile(eq(authenticatedJwt), eq(1L), any()))
+                .thenReturn(LecturerResponse.builder()
+                        .id(1L)
+                        .lecturerCode("CNTT26001")
+                        .email("new@example.com")
+                        .teachingSubjects(
+                                List.of(com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse.builder()
+                                        .id(10L)
+                                        .build()))
+                        .build());
+        mockMvc.perform(
+                        put("/api/v1/lecturers/1")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        """
+                {"fullName":"Trần Văn Bình","dateOfBirth":"1979-02-03","email":" NEW@EXAMPLE.COM ",
+                 "phone":"0912345678","citizenId":"012345678901","teachingSubjectIds":[10,30],"reason":"Cập nhật hồ sơ"}
+                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(1))
+                .andExpect(jsonPath("$.data.email").value("new@example.com"))
+                .andExpect(jsonPath("$.data.teachingSubjects[0].id").value(10));
+        var requestCaptor = ArgumentCaptor.forClass(UpdateLecturerProfileRequest.class);
+        verify(lecturerAdminUpdateService).updateLecturerProfile(eq(authenticatedJwt), eq(1L), requestCaptor.capture());
+        assertThat(requestCaptor.getValue().getEmail()).isEqualTo("new@example.com");
+        assertThat(requestCaptor.getValue().getTeachingSubjectIds()).containsExactly(10L, 30L);
+        assertThat(requestCaptor.getValue().getReason()).isEqualTo("Cập nhật hồ sơ");
+        verifyNoInteractions(lecturerCreationService, lecturerApplicationService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "lecturerCode",
+                "userId",
+                "facultyId",
+                "recruitmentYear",
+                "status",
+                "password",
+                "role",
+                "teachingSubjects",
+                "statusReason",
+                "unknownField"
+            })
+    void updateRejectsUnsupportedFieldsIncludingNullAndMixedEditableFields(String field) throws Exception {
+        for (String fieldValue : List.of("null", "1")) {
+            mockMvc.perform(put("/api/v1/lecturers/1")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"phone\":\"0912345678\",\"" + field + "\":" + fieldValue + "}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value(1001))
+                    .andExpect(jsonPath("$.errors[0].field").value(field));
+        }
+        verifyNoInteractions(lecturerAdminUpdateService, lecturerApplicationService, lecturerCreationService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{}", "{\"email\":null,\"teachingSubjectIds\":null}", "{\"email\":\"   \"}"})
+    void updatePreservesOmittedNullAndBlankEmailSemantics(String requestBody) throws Exception {
+        mockMvc.perform(put("/api/v1/lecturers/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isOk());
+        var requestCaptor = ArgumentCaptor.forClass(UpdateLecturerProfileRequest.class);
+        verify(lecturerAdminUpdateService).updateLecturerProfile(eq(authenticatedJwt), eq(1L), requestCaptor.capture());
+        assertThat(requestCaptor.getValue().getTeachingSubjectIds()).isNull();
+        if (requestBody.contains("   "))
+            assertThat(requestCaptor.getValue().getEmail()).isEmpty();
+        else assertThat(requestCaptor.getValue().getEmail()).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"[]", "[null]", "[0]", "[-1]"})
+    void updateRejectsEmptyOrInvalidSubjectSelectionBeforeCallingService(String subjectIds) throws Exception {
+        mockMvc.perform(put("/api/v1/lecturers/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"teachingSubjectIds\":" + subjectIds + "}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(1001))
+                .andExpect(jsonPath("$.errors[0].field").value(org.hamcrest.Matchers.startsWith("teachingSubjectIds")));
+        verifyNoInteractions(lecturerAdminUpdateService);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"fullName,256", "phone,256", "reason,501"})
+    void updateRejectsOversizedFields(String field, int characterCount) throws Exception {
+        mockMvc.perform(put("/api/v1/lecturers/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"" + field + "\":\"" + "x".repeat(characterCount) + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value(field));
+        verifyNoInteractions(lecturerAdminUpdateService);
+    }
+
+    @Test
+    void updateRejectsInvalidEmailAndMalformedDateOrSubjectShape() throws Exception {
+        mockMvc.perform(put("/api/v1/lecturers/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"invalid-email\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("email"));
+        mockMvc.perform(put("/api/v1/lecturers/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"dateOfBirth\":\"not-a-date\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("dateOfBirth"));
+        mockMvc.perform(put("/api/v1/lecturers/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"teachingSubjectIds\":{}}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("teachingSubjectIds"));
+        verifyNoInteractions(lecturerAdminUpdateService);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"email,4117", "citizenId,4118"})
+    void updateReturnsFieldErrorsForBusinessConflicts(String field, int code) throws Exception {
+        ErrorCode errorCode =
+                field.equals("email") ? ErrorCode.DUPLICATE_LECTURER_EMAIL : ErrorCode.DUPLICATE_LECTURER_CITIZEN_ID;
+        when(lecturerAdminUpdateService.updateLecturerProfile(eq(authenticatedJwt), eq(1L), any()))
+                .thenThrow(new LecturerProfileException(errorCode, field, errorCode.getMessage()));
+        mockMvc.perform(put("/api/v1/lecturers/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(code))
+                .andExpect(jsonPath("$.errors[0].field").value(field));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"uk_lecturers_email_active,email,4117", "uk_lecturers_citizen_id_active,citizenId,4118"})
+    void updateMapsConcurrentUniqueConstraintFailuresWithoutExposingSql(String constraintName, String field, int code)
+            throws Exception {
+        var constraintException = mock(org.hibernate.exception.ConstraintViolationException.class);
+        when(constraintException.getConstraintName()).thenReturn(constraintName);
+        when(lecturerAdminUpdateService.updateLecturerProfile(eq(authenticatedJwt), eq(1L), any()))
+                .thenThrow(new DataIntegrityViolationException("sensitive SQL context", constraintException));
+        mockMvc.perform(put("/api/v1/lecturers/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(code))
+                .andExpect(jsonPath("$.errors[0].field").value(field));
+    }
+
+    @Test
+    void unrelatedIntegrityFailureIsNotMisreportedAsAProfileConflict() throws Exception {
+        when(lecturerAdminUpdateService.updateLecturerProfile(eq(authenticatedJwt), eq(1L), any()))
+                .thenThrow(new DataIntegrityViolationException("sensitive SQL context"));
+        mockMvc.perform(put("/api/v1/lecturers/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value(1000));
+    }
+
+    @Test
+    void updateReturnsTeachingSubjectErrorOnSelectionField() throws Exception {
+        when(lecturerAdminUpdateService.updateLecturerProfile(eq(authenticatedJwt), eq(1L), any()))
+                .thenThrow(new TeachingSubjectException(ErrorCode.SUBJECT_NOT_TEACHABLE));
+        mockMvc.perform(put("/api/v1/lecturers/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"teachingSubjectIds\":[10]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(4212))
+                .andExpect(jsonPath("$.errors[0].field").value("teachingSubjectIds"));
     }
 
     private String validCreationJson() {

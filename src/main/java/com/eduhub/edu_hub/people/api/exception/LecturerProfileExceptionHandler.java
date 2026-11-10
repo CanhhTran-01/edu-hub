@@ -2,6 +2,7 @@ package com.eduhub.edu_hub.people.api.exception;
 
 import com.eduhub.edu_hub.curriculum.application.exception.TeachingSubjectException;
 import com.eduhub.edu_hub.people.api.controller.AdminLecturerController;
+import com.eduhub.edu_hub.people.application.exception.LecturerProfileException;
 import com.eduhub.edu_hub.people.application.exception.ProfileCreationException;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
@@ -12,38 +13,73 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import tools.jackson.databind.exc.MismatchedInputException;
 
 @RestControllerAdvice(assignableTypes = AdminLecturerController.class)
 @Order(Ordered.HIGHEST_PRECEDENCE)
-public class LecturerCreationExceptionHandler {
+public class LecturerProfileExceptionHandler {
     @ExceptionHandler(ProfileCreationException.class)
     public ResponseEntity<ApiResponse<Void>> handleProfileCreationException(
             ProfileCreationException exception, HttpServletRequest request) {
-        ErrorCode errorCode = exception.getErrorCode();
+        return buildProfileErrorResponse(
+                exception.getErrorCode(), exception.getField(), exception.getFieldMessage(), request);
+    }
+
+    @ExceptionHandler(LecturerProfileException.class)
+    public ResponseEntity<ApiResponse<Void>> handleLecturerProfileException(
+            LecturerProfileException exception, HttpServletRequest request) {
+        return buildProfileErrorResponse(
+                exception.getErrorCode(), exception.getField(), exception.getFieldMessage(), request);
+    }
+
+    private ResponseEntity<ApiResponse<Void>> buildProfileErrorResponse(
+            ErrorCode errorCode, String field, String fieldMessage, HttpServletRequest request) {
         return ResponseEntity.status(errorCode.getHttpStatus())
                 .body(ApiResponse.<Void>builder()
                         .success(false)
                         .code(errorCode.getCode())
                         .message(errorCode.getMessage())
-                        .errors(
-                                exception.getField() == null
-                                        ? null
-                                        : List.of(new FieldErrorDetail(
-                                                exception.getField(), exception.getFieldMessage())))
+                        .errors(field == null ? null : List.of(new FieldErrorDetail(field, fieldMessage)))
                         .path(request.getRequestURI())
                         .build());
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInvalidRequestBody(
+            HttpMessageNotReadableException exception, HttpServletRequest request) {
+        String field = "request";
+        String message = "JSON không hợp lệ";
+        Throwable cause = exception;
+        while (cause != null) {
+            // Jackson bọc lỗi từ JsonAnySetter; lấy lại lỗi theo field, kể cả key bị cấm có giá trị null.
+            if (cause instanceof LecturerProfileException profileException) {
+                return handleLecturerProfileException(profileException, request);
+            }
+            if (cause instanceof MismatchedInputException inputException
+                    && !inputException.getPath().isEmpty()) {
+                String inputField = inputException.getPath().getFirst().getPropertyName();
+                if (inputField != null) {
+                    field = inputField;
+                    message = "Giá trị trường không đúng định dạng";
+                }
+            }
+            cause = cause.getCause();
+        }
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.validationError(
+                        List.of(new FieldErrorDetail(field, message)), request.getRequestURI()));
     }
 
     @ExceptionHandler(TeachingSubjectException.class)
     public ResponseEntity<ApiResponse<Void>> handleTeachingSubjectException(
             TeachingSubjectException exception, HttpServletRequest request) {
-        return handleProfileCreationException(
-                new ProfileCreationException(
-                        exception.getErrorCode(),
-                        "teachingSubjectIds",
-                        exception.getErrorCode().getMessage()),
+        return buildProfileErrorResponse(
+                exception.getErrorCode(),
+                "teachingSubjectIds",
+                exception.getErrorCode().getMessage(),
                 request);
     }
 
@@ -73,6 +109,6 @@ public class LecturerCreationExceptionHandler {
                     case DUPLICATE_LECTURER_CITIZEN_ID -> "citizenId";
                     default -> null;
                 };
-        return handleProfileCreationException(new ProfileCreationException(code, field, code.getMessage()), request);
+        return buildProfileErrorResponse(code, field, code.getMessage(), request);
     }
 }

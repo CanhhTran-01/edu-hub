@@ -7,7 +7,7 @@ import com.eduhub.edu_hub.people.domain.model.Lecturer;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
-/** Dùng chung cho tạo/đọc hồ sơ; chỉ ghép email và môn học đã được service tải. */
+/** Dùng chung cho tạo/đọc/cập nhật hồ sơ; chỉ ghép email và môn học đã được service tải. */
 @Component
 public class LecturerResponseMapper {
     public LecturerResponse toLecturerResponse(

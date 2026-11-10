@@ -31,7 +31,11 @@ class LecturerCodeGeneratorTest {
     void formatsScopedSequencesAndStopsAtNineHundredNinetyNineWithoutRetry() {
         Faculty faculty = faculty(1L, "CNTT");
         when(jdbcTemplate.queryForList(anyString(), eq(Integer.class), eq(1L), eq(2026), eq(999)))
-                .thenReturn(List.of(1), List.of(2), List.of(999), List.of());
+                .thenReturn(List.of(1))
+                .thenReturn(List.of(2))
+                .thenReturn(List.of(999))
+                .thenReturn(List.of());
+
         assertThat(allocateAndGenerateLecturerCode(faculty, 2026)).isEqualTo("CNTT26001");
         assertThat(allocateAndGenerateLecturerCode(faculty, 2026)).isEqualTo("CNTT26002");
         assertThat(allocateAndGenerateLecturerCode(faculty, 2026)).isEqualTo("CNTT26999");
@@ -39,6 +43,7 @@ class LecturerCodeGeneratorTest {
                 .isInstanceOfSatisfying(
                         ProfileCreationException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.LECTURER_CODE_EXHAUSTED));
+
         verify(jdbcTemplate, times(4)).queryForList(anyString(), eq(Integer.class), eq(1L), eq(2026), eq(999));
     }
 
