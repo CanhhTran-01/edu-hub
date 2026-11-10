@@ -16,6 +16,9 @@ import lombok.Data;
 /** PUT cập nhật từng phần: bỏ field/null giữ nguyên, danh sách môn có giá trị thay thế toàn bộ tập hiện tại. */
 @Data
 public class UpdateLecturerProfileRequest {
+
+    // TODO: sau này có thể chỉnh thêm fields không cho Admin sửa (chỉ có cá nhân giảng viên mới sửa)
+
     @Size(max = 255, message = "Họ tên tối đa 255 ký tự")
     private String fullName;
 

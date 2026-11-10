@@ -26,5 +26,4 @@ public record AuthenticationSettings(
             throw new IdentityConfigurationException("Số lần đăng nhập sai và các thời hạn xác thực phải lớn hơn 0");
         }
     }
-
 }

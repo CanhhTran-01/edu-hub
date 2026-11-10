@@ -17,11 +17,10 @@ import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
 import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import com.eduhub.edu_hub.shared.mapper.PageMapper;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
-
-import com.eduhub.edu_hub.shared.mapper.PageMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -53,8 +52,10 @@ public class AdminUserService {
 
         currentUserAuthenticationService.requireCurrentUser(authenticatedJwt);
 
-        String keyword = request.getKeyword() == null ? "" : request.getKeyword().trim();
-        Pageable pageable = PageRequest.of(request.getPage(), request.getSize(), Sort.by("id").ascending());
+        String keyword =
+                request.getKeyword() == null ? "" : request.getKeyword().trim();
+        Pageable pageable = PageRequest.of(
+                request.getPage(), request.getSize(), Sort.by("id").ascending());
 
         Page<UserInfoResponse> userAccounts = userRepository
                 .findByDeletedFalseAndUsernameContainingIgnoreCase(keyword, pageable)
@@ -89,8 +90,11 @@ public class AdminUserService {
         // TODO(ACCESS_TOKEN_REVOCATION): Đồng bộ lock với logout/reset/đổi mật khẩu khi triển khai thu hồi jti.
 
         // TODO(AUDIT_LOG): Lưu actor, tài khoản đích và lý do khóa sau commit khi có hạ tầng audit.
-        log.info("Khóa tài khoản: actorUserId={}, targetUserId={}, reason={}",
-                actorUser.getId(), userId, request.reason());
+        log.info(
+                "Khóa tài khoản: actorUserId={}, targetUserId={}, reason={}",
+                actorUser.getId(),
+                userId,
+                request.reason());
     }
 
     @Transactional
@@ -109,7 +113,10 @@ public class AdminUserService {
         targetUser.setFailedLoginCount(0);
 
         // TODO(AUDIT_LOG): Lưu actor, tài khoản đích và trạng thái trước/sau mở khóa sau commit khi bật audit.
-        log.info("Mở khóa tài khoản: actorUserId={}, targetUserId={}", accountContext.actorUser().getId(), userId);
+        log.info(
+                "Mở khóa tài khoản: actorUserId={}, targetUserId={}",
+                accountContext.actorUser().getId(),
+                userId);
     }
 
     @Transactional
@@ -157,7 +164,10 @@ public class AdminUserService {
         //  transaction commit thất bại; rollback DB hiện không thể thu hồi email đã gửi. Chưa chuyển reset sang queue.
 
         // TODO(AUDIT_LOG): Lưu actor, tài khoản đích và kết quả reset sau commit; không lưu mật khẩu/hash/nội dung thư.
-        log.info("Reset mật khẩu: actorUserId={}, targetUserId={}", accountContext.actorUser().getId(), userId);
+        log.info(
+                "Reset mật khẩu: actorUserId={}, targetUserId={}",
+                accountContext.actorUser().getId(),
+                userId);
     }
 
     private void lockSystemAdminStatusChanges() {

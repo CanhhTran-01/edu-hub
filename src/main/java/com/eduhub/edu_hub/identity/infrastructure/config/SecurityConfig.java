@@ -82,7 +82,6 @@ public class SecurityConfig {
                         // TODO(AUTHORIZATION): Chốt ma trận quyền role cho từng API; hiện chưa kiểm tra role.
                         .requestMatchers("/api/v1/**")
                         .access(applicationApiAuthorizationManager)
-
                         .anyRequest()
                         .permitAll()) // phía dưới cùng không ghi đè rule đã khớp
                 .build();

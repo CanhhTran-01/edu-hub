@@ -17,7 +17,7 @@ import lombok.Data;
 @Data
 public class UpdateStudentProfileRequest {
 
-    // TODO: cần chỉnh thêm những trường không cho admin sửa (chỉ có cá nhân sinh viên mới sửa)
+    // TODO: sau này có thể chỉnh thêm fields không cho Admin sửa (chỉ có cá nhân sinh viên mới sửa)
 
     @Size(max = 255, message = "Họ tên tối đa 255 ký tự")
     private String fullName;

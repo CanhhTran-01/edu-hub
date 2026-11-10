@@ -68,8 +68,10 @@ public class StudentCreationService {
         AccountNotificationResponse notification = sendAccountEmail(createdStudent);
 
         if (createdStudent.hasEmail() && !notification.emailSent()) {
-            log.warn("Student account email was not sent: userId={}, errorCode={}",
-                    createdStudent.userId(), notification.emailError());
+            log.warn(
+                    "Student account email was not sent: userId={}, errorCode={}",
+                    createdStudent.userId(),
+                    notification.emailError());
         }
 
         AccountNotificationStatus notificationStatus = !createdStudent.hasEmail()

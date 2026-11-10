@@ -71,7 +71,8 @@ public class LecturerCreationService {
         AccountNotificationResponse notification = sendAccountEmail(createdLecturer.userId());
 
         if (!notification.emailSent()) {
-            log.warn("Lecturer account email was not sent: userId={}, errorCode={}",
+            log.warn(
+                    "Lecturer account email was not sent: userId={}, errorCode={}",
                     createdLecturer.userId(),
                     notification.emailError());
         }
@@ -106,7 +107,8 @@ public class LecturerCreationService {
         String fullName = request.getFullName().trim();
         boolean hasPossibleDuplicate = lecturerRepository.existsByFullNameIgnoreCaseAndDateOfBirthAndDeletedFalse(
                 fullName, request.getDateOfBirth());
-        int lecturerSequence = lecturerCodeGenerator.allocateNextLecturerSequence(faculty, request.getRecruitmentYear());
+        int lecturerSequence =
+                lecturerCodeGenerator.allocateNextLecturerSequence(faculty, request.getRecruitmentYear());
         String lecturerCode =
                 lecturerCodeGenerator.generateLecturerCode(faculty, request.getRecruitmentYear(), lecturerSequence);
         Long userId = identityFacade.createLecturerAccountWithoutNotification(
@@ -163,8 +165,10 @@ public class LecturerCreationService {
         try {
             return identityFacade.sendLecturerAccountNotification(userId);
         } catch (RuntimeException exception) {
-            log.warn("Lecturer account email failed: userId={}, failureType={}",
-                    userId, exception.getClass().getSimpleName());
+            log.warn(
+                    "Lecturer account email failed: userId={}, failureType={}",
+                    userId,
+                    exception.getClass().getSimpleName());
             return new AccountNotificationResponse(userId, false, "EMAIL_SEND_FAILED");
         }
     }

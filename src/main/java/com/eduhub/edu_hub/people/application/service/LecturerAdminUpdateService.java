@@ -97,8 +97,11 @@ public class LecturerAdminUpdateService {
                         .get(lecturer.getUserId());
 
         // TODO(AUDIT_LOG): Khi có audit trail, ghi actor, Lecturer ID, trường thay đổi, môn trước/sau, lý do
-        log.info("Updated lecturer profile: actorId={}, lecturerId={}, reason={}",
-                currentUser.getId(), lecturerId, updateReason);
+        log.info(
+                "Updated lecturer profile: actorId={}, lecturerId={}, reason={}",
+                currentUser.getId(),
+                lecturerId,
+                updateReason);
 
         return lecturerResponseMapper.toLecturerResponse(lecturer, accountEmail, teachingSubjects);
     }

@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 
 public interface FacultyRepository extends JpaRepository<Faculty, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select faculty from Faculty faculty where faculty.id = :facultyId and faculty.deleted = false and faculty.active = true")
+    @Query(
+            "select faculty from Faculty faculty where faculty.id = :facultyId and faculty.deleted = false and faculty.active = true")
     Optional<Faculty> findActiveFacultyForCodeAllocation(@Param("facultyId") Long facultyId);
 }
