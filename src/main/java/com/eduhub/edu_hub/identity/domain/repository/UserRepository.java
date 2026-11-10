@@ -7,15 +7,18 @@ import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.jspecify.annotations.NonNull;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface UserRepository extends JpaRepository<User, Long> {
+public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
     boolean existsByUsername(String username);
 
     @Query(
@@ -44,7 +47,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByIdForUpdate(@Param("userId") Long userId);
 
     @EntityGraph(attributePaths = "role")
-    Page<User> findByDeletedFalseAndUsernameContainingIgnoreCase(String username, Pageable pageable);
+    Optional<User> findByIdAndDeletedFalse(Long userId);
+
+    @Override
+    @EntityGraph(attributePaths = "role")
+    Page<User> findAll(@NonNull Specification<User> specification, @NonNull Pageable pageable);
 
     long countByDeletedFalseAndStatusAndRole_RoleName(UserStatus status, String roleName);
 }

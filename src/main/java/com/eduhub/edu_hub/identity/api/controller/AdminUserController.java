@@ -2,7 +2,8 @@ package com.eduhub.edu_hub.identity.api.controller;
 
 import com.eduhub.edu_hub.identity.api.dto.request.LockUserRequest;
 import com.eduhub.edu_hub.identity.api.dto.request.SearchUserAccountsRequest;
-import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
+import com.eduhub.edu_hub.identity.api.dto.response.UserAccountDetailResponse;
+import com.eduhub.edu_hub.identity.api.dto.response.UserAccountSummaryResponse;
 import com.eduhub.edu_hub.identity.application.service.AdminUserService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.PageResponse;
@@ -24,19 +25,23 @@ public class AdminUserController {
     private final AdminUserService adminUserService;
 
     // TODO(AUTHORIZATION): Khi triển khai phân quyền, chỉ SYSTEM_ADMIN có permission quản trị tài khoản
-    //  mới được tìm kiếm, khóa/mở khóa và reset mật khẩu ở đây. Hiện JWT ACCESS của role khác vẫn gọi được.
-    //  Quyền kỹ thuật này không cho phép SYSTEM_ADMIN cập nhật hồ sơ Student qua API của People.
+    //  mới được tìm kiếm, xem chi tiết, khóa/mở khóa và reset mật khẩu ở đây. Hiện JWT ACCESS của role khác vẫn gọi
+    //  được.Quyền kỹ thuật này không cho phép SYSTEM_ADMIN cập nhật hồ sơ Student qua API của People.
 
-    // TODO: sau này sẽ chỉnh thành 1 flow hoàn chỉnh:
-    //  admin vào dashboard --> FE hiện tài khoản --> admin tra cứu, xem chi tiết tài khoản mình cần --> thao tác
+    // Danh sách dùng chung cho dashboard và tìm kiếm; FE chọn tài khoản rồi tải chi tiết trước khi thao tác.
+    // FLOW: Admin truy cập, tìm kiếm -> hiển thị simple -> bấm xem chi tiết -> chọn thao tác trong cửa sổ popup
 
     @GetMapping
-    public ApiResponse<PageResponse<UserInfoResponse>> searchUserAccounts(
+    public ApiResponse<PageResponse<UserAccountSummaryResponse>> searchUserAccounts(
             @AuthenticationPrincipal Jwt authenticatedJwt, @Valid SearchUserAccountsRequest request) {
         return ApiResponse.success(adminUserService.searchUserAccounts(authenticatedJwt, request));
     }
 
-    // TODO: cần 1 endpoints trả về response chi tiết hơn (Search sẽ trả UserInfoSimple)
+    @GetMapping("/{userId}")
+    public ApiResponse<UserAccountDetailResponse> getUserAccountDetail(
+            @AuthenticationPrincipal Jwt authenticatedJwt, @PathVariable Long userId) {
+        return ApiResponse.success(adminUserService.getUserAccountDetail(authenticatedJwt, userId));
+    }
 
     @PostMapping("/{userId}/lock")
     public ApiResponse<Void> lockUserAccount(

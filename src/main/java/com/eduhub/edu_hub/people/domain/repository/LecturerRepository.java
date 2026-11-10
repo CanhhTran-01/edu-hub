@@ -1,5 +1,6 @@
 package com.eduhub.edu_hub.people.domain.repository;
 
+import com.eduhub.edu_hub.people.api.dto.response.AccountProfileContactResponse;
 import com.eduhub.edu_hub.people.domain.model.Lecturer;
 import jakarta.persistence.LockModeType;
 import java.util.Collection;
@@ -16,6 +17,11 @@ public interface LecturerRepository extends JpaRepository<Lecturer, Long>, JpaSp
     @Query(
             "select lecturer.fullName from Lecturer lecturer where lecturer.userId = :userId and lecturer.deleted = false")
     Optional<String> findFullNameByUserId(@Param("userId") Long userId);
+
+    @Query(
+            "select new com.eduhub.edu_hub.people.api.dto.response.AccountProfileContactResponse(lecturer.fullName, lecturer.phone) "
+                    + "from Lecturer lecturer where lecturer.userId = :userId and lecturer.deleted = false")
+    Optional<AccountProfileContactResponse> findAccountProfileContactByUserId(@Param("userId") Long userId);
 
     boolean existsByUserIdInAndDeletedFalse(Collection<Long> userIds);
 

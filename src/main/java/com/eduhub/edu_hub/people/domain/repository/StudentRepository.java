@@ -1,5 +1,6 @@
 package com.eduhub.edu_hub.people.domain.repository;
 
+import com.eduhub.edu_hub.people.api.dto.response.AccountProfileContactResponse;
 import com.eduhub.edu_hub.people.domain.model.Student;
 import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import java.util.List;
@@ -21,6 +22,11 @@ public interface StudentRepository extends JpaRepository<Student, Long>, JpaSpec
 
     @Query("select student.fullName from Student student where student.userId = :userId and student.deleted = false")
     Optional<String> findFullNameByUserId(@Param("userId") Long userId);
+
+    @Query(
+            "select new com.eduhub.edu_hub.people.api.dto.response.AccountProfileContactResponse(student.fullName, student.phone) "
+                    + "from Student student where student.userId = :userId and student.deleted = false")
+    Optional<AccountProfileContactResponse> findAccountProfileContactByUserId(@Param("userId") Long userId);
 
     @Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from Student s where s.userId = :userId and s.deleted = false")

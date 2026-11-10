@@ -9,6 +9,7 @@ import com.eduhub.edu_hub.identity.api.dto.request.SearchUserAccountsRequest;
 import com.eduhub.edu_hub.identity.application.exception.IdentityAccountException;
 import com.eduhub.edu_hub.identity.application.exception.IdentityAuthenticationException;
 import com.eduhub.edu_hub.identity.application.exception.IdentityConfigurationException;
+import com.eduhub.edu_hub.identity.domain.enums.RoleName;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.model.RefreshToken;
 import com.eduhub.edu_hub.identity.domain.model.Role;
@@ -17,6 +18,8 @@ import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.RoleRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
+import com.eduhub.edu_hub.people.api.dto.response.AccountProfileContactResponse;
+import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -32,6 +35,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
@@ -46,6 +50,7 @@ class AdminUserServiceTest {
     private final NotificationFacade.ImmediateEmail immediateEmailNotifications =
             mock(NotificationFacade.ImmediateEmail.class);
     private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
+    private final PeopleFacade.AccountProfile accountProfiles = mock(PeopleFacade.AccountProfile.class);
     private final AdminUserService adminUserService = new AdminUserService(
             userRepository,
             refreshTokenRepository,
@@ -53,7 +58,8 @@ class AdminUserServiceTest {
             currentUserAuthenticationService,
             tokenService,
             immediateEmailNotifications,
-            passwordEncoder);
+            passwordEncoder,
+            accountProfiles);
     private final Jwt authenticatedJwt = Jwt.withTokenValue("unit-token")
             .header("alg", "HS256")
             .subject("admin")
@@ -286,38 +292,148 @@ class AdminUserServiceTest {
                 .isInstanceOf(IdentityAuthenticationException.class);
         assertThatThrownBy(() -> adminUserService.searchUserAccounts(null, new SearchUserAccountsRequest()))
                 .isInstanceOf(IdentityAuthenticationException.class);
+        assertThatThrownBy(() -> adminUserService.getUserAccountDetail(null, 2L))
+                .isInstanceOf(IdentityAuthenticationException.class);
         verifyNoInteractions(roleRepository, userRepository, refreshTokenRepository);
+        verifyNoInteractions(accountProfiles);
     }
 
     @Test
-    void searchTrimsKeywordAndUsesStableIdOrderAndExistingResponseFields() {
+    void searchUsesStableIdOrderAndOnlyAccountSummaryFields() {
         var request = new SearchUserAccountsRequest();
         request.setKeyword(" student ");
         var pageable = PageRequest.of(0, 20, Sort.by("id").ascending());
         targetUser.setEmail("student@example.com");
         targetUser.setFirstLogin(true);
-        when(userRepository.findByDeletedFalseAndUsernameContainingIgnoreCase("student", pageable))
+        when(userRepository.findAll(any(Specification.class), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(targetUser), pageable, 1));
 
         var response = adminUserService.searchUserAccounts(authenticatedJwt, request);
 
         assertThat(response.getContent()).hasSize(1);
         assertThat(response.getContent().getFirst().getUsername()).isEqualTo("student");
-        assertThat(response.getContent().getFirst().getEmail()).isEqualTo("student@example.com");
-        assertThat(response.getContent().getFirst().isFirstLogin()).isTrue();
-        assertThat(response.getContent().getFirst().getFullName()).isNull();
+        assertThat(response.getContent().getFirst().getId()).isEqualTo(2L);
+        assertThat(response.getContent().getFirst().getRole()).isEqualTo("SYSTEM_ADMIN");
+        assertThat(response.getContent().getFirst().getStatus()).isEqualTo("ACTIVE");
         assertThat(response.getPageNumber()).isZero();
         assertThat(response.getTotalElements()).isEqualTo(1);
         assertThat(response.isLast()).isTrue();
+        verifyNoInteractions(accountProfiles);
     }
 
     @Test
     void searchWithNoMatchReturnsAnEmptyPage() {
-        when(userRepository.findByDeletedFalseAndUsernameContainingIgnoreCase(eq(""), any()))
+        when(userRepository.findAll(any(Specification.class), any(PageRequest.class)))
                 .thenAnswer(invocation -> Page.empty(invocation.getArgument(1)));
         var response = adminUserService.searchUserAccounts(authenticatedJwt, new SearchUserAccountsRequest());
         assertThat(response.getContent()).isEmpty();
         assertThat(response.getTotalElements()).isZero();
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = RoleName.class,
+            names = {"STUDENT", "LECTURER"})
+    void detailReadsContactByTargetUserIdAndPreservesAccountMetadata(RoleName targetRole) {
+        var role = new Role();
+        role.setRoleName(targetRole.name());
+        targetUser.setRole(role);
+        targetUser.setEmail("account@example.com");
+        targetUser.setFirstLogin(true);
+        targetUser.setFailedLoginCount(5);
+        targetUser.setLockedUntil(LocalDateTime.now(ZoneOffset.UTC).plusMinutes(10));
+        targetUser.setPasswordChangedAt(LocalDateTime.of(2026, 11, 1, 10, 0));
+        targetUser.setCreatedAt(LocalDateTime.of(2026, 10, 1, 10, 0));
+        targetUser.setUpdatedAt(LocalDateTime.of(2026, 11, 2, 10, 0));
+        when(userRepository.findByIdAndDeletedFalse(2L)).thenReturn(Optional.of(targetUser));
+        var contact = new AccountProfileContactResponse("Nguyễn Văn An", "0901234567");
+        if (targetRole == RoleName.STUDENT) {
+            when(accountProfiles.findStudentContactByUserId(2L)).thenReturn(Optional.of(contact));
+        } else {
+            when(accountProfiles.findLecturerContactByUserId(2L)).thenReturn(Optional.of(contact));
+        }
+
+        var detail = adminUserService.getUserAccountDetail(authenticatedJwt, 2L);
+
+        assertThat(detail.getId()).isEqualTo(2L);
+        assertThat(detail.getUsername()).isEqualTo("student");
+        assertThat(detail.getRole()).isEqualTo(targetRole.name());
+        assertThat(detail.getStatus()).isEqualTo("ACTIVE");
+        assertThat(detail.getEmail()).isEqualTo("account@example.com");
+        assertThat(detail.isFirstLogin()).isTrue();
+        assertThat(detail.getFailedLoginCount()).isEqualTo(5);
+        assertThat(detail.getLockedUntil()).isEqualTo(targetUser.getLockedUntil());
+        assertThat(detail.isTemporarilyLocked()).isTrue();
+        assertThat(detail.getPasswordChangedAt()).isEqualTo(targetUser.getPasswordChangedAt());
+        assertThat(detail.getCreatedAt()).isEqualTo(targetUser.getCreatedAt());
+        assertThat(detail.getUpdatedAt()).isEqualTo(targetUser.getUpdatedAt());
+        assertThat(detail.getFullName()).isEqualTo(contact.fullName());
+        assertThat(detail.getPhone()).isEqualTo(contact.phone());
+        if (targetRole == RoleName.STUDENT) {
+            verify(accountProfiles, never()).findLecturerContactByUserId(any());
+        } else {
+            verify(accountProfiles, never()).findStudentContactByUserId(any());
+        }
+        verify(userRepository, never()).findByIdForUpdate(any());
+        verifyNoInteractions(immediateEmailNotifications, passwordEncoder, roleRepository);
+    }
+
+    @ParameterizedTest
+    @EnumSource(RoleName.class)
+    void detailKeepsAccountWhenThereIsNoProfileAndDoesNotReadProfilesForAdmins(RoleName targetRole) {
+        var role = new Role();
+        role.setRoleName(targetRole.name());
+        targetUser.setRole(role);
+        when(userRepository.findByIdAndDeletedFalse(2L)).thenReturn(Optional.of(targetUser));
+
+        var detail = adminUserService.getUserAccountDetail(authenticatedJwt, 2L);
+
+        assertThat(detail.getId()).isEqualTo(2L);
+        assertThat(detail.getFullName()).isNull();
+        assertThat(detail.getPhone()).isNull();
+        assertThat(detail.isTemporarilyLocked()).isFalse();
+        if (targetRole == RoleName.SYSTEM_ADMIN || targetRole == RoleName.ACADEMIC_ADMIN) {
+            verifyNoInteractions(accountProfiles);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(UserStatus.class)
+    void detailAllowsEveryTargetStatusWithoutChangingTheAccount(UserStatus targetStatus) {
+        targetUser.setStatus(targetStatus);
+        targetUser.setFailedLoginCount(5);
+        targetUser.setLockedUntil(LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1));
+        when(userRepository.findByIdAndDeletedFalse(2L)).thenReturn(Optional.of(targetUser));
+
+        var detail = adminUserService.getUserAccountDetail(authenticatedJwt, 2L);
+
+        assertThat(detail.getStatus()).isEqualTo(targetStatus.name());
+        assertThat(detail.isTemporarilyLocked()).isFalse();
+        assertThat(detail.getLockedUntil()).isEqualTo(targetUser.getLockedUntil());
+        assertThat(targetUser.getFailedLoginCount()).isEqualTo(5);
+        assertThat(targetUser.getStatus()).isEqualTo(targetStatus);
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void missingOrDeletedAccountIsNotFoundAndDoesNotLoadContact() {
+        when(userRepository.findByIdAndDeletedFalse(2L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> adminUserService.getUserAccountDetail(authenticatedJwt, 2L))
+                .isInstanceOfSatisfying(
+                        IdentityAccountException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.USER_NOT_FOUND));
+        verifyNoInteractions(accountProfiles);
+    }
+
+    @Test
+    void revokedActorSessionCannotReadAccountDetails() {
+        when(refreshTokenRepository.findByIdAndRevokedFalse(3L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> adminUserService.getUserAccountDetail(authenticatedJwt, 2L))
+                .isInstanceOf(IdentityAuthenticationException.class);
+        verify(userRepository, never()).findByIdAndDeletedFalse(any());
+        verifyNoInteractions(accountProfiles);
     }
 
     private void performAction(String action) {

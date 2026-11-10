@@ -14,6 +14,7 @@ import com.eduhub.edu_hub.notification.api.dto.request.SendAccountEmailRequest;
 import com.eduhub.edu_hub.notification.api.dto.response.EmailDeliveryResponse;
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
 import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
+import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.time.LocalDateTime;
@@ -48,7 +49,8 @@ class AdminUserNotificationTest {
             currentUserAuthenticationService,
             tokens,
             immediateEmailNotifications,
-            new BCryptPasswordEncoder(4));
+            new BCryptPasswordEncoder(4),
+            mock(PeopleFacade.AccountProfile.class));
     private User target;
 
     @BeforeEach

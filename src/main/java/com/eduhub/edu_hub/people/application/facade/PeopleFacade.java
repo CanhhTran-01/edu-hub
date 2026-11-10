@@ -1,5 +1,6 @@
 package com.eduhub.edu_hub.people.application.facade;
 
+import com.eduhub.edu_hub.people.api.dto.response.AccountProfileContactResponse;
 import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
 import com.eduhub.edu_hub.people.application.facade.dto.*;
 import java.util.List;
@@ -7,6 +8,13 @@ import java.util.Optional;
 import java.util.Set;
 
 public interface PeopleFacade {
+    /** Đọc thông tin liên hệ cho quản trị tài khoản theo User ID; không tải tài khoản từ Identity. */
+    interface AccountProfile {
+        Optional<AccountProfileContactResponse> findStudentContactByUserId(Long userId);
+
+        Optional<AccountProfileContactResponse> findLecturerContactByUserId(Long userId);
+    }
+
     /** Thông tin hiển thị sau xác thực; không tải tài khoản hoặc tạo hồ sơ khi đăng nhập. */
     interface LoginProfile {
         Optional<String> findStudentFullNameByUserId(Long userId);

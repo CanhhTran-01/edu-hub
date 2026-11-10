@@ -2,9 +2,11 @@ package com.eduhub.edu_hub.identity.application.service;
 
 import com.eduhub.edu_hub.identity.api.dto.request.LockUserRequest;
 import com.eduhub.edu_hub.identity.api.dto.request.SearchUserAccountsRequest;
-import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
+import com.eduhub.edu_hub.identity.api.dto.response.UserAccountDetailResponse;
+import com.eduhub.edu_hub.identity.api.dto.response.UserAccountSummaryResponse;
 import com.eduhub.edu_hub.identity.application.exception.IdentityAccountException;
 import com.eduhub.edu_hub.identity.application.exception.IdentityConfigurationException;
+import com.eduhub.edu_hub.identity.application.specification.UserAccountSpecification;
 import com.eduhub.edu_hub.identity.domain.enums.RoleName;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.model.User;
@@ -15,6 +17,8 @@ import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
 import com.eduhub.edu_hub.notification.api.dto.request.SendAccountEmailRequest;
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
 import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
+import com.eduhub.edu_hub.people.api.dto.response.AccountProfileContactResponse;
+import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.mapper.PageMapper;
@@ -27,6 +31,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
@@ -43,25 +48,64 @@ public class AdminUserService {
     private final TokenService tokenService;
     private final NotificationFacade.ImmediateEmail immediateEmailNotifications;
     private final PasswordEncoder passwordEncoder;
+    private final PeopleFacade.AccountProfile accountProfiles;
 
     @Transactional(readOnly = true)
-    public PageResponse<UserInfoResponse> searchUserAccounts(Jwt authenticatedJwt, SearchUserAccountsRequest request) {
+    public PageResponse<UserAccountSummaryResponse> searchUserAccounts(
+            Jwt authenticatedJwt, SearchUserAccountsRequest request) {
         if (request.getPage() < 0 || request.getSize() < 1) {
             throw new IdentityAccountException(ErrorCode.VALIDATION_ERROR);
         }
 
         currentUserAuthenticationService.requireCurrentUser(authenticatedJwt);
 
-        String keyword =
-                request.getKeyword() == null ? "" : request.getKeyword().trim();
         Pageable pageable = PageRequest.of(
                 request.getPage(), request.getSize(), Sort.by("id").ascending());
 
-        Page<UserInfoResponse> userAccounts = userRepository
-                .findByDeletedFalseAndUsernameContainingIgnoreCase(keyword, pageable)
-                .map(this::toUserInfoResponse);
+        Specification<User> accountCriteria = Specification.allOf(
+                UserAccountSpecification.notDeleted(),
+                UserAccountSpecification.matchesKeyword(request.getKeyword()),
+                UserAccountSpecification.hasRole(request.getRole()),
+                UserAccountSpecification.hasStatus(request.getStatus()),
+                UserAccountSpecification.requiresPasswordChange(request.getFirstLogin()));
+        Page<UserAccountSummaryResponse> userAccounts =
+                userRepository.findAll(accountCriteria, pageable).map(this::toUserAccountSummaryResponse);
 
         return PageMapper.toPageResponse(userAccounts);
+    }
+
+    @Transactional(readOnly = true)
+    public UserAccountDetailResponse getUserAccountDetail(Jwt authenticatedJwt, Long userId) {
+        currentUserAuthenticationService.requireCurrentUser(authenticatedJwt);
+
+        User targetUser = userRepository
+                .findByIdAndDeletedFalse(userId)
+                .orElseThrow(() -> new IdentityAccountException(ErrorCode.USER_NOT_FOUND));
+
+        // Chỉ đọc loại hồ sơ phù hợp role theo User ID; thiếu hồ sơ không làm mất thông tin tài khoản.
+        Optional<AccountProfileContactResponse> profileContact = findAccountProfileContact(targetUser);
+        LocalDateTime evaluatedAt = LocalDateTime.now(ZoneOffset.UTC);
+
+        return UserAccountDetailResponse.builder()
+                .id(targetUser.getId())
+                .username(targetUser.getUsername())
+                .role(targetUser.getRole().getRoleName())
+                .status(targetUser.getStatus().name())
+                .failedLoginCount(targetUser.getFailedLoginCount())
+                .lockedUntil(targetUser.getLockedUntil())
+                .passwordChangedAt(targetUser.getPasswordChangedAt())
+                .createdAt(targetUser.getCreatedAt())
+                .updatedAt(targetUser.getUpdatedAt())
+                .email(targetUser.getEmail())
+                .firstLogin(targetUser.isFirstLogin())
+                // Khóa tạm độc lập với LOCKED thủ công; mốc khóa đã hết hạn vẫn được giữ nguyên để đọc.
+                .temporarilyLocked(
+                        targetUser.getLockedUntil() != null && evaluatedAt.isBefore(targetUser.getLockedUntil()))
+                .fullName(profileContact
+                        .map(AccountProfileContactResponse::fullName)
+                        .orElse(null))
+                .phone(profileContact.map(AccountProfileContactResponse::phone).orElse(null))
+                .build();
     }
 
     @Transactional
@@ -202,14 +246,22 @@ public class AdminUserService {
         refreshTokenRepository.findByUser_IdAndRevokedFalse(userId).forEach(session -> session.setRevoked(true));
     }
 
-    private UserInfoResponse toUserInfoResponse(User user) {
-        return UserInfoResponse.builder()
+    private Optional<AccountProfileContactResponse> findAccountProfileContact(User user) {
+        if (RoleName.STUDENT.name().equals(user.getRole().getRoleName())) {
+            return accountProfiles.findStudentContactByUserId(user.getId());
+        }
+        if (RoleName.LECTURER.name().equals(user.getRole().getRoleName())) {
+            return accountProfiles.findLecturerContactByUserId(user.getId());
+        }
+        return Optional.empty();
+    }
+
+    private UserAccountSummaryResponse toUserAccountSummaryResponse(User user) {
+        return UserAccountSummaryResponse.builder()
                 .id(user.getId())
                 .username(user.getUsername())
-                .email(user.getEmail())
                 .role(user.getRole().getRoleName())
                 .status(user.getStatus().name())
-                .isFirstLogin(user.isFirstLogin())
                 .build();
     }
 
