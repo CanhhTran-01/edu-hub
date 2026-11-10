@@ -1,10 +1,13 @@
 package com.eduhub.edu_hub.people.api.exception;
 
+import com.eduhub.edu_hub.curriculum.application.exception.TeachingSubjectException;
 import com.eduhub.edu_hub.people.api.controller.AdminLecturerController;
-import com.eduhub.edu_hub.people.application.exception.LecturerAccountNotificationException;
+import com.eduhub.edu_hub.people.application.exception.ProfileCreationException;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.List;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -15,19 +18,40 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice(assignableTypes = AdminLecturerController.class)
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class LecturerCreationExceptionHandler {
-    @ExceptionHandler(LecturerAccountNotificationException.class)
-    public ResponseEntity<ApiResponse<Void>> handleAccountNotificationException(
-            LecturerAccountNotificationException exception, HttpServletRequest request) {
+    @ExceptionHandler(ProfileCreationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleProfileCreationException(
+            ProfileCreationException exception, HttpServletRequest request) {
         ErrorCode errorCode = exception.getErrorCode();
         return ResponseEntity.status(errorCode.getHttpStatus())
-                .body(ApiResponse.error(errorCode, request.getRequestURI()));
+                .body(ApiResponse.<Void>builder()
+                        .success(false)
+                        .code(errorCode.getCode())
+                        .message(errorCode.getMessage())
+                        .errors(
+                                exception.getField() == null
+                                        ? null
+                                        : List.of(new FieldErrorDetail(
+                                                exception.getField(), exception.getFieldMessage())))
+                        .path(request.getRequestURI())
+                        .build());
+    }
+
+    @ExceptionHandler(TeachingSubjectException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTeachingSubjectException(
+            TeachingSubjectException exception, HttpServletRequest request) {
+        return handleProfileCreationException(
+                new ProfileCreationException(
+                        exception.getErrorCode(),
+                        "teachingSubjectIds",
+                        exception.getErrorCode().getMessage()),
+                request);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponse<Void>> conflict(
             DataIntegrityViolationException exception, HttpServletRequest request) {
 
-        ErrorCode code = ErrorCode.VALIDATION_ERROR;
+        ErrorCode code = ErrorCode.UNEXPECTED_ERROR;
         Throwable cause = exception;
 
         while (cause != null) {
@@ -43,6 +67,12 @@ public class LecturerCreationExceptionHandler {
             cause = cause.getCause();
         }
 
-        return ResponseEntity.status(code.getHttpStatus()).body(ApiResponse.error(code, request.getRequestURI()));
+        String field =
+                switch (code) {
+                    case DUPLICATE_LECTURER_EMAIL -> "email";
+                    case DUPLICATE_LECTURER_CITIZEN_ID -> "citizenId";
+                    default -> null;
+                };
+        return handleProfileCreationException(new ProfileCreationException(code, field, code.getMessage()), request);
     }
 }

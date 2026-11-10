@@ -6,9 +6,9 @@ import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.identity.api.dto.request.CreateStudentAccountRequest;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.people.application.code.AdministrativeClassNames;
-import com.eduhub.edu_hub.people.application.code.StudentCodeGenerator;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.application.facade.dto.*;
+import com.eduhub.edu_hub.people.application.service.StudentCodeGenerator;
 import com.eduhub.edu_hub.people.domain.model.*;
 import com.eduhub.edu_hub.people.domain.repository.*;
 import com.eduhub.edu_hub.shared.enums.ActivityStatus;
@@ -132,7 +132,7 @@ public class PeopleAdmissionFacadeImpl implements PeopleFacade.Admission {
         boolean reused = student != null;
         boolean locked = false;
         if (!reused) {
-            String code = codes.generate(target, codes.nextSequence(target));
+            String code = codes.generateStudentCode(target, codes.allocateNextStudentSequence(target));
             if (students.existsByStudentCode(code) || identity.existsByUsername(code))
                 throw new BaseException(ErrorCode.DUPLICATE_STUDENT_CODE);
             Long userId = identity.createStudentAccountWithoutNotification(

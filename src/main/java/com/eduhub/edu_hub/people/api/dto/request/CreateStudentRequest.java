@@ -1,6 +1,7 @@
 package com.eduhub.edu_hub.people.api.dto.request;
 
 import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
+import com.eduhub.edu_hub.shared.text.TextsNormalizer;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -24,6 +25,10 @@ public class CreateStudentRequest {
     @Email
     @Size(max = 255)
     private String email;
+
+    public void setEmail(String email) {
+        this.email = TextsNormalizer.normalizeEmail(email);
+    }
 
     @Size(max = 255)
     private String phone;

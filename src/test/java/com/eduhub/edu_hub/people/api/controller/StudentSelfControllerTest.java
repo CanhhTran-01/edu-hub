@@ -47,7 +47,11 @@ class StudentSelfControllerTest {
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(authenticatedJwt));
         mvc = MockMvcBuilders.standaloneSetup(
                         new StudentSelfController(service),
-                        new AdminStudentController(studentApplicationService, studentAdminUpdateService))
+                        new AdminStudentController(
+                                studentApplicationService,
+                                studentAdminUpdateService,
+                                org.mockito.Mockito.mock(
+                                        com.eduhub.edu_hub.people.application.service.StudentCreationService.class)))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setControllerAdvice(new StudentProfileExceptionHandler(), new GlobalExceptionHandler())
                 .build();

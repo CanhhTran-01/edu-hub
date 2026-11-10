@@ -1,6 +1,8 @@
 package com.eduhub.edu_hub.people.api.dto.response;
 
+import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
 import com.eduhub.edu_hub.people.domain.enums.LecturerStatus;
+import java.util.List;
 import lombok.Builder;
 import lombok.Data;
 
@@ -17,4 +19,8 @@ public class LecturerResponse {
     private Long facultyId;
     private String facultyName;
     private LecturerStatus status;
+    private Integer recruitmentYear;
+
+    @Builder.Default
+    private List<SubjectSimpleResponse> teachingSubjects = List.of();
 }

@@ -9,6 +9,12 @@ import java.util.Set;
 
 public interface CurriculumFacade {
 
+    interface TeachingSubjects {
+        List<SubjectSimpleResponse> requireActiveTeachingSubjects(Set<Long> subjectIds);
+
+        List<SubjectSimpleResponse> findTeachingSubjectsByIds(Set<Long> subjectIds);
+    }
+
     interface ReferenceData {
         List<MajorSimpleResponse> findMajorsByIds(Set<Long> ids);
 

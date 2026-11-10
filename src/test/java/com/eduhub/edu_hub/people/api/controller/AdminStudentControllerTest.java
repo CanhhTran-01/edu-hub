@@ -23,6 +23,7 @@ import com.eduhub.edu_hub.people.api.dto.response.StudentResponse;
 import com.eduhub.edu_hub.people.api.exception.StudentProfileExceptionHandler;
 import com.eduhub.edu_hub.people.application.service.StudentAdminUpdateService;
 import com.eduhub.edu_hub.people.application.service.StudentApplicationService;
+import com.eduhub.edu_hub.people.application.service.StudentCreationService;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;
 import java.util.List;
@@ -45,6 +46,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class AdminStudentControllerTest {
     private final StudentApplicationService service = mock(StudentApplicationService.class);
+    private final StudentCreationService studentCreationService = mock(StudentCreationService.class);
     private final StudentAdminUpdateService profileUpdateService = mock(StudentAdminUpdateService.class);
     private final Jwt authenticatedJwt = Jwt.withTokenValue("test-token")
             .header("alg", "HS256")
@@ -58,7 +60,8 @@ class AdminStudentControllerTest {
     void setup() {
         SecurityContextHolder.clearContext();
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(authenticatedJwt));
-        mvc = MockMvcBuilders.standaloneSetup(new AdminStudentController(service, profileUpdateService))
+        mvc = MockMvcBuilders.standaloneSetup(
+                        new AdminStudentController(service, profileUpdateService, studentCreationService))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setControllerAdvice(new StudentProfileExceptionHandler(), new GlobalExceptionHandler())
                 .build();
@@ -259,7 +262,7 @@ class AdminStudentControllerTest {
                 .studentCode("CT080101")
                 .fullName("Nguyen Van An")
                 .build();
-        when(service.create(any(CreateStudentRequest.class)))
+        when(studentCreationService.createStudent(eq(authenticatedJwt), any(CreateStudentRequest.class)))
                 .thenReturn(new CreateStudentResponse(student, List.of(), "SENT", null));
 
         mvc.perform(
@@ -280,7 +283,9 @@ class AdminStudentControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.student.studentCode").value("CT080101"));
-        verify(service).create(argThat(value -> value.getAdministrativeClassId().equals(3L)));
+        verify(studentCreationService)
+                .createStudent(eq(authenticatedJwt), argThat(request -> request.getAdministrativeClassId()
+                        .equals(3L)));
     }
 
     @Test

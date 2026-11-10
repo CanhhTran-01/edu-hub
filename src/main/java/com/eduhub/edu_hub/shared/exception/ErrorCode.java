@@ -63,7 +63,10 @@ public enum ErrorCode {
     FACULTY_NOT_ACTIVE(4116, "Khoa không tồn tại hoặc đã ngừng hoạt động", HttpStatus.BAD_REQUEST),
     DUPLICATE_LECTURER_EMAIL(4117, "Email giảng viên đã tồn tại", HttpStatus.CONFLICT),
     DUPLICATE_LECTURER_CITIZEN_ID(4118, "CCCD giảng viên đã tồn tại", HttpStatus.CONFLICT),
-    LECTURER_CODE_EXHAUSTED(4119, "Đã hết dải mã giảng viên GV 6 chữ số", HttpStatus.CONFLICT),
+    LECTURER_CODE_EXHAUSTED(
+            4119, "Đã hết dải 999 mã giảng viên trong cùng khoa và năm tuyển dụng", HttpStatus.CONFLICT),
+    INVALID_LECTURER_CODE_FACULTY(4121, "Khoa chưa có mã định danh hợp lệ để cấp MSGV", HttpStatus.BAD_REQUEST),
+    SUBJECT_NOT_TEACHABLE(4212, "Môn có thể dạy phải đang hoạt động và chưa bị xóa", HttpStatus.BAD_REQUEST),
     SUBJECT_NOT_FOUND(4201, "Không tìm thấy học phần", HttpStatus.NOT_FOUND),
     CURRICULUM_NOT_FOUND(4202, "Không tìm thấy chương trình đào tạo", HttpStatus.NOT_FOUND),
     PREREQUISITE_CYCLE(4203, "Phát hiện chu trình tiên quyết", HttpStatus.BAD_REQUEST),

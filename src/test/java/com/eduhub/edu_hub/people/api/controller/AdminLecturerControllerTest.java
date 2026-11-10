@@ -2,39 +2,144 @@ package com.eduhub.edu_hub.people.api.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.eduhub.edu_hub.curriculum.application.exception.TeachingSubjectException;
+import com.eduhub.edu_hub.people.api.dto.request.CreateLecturerRequest;
 import com.eduhub.edu_hub.people.api.dto.request.LecturerSearchRequest;
+import com.eduhub.edu_hub.people.api.dto.response.CreateLecturerResponse;
 import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
 import com.eduhub.edu_hub.people.api.exception.LecturerCreationExceptionHandler;
+import com.eduhub.edu_hub.people.application.exception.ProfileCreationException;
 import com.eduhub.edu_hub.people.application.exception.ProfileSearchException;
 import com.eduhub.edu_hub.people.application.service.LecturerApplicationService;
 import com.eduhub.edu_hub.people.application.service.LecturerCreationService;
 import com.eduhub.edu_hub.people.domain.enums.LecturerStatus;
 import com.eduhub.edu_hub.shared.common.PageResponse;
+import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;
 import java.util.List;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.springframework.http.MediaType;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class AdminLecturerControllerTest {
     private final LecturerApplicationService lecturerApplicationService = mock(LecturerApplicationService.class);
     private final LecturerCreationService lecturerCreationService = mock(LecturerCreationService.class);
+    private final Jwt authenticatedJwt = Jwt.withTokenValue("test-token")
+            .header("alg", "HS256")
+            .subject("academic-admin")
+            .build();
     private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(
                     new AdminLecturerController(lecturerApplicationService, lecturerCreationService))
+            .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
             .setControllerAdvice(new LecturerCreationExceptionHandler(), new GlobalExceptionHandler())
             .build();
+
+    @BeforeEach
+    void authenticateActor() {
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(authenticatedJwt));
+    }
+
+    @AfterEach
+    void clearAuthentication() {
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void createPassesPrincipalAndNewFieldsAndNormalizesEmailBeforeValidation() throws Exception {
+        when(lecturerCreationService.createLecturer(eq(authenticatedJwt), any()))
+                .thenReturn(new CreateLecturerResponse(
+                        LecturerResponse.builder()
+                                .id(1L)
+                                .lecturerCode("CNTT26001")
+                                .recruitmentYear(2026)
+                                .build(),
+                        List.of(),
+                        "SENT",
+                        null));
+        mockMvc.perform(post("/api/v1/lecturers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validCreationJson()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.lecturer.lecturerCode").value("CNTT26001"));
+        var requestCaptor = ArgumentCaptor.forClass(CreateLecturerRequest.class);
+        verify(lecturerCreationService).createLecturer(eq(authenticatedJwt), requestCaptor.capture());
+        assertThat(requestCaptor.getValue().getEmail()).isEqualTo("an@example.test");
+        assertThat(requestCaptor.getValue().getRecruitmentYear()).isEqualTo(2026);
+        assertThat(requestCaptor.getValue().getTeachingSubjectIds()).containsExactly(10L);
+    }
+
+    @Test
+    void createRequiresRecruitmentYearAndAtLeastOneSubject() throws Exception {
+        mockMvc.perform(post("/api/v1/lecturers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validCreationJson().replace("\"recruitmentYear\":2026,", "")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("recruitmentYear"));
+        mockMvc.perform(post("/api/v1/lecturers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validCreationJson().replace("[10]", "[]")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("teachingSubjectIds"));
+        mockMvc.perform(post("/api/v1/lecturers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validCreationJson().replace("[10]", "[null]")))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(lecturerCreationService);
+    }
+
+    @Test
+    void reportsDuplicateProfileAndUnavailableSubjectErrorsOnTheirFields() throws Exception {
+        when(lecturerCreationService.createLecturer(eq(authenticatedJwt), any()))
+                .thenThrow(new ProfileCreationException(
+                        ErrorCode.DUPLICATE_LECTURER_EMAIL, "email", "Email giảng viên đã tồn tại"))
+                .thenThrow(new TeachingSubjectException(ErrorCode.SUBJECT_NOT_TEACHABLE));
+        mockMvc.perform(post("/api/v1/lecturers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validCreationJson()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(4117))
+                .andExpect(jsonPath("$.errors[0].field").value("email"));
+        mockMvc.perform(post("/api/v1/lecturers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validCreationJson()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(4212))
+                .andExpect(jsonPath("$.errors[0].field").value("teachingSubjectIds"));
+    }
+
+    @Test
+    void noLongerExposesResendEndpoint() throws Exception {
+        mockMvc.perform(post("/api/v1/lecturers/1/account-notification/resend")).andExpect(status().isNotFound());
+        verifyNoInteractions(lecturerCreationService);
+    }
+
+    private String validCreationJson() {
+        return """
+                {"fullName":"Nguyễn Văn An","dateOfBirth":"1980-01-01","email":" AN@EXAMPLE.TEST ",
+                 "facultyId":1,"recruitmentYear":2026,"teachingSubjectIds":[10],"reason":"Bổ sung giảng viên"}
+                """;
+    }
 
     @ParameterizedTest
     @EnumSource(LecturerStatus.class)

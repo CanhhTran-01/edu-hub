@@ -3,7 +3,6 @@ package com.eduhub.edu_hub.people.api.controller;
 import com.eduhub.edu_hub.people.api.dto.request.CreateLecturerRequest;
 import com.eduhub.edu_hub.people.api.dto.request.LecturerSearchRequest;
 import com.eduhub.edu_hub.people.api.dto.response.CreateLecturerResponse;
-import com.eduhub.edu_hub.people.api.dto.response.LecturerNotificationResponse;
 import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
 import com.eduhub.edu_hub.people.application.service.LecturerApplicationService;
 import com.eduhub.edu_hub.people.application.service.LecturerCreationService;
@@ -11,6 +10,8 @@ import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -36,12 +37,8 @@ public class AdminLecturerController {
     }
 
     @PostMapping
-    public ApiResponse<CreateLecturerResponse> create(@Valid @RequestBody CreateLecturerRequest request) {
-        return ApiResponse.success(lecturerCreationService.create(request));
-    }
-
-    @PostMapping("/{id}/account-notification/resend")
-    public ApiResponse<LecturerNotificationResponse> resend(@PathVariable Long id) {
-        return ApiResponse.success(lecturerCreationService.resend(id));
+    public ApiResponse<CreateLecturerResponse> create(
+            @Valid @RequestBody CreateLecturerRequest request, @AuthenticationPrincipal Jwt authenticatedJwt) {
+        return ApiResponse.success(lecturerCreationService.createLecturer(authenticatedJwt, request));
     }
 }

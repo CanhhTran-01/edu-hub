@@ -4,14 +4,19 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
+import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.identity.api.dto.response.UserAccountEmailResponse;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.people.api.dto.request.LecturerSearchRequest;
+import com.eduhub.edu_hub.people.api.mapper.LecturerResponseMapper;
 import com.eduhub.edu_hub.people.application.exception.ProfileSearchException;
 import com.eduhub.edu_hub.people.domain.enums.LecturerStatus;
 import com.eduhub.edu_hub.people.domain.model.Faculty;
 import com.eduhub.edu_hub.people.domain.model.Lecturer;
+import com.eduhub.edu_hub.people.domain.model.LecturerTeachingSubject;
 import com.eduhub.edu_hub.people.domain.repository.LecturerRepository;
+import com.eduhub.edu_hub.people.domain.repository.LecturerTeachingSubjectRepository;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Join;
@@ -35,8 +40,16 @@ import tools.jackson.databind.json.JsonMapper;
 class LecturerApplicationServiceTest {
     private final LecturerRepository lecturerRepository = mock(LecturerRepository.class);
     private final IdentityFacade identityFacade = mock(IdentityFacade.class);
-    private final LecturerApplicationService lecturerApplicationService =
-            new LecturerApplicationService(lecturerRepository, new ProfileAccountEmailService(identityFacade));
+    private final LecturerTeachingSubjectRepository teachingSubjectRepository =
+            mock(LecturerTeachingSubjectRepository.class);
+    private final CurriculumFacade.TeachingSubjects curriculumTeachingSubjects =
+            mock(CurriculumFacade.TeachingSubjects.class);
+    private final LecturerApplicationService lecturerApplicationService = new LecturerApplicationService(
+            lecturerRepository,
+            new ProfileAccountEmailService(identityFacade),
+            teachingSubjectRepository,
+            curriculumTeachingSubjects,
+            new LecturerResponseMapper());
 
     @Test
     void searchGetsCurrentAccountEmailsInOneBatchAndKeepsUnlinkedProfiles() {
@@ -204,6 +217,36 @@ class LecturerApplicationServiceTest {
     void emptyLookupDoesNotCallIdentityOrTheRepository() {
         assertThat(lecturerApplicationService.findByIds(Set.of())).isEmpty();
         verifyNoInteractions(identityFacade, lecturerRepository);
+    }
+
+    @Test
+    void loadsTeachingSubjectsInBatchesAndPreservesLegacyCodesAndUnknownRecruitmentYear() {
+        Lecturer firstLecturer = lecturer(1L, 101L);
+        firstLecturer.setLecturerCode("GV000001");
+        Lecturer secondLecturer = lecturer(2L, null);
+        secondLecturer.setLecturerCode("CNTT26001");
+        secondLecturer.setRecruitmentYear(2026);
+        when(lecturerRepository.findAllByIdInAndDeletedFalse(Set.of(1L, 2L)))
+                .thenReturn(List.of(firstLecturer, secondLecturer));
+        when(teachingSubjectRepository.findByLecturerIdInAndDeletedFalseOrderByLecturerIdAscSubjectIdAsc(
+                        Set.of(1L, 2L)))
+                .thenReturn(List.of(LecturerTeachingSubject.builder()
+                        .lecturerId(2L)
+                        .subjectId(10L)
+                        .build()));
+        when(curriculumTeachingSubjects.findTeachingSubjectsByIds(Set.of(10L)))
+                .thenReturn(List.of(SubjectSimpleResponse.builder()
+                        .id(10L)
+                        .subjectName("Môn lịch sử")
+                        .build()));
+        var lecturerResponses = lecturerApplicationService.findByIds(Set.of(1L, 2L));
+        assertThat(lecturerResponses.getFirst().getLecturerCode()).isEqualTo("GV000001");
+        assertThat(lecturerResponses.getFirst().getRecruitmentYear()).isNull();
+        assertThat(lecturerResponses.getFirst().getTeachingSubjects()).isEmpty();
+        assertThat(lecturerResponses.getLast().getTeachingSubjects())
+                .extracting(SubjectSimpleResponse::getId)
+                .containsExactly(10L);
+        verify(curriculumTeachingSubjects, times(1)).findTeachingSubjectsByIds(Set.of(10L));
     }
 
     private Lecturer lecturer(Long lecturerId, Long userId) {

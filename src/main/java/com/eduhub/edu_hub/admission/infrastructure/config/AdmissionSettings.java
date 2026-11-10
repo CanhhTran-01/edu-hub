@@ -16,5 +16,4 @@ public class AdmissionSettings {
     private int reserveCapacity = 15;
     private int maxImportRows = 50000;
     private int confirmationLeaseMinutes = 5;
-    private String studentCodeFormat = "[MaNganh][SttKhoa][SttLop][SttSVTrongLop]";
 }

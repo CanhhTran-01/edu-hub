@@ -7,6 +7,7 @@ import com.eduhub.edu_hub.people.api.dto.response.CreateStudentResponse;
 import com.eduhub.edu_hub.people.api.dto.response.StudentResponse;
 import com.eduhub.edu_hub.people.application.service.StudentAdminUpdateService;
 import com.eduhub.edu_hub.people.application.service.StudentApplicationService;
+import com.eduhub.edu_hub.people.application.service.StudentCreationService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import jakarta.validation.Valid;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminStudentController {
     private final StudentApplicationService studentApplicationService;
     private final StudentAdminUpdateService studentAdminUpdateService;
+    private final StudentCreationService studentCreationService;
 
     @GetMapping
     public ApiResponse<PageResponse<StudentResponse>> search(StudentSearchRequest request) {
@@ -44,8 +46,9 @@ public class AdminStudentController {
     }
 
     @PostMapping
-    public ApiResponse<CreateStudentResponse> create(@Valid @RequestBody CreateStudentRequest request) {
-        return ApiResponse.success(studentApplicationService.create(request));
+    public ApiResponse<CreateStudentResponse> create(
+            @Valid @RequestBody CreateStudentRequest request, @AuthenticationPrincipal Jwt authenticatedJwt) {
+        return ApiResponse.success(studentCreationService.createStudent(authenticatedJwt, request));
     }
 
     @PutMapping("/{id}")

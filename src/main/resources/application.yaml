@@ -73,6 +73,9 @@ admission:
   notifications-enabled: true
   mail-retry-delay-ms: 60000
 
+people:
+  lecturer-code-format: "[MaKhoa][NamTuyenDung][SttGV]"
+
 notification:
   mail:
     brand-name: ${NOTIFICATION_MAIL_BRAND_NAME:EduHub}

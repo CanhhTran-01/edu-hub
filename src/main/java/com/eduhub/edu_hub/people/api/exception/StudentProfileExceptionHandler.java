@@ -2,6 +2,7 @@ package com.eduhub.edu_hub.people.api.exception;
 
 import com.eduhub.edu_hub.people.api.controller.AdminStudentController;
 import com.eduhub.edu_hub.people.api.controller.StudentSelfController;
+import com.eduhub.edu_hub.people.application.exception.ProfileCreationException;
 import com.eduhub.edu_hub.people.application.exception.StudentProfileException;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
@@ -20,6 +21,15 @@ import tools.jackson.databind.exc.MismatchedInputException;
 @RestControllerAdvice(assignableTypes = {StudentSelfController.class, AdminStudentController.class})
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class StudentProfileExceptionHandler {
+    @ExceptionHandler(ProfileCreationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleProfileCreationException(
+            ProfileCreationException exception, HttpServletRequest request) {
+        return handleStudentProfileException(
+                new StudentProfileException(
+                        exception.getErrorCode(), exception.getField(), exception.getFieldMessage()),
+                request);
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleProfileDataConflict(
             DataIntegrityViolationException exception, HttpServletRequest request) {
@@ -32,6 +42,13 @@ public class StudentProfileExceptionHandler {
                         new StudentProfileException(
                                 ErrorCode.DUPLICATE_STUDENT_CITIZEN_ID, "citizenId", "CCCD sinh viên đã tồn tại"),
                         request);
+            }
+            if (cause instanceof org.hibernate.exception.ConstraintViolationException constraintException
+                    && constraintException.getConstraintName() != null
+                    && (constraintException.getConstraintName().contains("student_code")
+                            || constraintException.getConstraintName().contains("username"))) {
+                return handleProfileCreationException(
+                        new ProfileCreationException(ErrorCode.DUPLICATE_STUDENT_CODE), request);
             }
             cause = cause.getCause();
         }

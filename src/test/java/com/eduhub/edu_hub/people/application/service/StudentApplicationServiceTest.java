@@ -63,15 +63,7 @@ class StudentApplicationServiceTest {
     @BeforeEach
     void setUp() {
         service = new StudentApplicationService(
-                students,
-                null,
-                null,
-                curriculum,
-                null,
-                identityFacade,
-                null,
-                studentResponseMapper,
-                new ProfileAccountEmailService(identityFacade));
+                students, curriculum, studentResponseMapper, new ProfileAccountEmailService(identityFacade));
     }
 
     @Test

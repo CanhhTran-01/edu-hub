@@ -11,14 +11,25 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
 @Table(name = "lecturers")
 @Getter
 @Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class Lecturer extends BaseEntity {
+    // Hồ sơ cũ chưa biết năm tuyển dụng giữ null, không suy từ thời điểm nhập dữ liệu.
+    @Column(name = "recruitment_year")
+    private Integer recruitmentYear;
+
     @Column(name = "user_id", unique = true)
     private Long userId;
 
