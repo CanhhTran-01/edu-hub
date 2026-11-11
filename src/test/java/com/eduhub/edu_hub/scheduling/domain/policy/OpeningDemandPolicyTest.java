@@ -1,10 +1,13 @@
-package com.eduhub.edu_hub.scheduling.application;
+package com.eduhub.edu_hub.scheduling.domain.policy;
 
 import static org.assertj.core.api.Assertions.*;
 
 import com.eduhub.edu_hub.curriculum.application.facade.dto.CurriculumOpeningSubjectResponse;
-import com.eduhub.edu_hub.scheduling.application.port.PlanningSnapshot;
-import com.eduhub.edu_hub.scheduling.application.port.PlanningSnapshot.*;
+import com.eduhub.edu_hub.scheduling.api.dto.response.OpeningSubjectResponse;
+import com.eduhub.edu_hub.scheduling.api.mapper.OpeningSubjectResponseMapper;
+import com.eduhub.edu_hub.scheduling.domain.enums.LearningOutcome;
+import com.eduhub.edu_hub.scheduling.domain.model.AcademicPlanningSnapshot;
+import com.eduhub.edu_hub.scheduling.domain.model.AcademicPlanningSnapshot.*;
 import com.eduhub.edu_hub.scheduling.infrastructure.PlanningTestData;
 import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.BaseException;
@@ -14,8 +17,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-class OpeningDemandCalculatorTest {
-    private final OpeningDemandCalculator calculator = new OpeningDemandCalculator();
+class OpeningDemandPolicyTest {
+    private final OpeningDemandPolicy openingDemandPolicy = new OpeningDemandPolicy();
 
     @Test
     void fixtureCountsSharedSubjectOncePerStudentAndSeparatesDebtFromRecommendedStudy() {
@@ -23,7 +26,7 @@ class OpeningDemandCalculatorTest {
         var plan = List.of(
                 subject("CNTT_4Y_V1", 1), subject("ATTT_4Y_V1", 1), subject("DTVT_4Y_V1", 1), subject("TTNT_4Y_V1", 1));
 
-        var result = calculator.calculate("HK_1_2026_2027", plan, data);
+        var result = calculateOpeningSubjects("HK_1_2026_2027", plan, data);
 
         assertThat(result).singleElement().satisfies(demand -> {
             assertThat(demand.getOnTimeStudentCount()).isEqualTo(97);
@@ -41,15 +44,15 @@ class OpeningDemandCalculatorTest {
 
     @Test
     void onlyStudyingStudentsContributeRegardlessOfTheirAccountOrExpectedGraduationYear() {
-        var data = new PlanningSnapshot(
+        var data = new AcademicPlanningSnapshot(
                 "TEST",
                 true,
                 List.of(
-                        new Student(1, "SV01", "CNTT_4Y_V1", 2020, ActivityStatus.STUDYING),
-                        new Student(2, "SV02", "CNTT_4Y_V1", 2020, ActivityStatus.DEACTIVATED),
-                        new Student(3, "SV03", "CNTT_4Y_V1", 2020, ActivityStatus.DELETED)),
+                        new PlanningStudent(1, "SV01", "CNTT_4Y_V1", 2020, ActivityStatus.STUDYING),
+                        new PlanningStudent(2, "SV02", "CNTT_4Y_V1", 2020, ActivityStatus.DEACTIVATED),
+                        new PlanningStudent(3, "SV03", "CNTT_4Y_V1", 2020, ActivityStatus.DELETED)),
                 List.of());
-        var result = calculator.calculate("HK_1_2026_2027", List.of(subject("CNTT_4Y_V1", 1)), data);
+        var result = calculateOpeningSubjects("HK_1_2026_2027", List.of(subject("CNTT_4Y_V1", 1)), data);
         assertThat(result).singleElement().satisfies(demand -> {
             assertThat(demand.getMissedStudentCount()).isEqualTo(1);
             assertThat(demand.getExpectedStudentCount()).isEqualTo(1);
@@ -59,7 +62,7 @@ class OpeningDemandCalculatorTest {
     @Test
     void secondSemesterUsesAcademicYearInsteadOfCalendarYearOfStartDate() {
         var data = snapshot(true, List.of());
-        var result = calculator.calculate("HK_2_2026_2027", List.of(subject("CNTT_4Y_V1", 2)), data);
+        var result = calculateOpeningSubjects("HK_2_2026_2027", List.of(subject("CNTT_4Y_V1", 2)), data);
         assertThat(result).singleElement().satisfies(demand -> {
             assertThat(demand.getOnTimeStudentCount()).isEqualTo(1);
             assertThat(demand.getMissedStudentCount()).isZero();
@@ -68,7 +71,7 @@ class OpeningDemandCalculatorTest {
 
     @Test
     void missingHistoryIsUnavailableInsteadOfInferringThatEveryoneMissedTheSubject() {
-        assertThatThrownBy(() -> calculator.calculate(
+        assertThatThrownBy(() -> calculateOpeningSubjects(
                         "HK_1_2026_2027", List.of(subject("CNTT_4Y_V1", 1)), snapshot(false, List.of())))
                 .isInstanceOfSatisfying(BaseException.class, error -> assertThat(error.getErrorCode())
                         .isEqualTo(ErrorCode.PLANNING_DATA_UNAVAILABLE));
@@ -76,13 +79,13 @@ class OpeningDemandCalculatorTest {
 
     @Test
     void droppedAttemptIsNotMissingEnrollmentAndPassedSubjectDoesNotBecomeMandatoryImprovement() {
-        var dropped = new Attempt(1, "CS101", 2026, 1, Outcome.DROPPED);
-        assertThat(calculator.calculate(
+        var dropped = new LearningAttempt(1, "CS101", 2026, 1, LearningOutcome.DROPPED);
+        assertThat(calculateOpeningSubjects(
                         "HK_2_2026_2027", List.of(subject("CNTT_4Y_V1", 1)), snapshot(true, List.of(dropped))))
                 .isEmpty();
-        var passed = new Attempt(1, "CS101", 2026, 1, Outcome.COMPLETED);
-        var failedImprovement = new Attempt(1, "CS101", 2026, 2, Outcome.FAILED);
-        assertThat(calculator.calculate(
+        var passed = new LearningAttempt(1, "CS101", 2026, 1, LearningOutcome.COMPLETED);
+        var failedImprovement = new LearningAttempt(1, "CS101", 2026, 2, LearningOutcome.FAILED);
+        assertThat(calculateOpeningSubjects(
                         "HK_2_2026_2027",
                         List.of(subject("CNTT_4Y_V1", 1)),
                         snapshot(true, List.of(passed, failedImprovement))))
@@ -92,9 +95,9 @@ class OpeningDemandCalculatorTest {
     @Test
     void onTimeGroupTakesPrecedenceAndDuplicateProgramRowsDoNotDoubleCount() {
         var subject = subject("CNTT_4Y_V1", 1);
-        var failure = new Attempt(1, "CS101", 2026, 1, Outcome.FAILED);
+        var failure = new LearningAttempt(1, "CS101", 2026, 1, LearningOutcome.FAILED);
         var result =
-                calculator.calculate("HK_1_2026_2027", List.of(subject, subject), snapshot(true, List.of(failure)));
+                calculateOpeningSubjects("HK_1_2026_2027", List.of(subject, subject), snapshot(true, List.of(failure)));
         assertThat(result).singleElement().satisfies(demand -> {
             assertThat(demand.getOnTimeStudentCount()).isEqualTo(1);
             assertThat(demand.getRetakeStudentCount()).isZero();
@@ -105,16 +108,34 @@ class OpeningDemandCalculatorTest {
     @ParameterizedTest
     @ValueSource(strings = {"HK_3_2026_2027", "HK_1_2026_2028", "HK_1_0000_0001", "invalid"})
     void rejectsUnsupportedSemesterCodes(String code) {
-        assertThatThrownBy(() -> calculator.calculate(code, List.of(), snapshot(true, List.of())))
+        assertThatThrownBy(() -> calculateOpeningSubjects(code, List.of(), snapshot(true, List.of())))
                 .isInstanceOfSatisfying(BaseException.class, error -> assertThat(error.getErrorCode())
                         .isEqualTo(ErrorCode.PLANNING_SEMESTER_UNSUPPORTED));
     }
 
-    private PlanningSnapshot snapshot(boolean historyComplete, List<Attempt> attempts) {
-        return new PlanningSnapshot(
+    private List<OpeningSubjectResponse> calculateOpeningSubjects(
+            String semesterCode,
+            List<CurriculumOpeningSubjectResponse> subjects,
+            AcademicPlanningSnapshot planningSnapshot) {
+        var planningSubjects = subjects.stream()
+                .map(subject -> new OpeningDemandPolicy.PlanningSubject(
+                        subject.getCurriculumCode(),
+                        subject.getSubjectId(),
+                        subject.getSubjectCode(),
+                        subject.getSubjectName(),
+                        subject.getCredits(),
+                        subject.getRecommendSemester()))
+                .toList();
+        return openingDemandPolicy.calculate(semesterCode, planningSubjects, planningSnapshot).stream()
+                .map(demand -> OpeningSubjectResponseMapper.toResponse(demand, planningSnapshot))
+                .toList();
+    }
+
+    private AcademicPlanningSnapshot snapshot(boolean historyComplete, List<LearningAttempt> attempts) {
+        return new AcademicPlanningSnapshot(
                 "TEST",
                 historyComplete,
-                List.of(new Student(1, "SV01", "CNTT_4Y_V1", 2026, ActivityStatus.STUDYING)),
+                List.of(new PlanningStudent(1, "SV01", "CNTT_4Y_V1", 2026, ActivityStatus.STUDYING)),
                 attempts);
     }
 

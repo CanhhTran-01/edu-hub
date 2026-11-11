@@ -1,28 +1,22 @@
-package com.eduhub.edu_hub.scheduling.application.port;
+package com.eduhub.edu_hub.scheduling.domain.model;
 
+import com.eduhub.edu_hub.scheduling.domain.enums.LearningOutcome;
 import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import java.util.*;
 
-public record PlanningSnapshot(String source, boolean historyComplete, List<Student> students, List<Attempt> attempts) {
-    public PlanningSnapshot {
+public record AcademicPlanningSnapshot(
+        String source, boolean historyComplete, List<PlanningStudent> students, List<LearningAttempt> attempts) {
+    public AcademicPlanningSnapshot {
         Objects.requireNonNull(source);
         students = List.copyOf(students);
         attempts = List.copyOf(attempts);
     }
 
-    /** COMPLETED trong contract lập kế hoạch nghĩa là đã đạt, không chỉ có điểm thành phần. */
-    public enum Outcome {
-        REGISTERED,
-        DROPPED,
-        COMPLETED,
-        FAILED
-    }
-
-    public record Student(
+    public record PlanningStudent(
             long id, String studentCode, String curriculumCode, int admissionYear, ActivityStatus activityStatus) {}
 
-    public record Attempt(
-            long studentId, String subjectCode, int academicYearStart, int semesterNumber, Outcome status) {
+    public record LearningAttempt(
+            long studentId, String subjectCode, int academicYearStart, int semesterNumber, LearningOutcome status) {
         public int termIndex() {
             return academicYearStart * 2 + semesterNumber;
         }
@@ -32,7 +26,7 @@ public record PlanningSnapshot(String source, boolean historyComplete, List<Stud
         if (source.isBlank()) throw new IllegalArgumentException("Missing planning source");
         Set<Long> studentIds = new HashSet<>();
         Set<String> studentCodes = new HashSet<>();
-        for (Student student : students) {
+        for (PlanningStudent student : students) {
             if (student.id() <= 0
                     || !studentIds.add(student.id())
                     || student.studentCode() == null
@@ -44,7 +38,7 @@ public record PlanningSnapshot(String source, boolean historyComplete, List<Stud
                     || student.activityStatus() == null)
                 throw new IllegalArgumentException("Invalid student planning data");
         }
-        for (Attempt attempt : attempts) {
+        for (LearningAttempt attempt : attempts) {
             if (!studentIds.contains(attempt.studentId())
                     || attempt.subjectCode() == null
                     || attempt.subjectCode().isBlank()

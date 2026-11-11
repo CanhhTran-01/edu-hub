@@ -1,4 +1,4 @@
-package com.eduhub.edu_hub.scheduling.api;
+package com.eduhub.edu_hub.scheduling.api.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
@@ -6,14 +6,14 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import com.eduhub.edu_hub.scheduling.api.controller.ModuleClassController;
 import com.eduhub.edu_hub.scheduling.api.dto.request.CreateModuleClassesRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.UpdateModuleClassRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.response.ModuleClassResponse;
 import com.eduhub.edu_hub.scheduling.api.exception.ModuleClassExceptionHandler;
-import com.eduhub.edu_hub.scheduling.application.ModuleClassApplicationService;
 import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassConflictException;
+import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassException;
 import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassOpeningException;
+import com.eduhub.edu_hub.scheduling.application.service.ModuleClassApplicationService;
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
 import com.eduhub.edu_hub.shared.exception.*;
@@ -53,7 +53,7 @@ class ModuleClassControllerTest {
 
     @Test
     void createsBatchWithDefaultCapacityAndReturnsCreatedClasses() throws Exception {
-        when(service.createBatch(eq(7L), any()))
+        when(service.createModuleClasses(eq(7L), any()))
                 .thenReturn(List.of(ModuleClassResponse.builder()
                         .id(101L)
                         .moduleClassCode("MC_7_CS101_001")
@@ -69,7 +69,7 @@ class ModuleClassControllerTest {
                 .andExpect(jsonPath("$.data[0].status").value("UNSCHEDULED"))
                 .andExpect(jsonPath("$.data[0].schedules").isEmpty());
         var request = ArgumentCaptor.forClass(CreateModuleClassesRequest.class);
-        verify(service).createBatch(eq(7L), request.capture());
+        verify(service).createModuleClasses(eq(7L), request.capture());
         assertThat(request.getValue()
                         .getSubjects()
                         .getFirst()
@@ -102,7 +102,7 @@ class ModuleClassControllerTest {
 
     @Test
     void confirmationConflictKeepsModuleSpecificDetailsWhenGlobalHandlerIsAlsoRegistered() throws Exception {
-        when(service.createBatch(eq(7L), any()))
+        when(service.createModuleClasses(eq(7L), any()))
                 .thenThrow(new ModuleClassOpeningException(
                         ErrorCode.MODULE_CLASS_CONFIRMATION_REQUIRED,
                         List.of(new FieldErrorDetail("subjects[0].subjectId", "CS101 đã có 2 lớp chưa hủy"))));
@@ -118,7 +118,8 @@ class ModuleClassControllerTest {
     @Test
     void codeConstraintConflictDoesNotLeakSql() throws Exception {
         var cause = new ConstraintViolationException("SQL detail", new SQLException(), "uk_module_classes_sequence");
-        when(service.createBatch(eq(7L), any())).thenThrow(new DataIntegrityViolationException("SQL detail", cause));
+        when(service.createModuleClasses(eq(7L), any()))
+                .thenThrow(new DataIntegrityViolationException("SQL detail", cause));
         mvc.perform(post("/api/v1/semesters/7/module-classes/batch")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(BODY))
@@ -128,7 +129,7 @@ class ModuleClassControllerTest {
 
     @Test
     void unavailableHistoryReturns503InsteadOfAnEmptyRecommendation() throws Exception {
-        when(service.findOpeningSubjects(7L)).thenThrow(new BaseException(ErrorCode.PLANNING_DATA_UNAVAILABLE));
+        when(service.findSubjectsToOpen(7L)).thenThrow(new ModuleClassException(ErrorCode.PLANNING_DATA_UNAVAILABLE));
         mvc.perform(get("/api/v1/semesters/7/opening-subjects"))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.code").value(4317));
@@ -136,7 +137,7 @@ class ModuleClassControllerTest {
 
     @Test
     void emptyRecommendationsHaveAnExplicitMessage() throws Exception {
-        when(service.findOpeningSubjects(7L)).thenReturn(List.of());
+        when(service.findSubjectsToOpen(7L)).thenReturn(List.of());
         mvc.perform(get("/api/v1/semesters/7/opening-subjects"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").isEmpty())
@@ -145,7 +146,7 @@ class ModuleClassControllerTest {
 
     @Test
     void patchesCapacityAndReturnsUpdatedClass() throws Exception {
-        when(service.update(eq(101L), any()))
+        when(service.updateModuleClassCapacity(eq(101L), any()))
                 .thenReturn(ModuleClassResponse.builder()
                         .id(101L)
                         .lecturerId(5001L)
@@ -158,7 +159,7 @@ class ModuleClassControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.maxCapacity").value(60));
         var request = ArgumentCaptor.forClass(UpdateModuleClassRequest.class);
-        verify(service).update(eq(101L), request.capture());
+        verify(service).updateModuleClassCapacity(eq(101L), request.capture());
         assertThat(request.getValue().getMaxCapacity()).isEqualTo(60);
         assertThat(request.getValue().getReason()).isEqualTo("Điều chỉnh quy mô");
     }
@@ -186,7 +187,7 @@ class ModuleClassControllerTest {
 
     @Test
     void capacityConflictKeepsCurrentSizeDetailsThroughTheModuleHandler() throws Exception {
-        when(service.update(eq(101L), any()))
+        when(service.updateModuleClassCapacity(eq(101L), any()))
                 .thenThrow(new ModuleClassConflictException(
                         ErrorCode.MODULE_CLASS_CAPACITY_BELOW_SIZE,
                         List.of(new FieldErrorDetail("maxCapacity", "Sĩ số hiện có: 50"))));
@@ -200,7 +201,7 @@ class ModuleClassControllerTest {
 
     @Test
     void cancellationReturnsTheRetainedCancelledClass() throws Exception {
-        when(service.cancel(eq(101L), any()))
+        when(service.cancelModuleClass(eq(101L), any()))
                 .thenReturn(ModuleClassResponse.builder()
                         .id(101L)
                         .moduleClassCode("MC_9_CS101_001")
@@ -227,8 +228,8 @@ class ModuleClassControllerTest {
 
     @Test
     void unavailableCancellationHistoryIsReportedInsteadOfAllowingCancellation() throws Exception {
-        when(service.cancel(eq(101L), any()))
-                .thenThrow(new BaseException(ErrorCode.MODULE_CLASS_ENROLLMENT_DATA_UNAVAILABLE));
+        when(service.cancelModuleClass(eq(101L), any()))
+                .thenThrow(new ModuleClassException(ErrorCode.MODULE_CLASS_ENROLLMENT_DATA_UNAVAILABLE));
         mvc.perform(post("/api/v1/module-classes/101/cancel")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"reason\":\"Không đủ nhu cầu\"}"))
@@ -239,6 +240,6 @@ class ModuleClassControllerTest {
     @Test
     void searchValidatesPagination() throws Exception {
         mvc.perform(get("/api/v1/module-classes").param("size", "0")).andExpect(status().isBadRequest());
-        verify(service, never()).search(any());
+        verify(service, never()).searchModuleClasses(any());
     }
 }

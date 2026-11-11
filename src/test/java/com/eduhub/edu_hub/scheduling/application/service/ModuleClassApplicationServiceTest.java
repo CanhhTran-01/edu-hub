@@ -1,4 +1,4 @@
-package com.eduhub.edu_hub.scheduling.application;
+package com.eduhub.edu_hub.scheduling.application.service;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
+import com.eduhub.edu_hub.curriculum.application.facade.dto.CurriculumOpeningSubjectResponse;
 import com.eduhub.edu_hub.curriculum.domain.model.Subject;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.domain.model.Lecturer;
@@ -17,12 +18,16 @@ import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassOpeningExc
 import com.eduhub.edu_hub.scheduling.application.port.AcademicPlanningDataSource;
 import com.eduhub.edu_hub.scheduling.application.port.ModuleClassEnrollmentQuery;
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
+import com.eduhub.edu_hub.scheduling.domain.model.AcademicPlanningSnapshot;
 import com.eduhub.edu_hub.scheduling.domain.model.ModuleClass;
 import com.eduhub.edu_hub.scheduling.domain.model.Semester;
+import com.eduhub.edu_hub.scheduling.domain.policy.OpeningDemandPolicy;
 import com.eduhub.edu_hub.scheduling.domain.repository.ModuleClassRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.SemesterRepository;
+import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import com.eduhub.edu_hub.shared.config.TimeConfiguration;
 import jakarta.persistence.EntityManager;
 import java.time.*;
 import java.util.*;
@@ -37,7 +42,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class ModuleClassApplicationServiceTest {
-    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-11-02T10:00:00Z"), ZoneOffset.UTC);
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-02T10:00:00Z"),
+            new TimeConfiguration().applicationClock().getZone());
 
     @Mock
     private SemesterRepository semesters;
@@ -71,7 +78,7 @@ class ModuleClassApplicationServiceTest {
                 people,
                 dataSource,
                 enrollmentQuery,
-                new OpeningDemandCalculator(),
+                new OpeningDemandPolicy(),
                 entityManager,
                 CLOCK);
     }
@@ -86,7 +93,7 @@ class ModuleClassApplicationServiceTest {
             return saved;
         });
 
-        var result = service.createBatch(7L, request);
+        var result = service.createModuleClasses(7L, request);
 
         assertThat(result)
                 .extracting(ModuleClassResponse::getModuleClassCode)
@@ -118,7 +125,7 @@ class ModuleClassApplicationServiceTest {
         var existing = historical(semester, 4, ModuleClassStatus.UNSCHEDULED, true);
         when(classes.findAllBySemester_IdOrderByIdAsc(7L)).thenReturn(List.of(existing));
 
-        assertThatThrownBy(() -> service.createBatch(7L, batch(subjectRequest(2, 80), subjectRequest(1, 80))))
+        assertThatThrownBy(() -> service.createModuleClasses(7L, batch(subjectRequest(2, 80), subjectRequest(1, 80))))
                 .isInstanceOfSatisfying(ModuleClassOpeningException.class, error -> {
                     assertThat(error.getErrorCode()).isEqualTo(ErrorCode.MODULE_CLASS_CONFIRMATION_REQUIRED);
                     assertThat(error.getErrors()).singleElement().satisfies(field -> {
@@ -141,10 +148,12 @@ class ModuleClassApplicationServiceTest {
         var request = subjectRequest(1, 80);
         request.setConfirmAdditionalClasses(true);
 
-        assertThat(service.createBatch(7L, batch(request))).singleElement().satisfies(item -> {
-            assertThat(item.getClassSequence()).isEqualTo(10);
-            assertThat(item.getModuleClassCode()).isEqualTo("MC_7_CS101_010");
-        });
+        assertThat(service.createModuleClasses(7L, batch(request)))
+                .singleElement()
+                .satisfies(item -> {
+                    assertThat(item.getClassSequence()).isEqualTo(10);
+                    assertThat(item.getModuleClassCode()).isEqualTo("MC_7_CS101_010");
+                });
     }
 
     @Test
@@ -154,7 +163,7 @@ class ModuleClassApplicationServiceTest {
         when(classes.findAllBySemester_IdOrderByIdAsc(7L))
                 .thenReturn(List.of(historical(semester, 3, ModuleClassStatus.CANCELLED, false)));
         when(classes.saveAllAndFlush(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
-        assertThat(service.createBatch(7L, batch(subjectRequest(1, 80))))
+        assertThat(service.createModuleClasses(7L, batch(subjectRequest(1, 80))))
                 .singleElement()
                 .satisfies(item -> assertThat(item.getClassSequence()).isEqualTo(4));
     }
@@ -162,7 +171,7 @@ class ModuleClassApplicationServiceTest {
     @Test
     void duplicateSubjectsAreRejectedRatherThanSilentlyMerged() {
         assertError(
-                () -> service.createBatch(7L, batch(subjectRequest(1, 80), subjectRequest(1, 80))),
+                () -> service.createModuleClasses(7L, batch(subjectRequest(1, 80), subjectRequest(1, 80))),
                 ErrorCode.DUPLICATE_BATCH_SUBJECT);
         verifyNoInteractions(semesters, classes, curriculum, dataSource);
     }
@@ -172,7 +181,7 @@ class ModuleClassApplicationServiceTest {
     void capacityOutsideOneToEightyIsRejected(int capacity) {
         var subject = subjectRequest(1, 80);
         subject.getClasses().getFirst().setMaxCapacity(capacity);
-        assertError(() -> service.createBatch(7L, batch(subject)), ErrorCode.VALIDATION_ERROR);
+        assertError(() -> service.createModuleClasses(7L, batch(subject)), ErrorCode.VALIDATION_ERROR);
         verifyNoInteractions(semesters, classes, curriculum, dataSource);
     }
 
@@ -181,7 +190,7 @@ class ModuleClassApplicationServiceTest {
         var semester = semester();
         semester.setLocked(true);
         when(semesters.findForUpdateByIdAndDeletedFalse(7L)).thenReturn(Optional.of(semester));
-        assertError(() -> service.createBatch(7L, batch(subjectRequest(1, 80))), ErrorCode.SEMESTER_LOCKED);
+        assertError(() -> service.createModuleClasses(7L, batch(subjectRequest(1, 80))), ErrorCode.SEMESTER_LOCKED);
         verifyNoInteractions(classes, curriculum, dataSource);
     }
 
@@ -190,14 +199,67 @@ class ModuleClassApplicationServiceTest {
         var semester = semester();
         semester.setEndDate(LocalDate.parse("2026-11-01"));
         when(semesters.findForUpdateByIdAndDeletedFalse(7L)).thenReturn(Optional.of(semester));
-        assertError(() -> service.createBatch(7L, batch(subjectRequest(1, 80))), ErrorCode.SEMESTER_ENDED);
+        assertError(() -> service.createModuleClasses(7L, batch(subjectRequest(1, 80))), ErrorCode.SEMESTER_ENDED);
         verifyNoInteractions(classes, curriculum, dataSource);
     }
 
     @Test
     void missingSemesterAndClassReturnBusinessNotFound() {
-        assertError(() -> service.createBatch(7L, batch(subjectRequest(1, 80))), ErrorCode.SEMESTER_NOT_FOUND);
-        assertError(() -> service.findById(99L), ErrorCode.MODULE_CLASS_NOT_FOUND);
+        assertError(() -> service.createModuleClasses(7L, batch(subjectRequest(1, 80))), ErrorCode.SEMESTER_NOT_FOUND);
+        assertError(() -> service.findModuleClassById(99L), ErrorCode.MODULE_CLASS_NOT_FOUND);
+    }
+
+    @Test
+    void openingSuggestionsKeepDemandMetadataAndCountHiddenNonCancelledClasses() {
+        var targetSemester = semester();
+        when(semesters.findByIdAndDeletedFalse(7L)).thenReturn(Optional.of(targetSemester));
+        when(dataSource.snapshot())
+                .thenReturn(new AcademicPlanningSnapshot(
+                        "DATABASE",
+                        true,
+                        List.of(new AcademicPlanningSnapshot.PlanningStudent(
+                                1L, "SV01", "CTDT01", 2026, ActivityStatus.STUDYING)),
+                        List.of()));
+        when(curriculum.findPlanningSubjects())
+                .thenReturn(List.of(CurriculumOpeningSubjectResponse.builder()
+                        .curriculumCode("CTDT01")
+                        .subjectId(1L)
+                        .subjectCode("CS101")
+                        .subjectName("Nhập môn lập trình")
+                        .credits(3)
+                        .recommendSemester(1)
+                        .build()));
+        when(classes.findAllBySemester_IdOrderByIdAsc(7L))
+                .thenReturn(List.of(
+                        historical(targetSemester, 1, ModuleClassStatus.UNSCHEDULED, false),
+                        historical(targetSemester, 2, ModuleClassStatus.SCHEDULED, true),
+                        historical(targetSemester, 3, ModuleClassStatus.CANCELLED, false)));
+
+        assertThat(service.findSubjectsToOpen(7L)).singleElement().satisfies(openingSubject -> {
+            assertThat(openingSubject.getSubjectId()).isEqualTo(1L);
+            assertThat(openingSubject.getSubjectCode()).isEqualTo("CS101");
+            assertThat(openingSubject.getSubjectName()).isEqualTo("Nhập môn lập trình");
+            assertThat(openingSubject.getCredits()).isEqualTo(3);
+            assertThat(openingSubject.getExpectedStudentCount()).isEqualTo(1);
+            assertThat(openingSubject.getOnTimeStudentCount()).isEqualTo(1);
+            assertThat(openingSubject.getRecommendedClassCount()).isEqualTo(1);
+            assertThat(openingSubject.getExistingClassCount()).isEqualTo(2);
+            assertThat(openingSubject.getDataSource()).isEqualTo("DATABASE");
+            assertThat(openingSubject.isHistoryComplete()).isTrue();
+        });
+        verifyNoInteractions(people, enrollmentQuery, entityManager);
+        verify(classes, never()).saveAllAndFlush(anyList());
+    }
+
+    @Test
+    void openingSuggestionsDoNotTreatMissingHistoryAsEmptyDemand() {
+        when(semesters.findByIdAndDeletedFalse(7L)).thenReturn(Optional.of(semester()));
+        when(dataSource.snapshot()).thenReturn(new AcademicPlanningSnapshot("DATABASE", false, List.of(), List.of()));
+        when(curriculum.findPlanningSubjects()).thenReturn(List.of());
+
+        assertError(() -> service.findSubjectsToOpen(7L), ErrorCode.PLANNING_DATA_UNAVAILABLE);
+
+        verifyNoInteractions(classes, people, enrollmentQuery, entityManager);
     }
 
     private void prepare(Semester semester) {

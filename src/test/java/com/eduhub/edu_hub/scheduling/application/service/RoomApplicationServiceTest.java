@@ -1,4 +1,4 @@
-package com.eduhub.edu_hub.scheduling.application;
+package com.eduhub.edu_hub.scheduling.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -23,6 +23,10 @@ import com.eduhub.edu_hub.scheduling.domain.repository.ClassScheduleRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.RoomRepository;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import com.eduhub.edu_hub.shared.config.TimeConfiguration;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +43,10 @@ import org.springframework.data.jpa.domain.Specification;
 
 @ExtendWith(MockitoExtension.class)
 class RoomApplicationServiceTest {
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-08-31T17:30:00Z"),
+            new TimeConfiguration().applicationClock().getZone());
+
     @Mock
     private RoomRepository repository;
 
@@ -49,7 +57,7 @@ class RoomApplicationServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new RoomApplicationService(repository, schedules);
+        service = new RoomApplicationService(repository, schedules, CLOCK);
     }
 
     @Test
@@ -63,12 +71,12 @@ class RoomApplicationServiceTest {
             Room room = invocation.getArgument(0);
             room.setId(1L);
             assertThat(room.isDeleted()).isFalse();
-            assertThat(room.getCreatedAt()).isNotNull();
+            assertThat(room.getCreatedAt()).isEqualTo(LocalDateTime.parse("2026-08-31T17:30:00"));
             assertThat(room.getUpdatedAt()).isEqualTo(room.getCreatedAt());
             return room;
         });
 
-        var result = service.create(request);
+        var result = service.createRoom(request);
 
         assertThat(result.getId()).isEqualTo(1L);
         assertThat(result.getRoomCode()).isEqualTo("102-TA1");
@@ -82,7 +90,7 @@ class RoomApplicationServiceTest {
     void rejectsCodeReservedByAnyRoomIncludingSoftDeleted() {
         when(repository.existsByRoomCode("102-TA1")).thenReturn(true);
 
-        assertError(() -> service.create(createRequest()), ErrorCode.DUPLICATE_ROOM_CODE);
+        assertError(() -> service.createRoom(createRequest()), ErrorCode.DUPLICATE_ROOM_CODE);
 
         verify(repository, never()).saveAndFlush(any());
     }
@@ -92,7 +100,7 @@ class RoomApplicationServiceTest {
         when(repository.existsByCampusAndBuildingCodeAndRoomNumber("", "TA1", "102"))
                 .thenReturn(true);
 
-        assertError(() -> service.create(createRequest()), ErrorCode.DUPLICATE_ROOM_LOCATION);
+        assertError(() -> service.createRoom(createRequest()), ErrorCode.DUPLICATE_ROOM_LOCATION);
 
         verify(repository, never()).saveAndFlush(any());
     }
@@ -101,10 +109,10 @@ class RoomApplicationServiceTest {
     void rejectsNonPositiveCapacityAndBlankIdentifiers() {
         var request = createRequest();
         request.setCapacity(0);
-        assertError(() -> service.create(request), ErrorCode.VALIDATION_ERROR);
+        assertError(() -> service.createRoom(request), ErrorCode.VALIDATION_ERROR);
         request.setCapacity(80);
         request.setRoomCode("   ");
-        assertError(() -> service.create(request), ErrorCode.VALIDATION_ERROR);
+        assertError(() -> service.createRoom(request), ErrorCode.VALIDATION_ERROR);
         verify(repository, never()).saveAndFlush(any());
     }
 
@@ -114,15 +122,15 @@ class RoomApplicationServiceTest {
         room.setStatus(RoomStatus.INACTIVE);
         when(repository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(room));
 
-        assertThat(service.findById(1L).getStatus()).isEqualTo(RoomStatus.INACTIVE);
+        assertThat(service.findRoomById(1L).getStatus()).isEqualTo(RoomStatus.INACTIVE);
     }
 
     @Test
     void missingOrHiddenRoomReturns404ForReadAndAllMutations() {
-        assertError(() -> service.findById(99L), ErrorCode.ROOM_NOT_FOUND);
-        assertError(() -> service.update(99L, updateRequest()), ErrorCode.ROOM_NOT_FOUND);
-        assertError(() -> service.changeStatus(99L, statusRequest(RoomStatus.INACTIVE)), ErrorCode.ROOM_NOT_FOUND);
-        assertError(() -> service.delete(99L), ErrorCode.ROOM_NOT_FOUND);
+        assertError(() -> service.findRoomById(99L), ErrorCode.ROOM_NOT_FOUND);
+        assertError(() -> service.updateRoom(99L, updateRequest()), ErrorCode.ROOM_NOT_FOUND);
+        assertError(() -> service.changeRoomStatus(99L, statusRequest(RoomStatus.INACTIVE)), ErrorCode.ROOM_NOT_FOUND);
+        assertError(() -> service.deleteRoom(99L), ErrorCode.ROOM_NOT_FOUND);
         verify(repository, never()).saveAndFlush(any());
     }
 
@@ -138,7 +146,7 @@ class RoomApplicationServiceTest {
         request.setRoomCode(" 102-ta1 ");
         request.setCapacity(100);
 
-        var result = service.update(1L, request);
+        var result = service.updateRoom(1L, request);
 
         assertThat(result.getId()).isEqualTo(1L);
         assertThat(result.getRoomCode()).isEqualTo("102-TA1");
@@ -167,7 +175,7 @@ class RoomApplicationServiceTest {
                     .thenReturn(true);
         }
 
-        assertError(() -> service.update(1L, request), error);
+        assertError(() -> service.updateRoom(1L, request), error);
 
         assertThat(room.getRoomCode()).isEqualTo("102-TA1");
         assertThat(room.getBuildingCode()).isEqualTo("TA1");
@@ -183,7 +191,8 @@ class RoomApplicationServiceTest {
         when(repository.findForUpdateByIdAndDeletedFalse(1L)).thenReturn(Optional.of(room));
         when(repository.saveAndFlush(room)).thenReturn(room);
 
-        assertThat(service.changeStatus(1L, statusRequest(target)).getStatus()).isEqualTo(target);
+        assertThat(service.changeRoomStatus(1L, statusRequest(target)).getStatus())
+                .isEqualTo(target);
         assertThat(room.isDeleted()).isFalse();
         assertThat(room.getUpdatedAt()).isNotNull();
     }
@@ -192,7 +201,8 @@ class RoomApplicationServiceTest {
     void repeatedStatusChangeIsIdempotent() {
         when(repository.findForUpdateByIdAndDeletedFalse(1L)).thenReturn(Optional.of(room()));
 
-        assertThat(service.changeStatus(1L, statusRequest(RoomStatus.ACTIVE)).getStatus())
+        assertThat(service.changeRoomStatus(1L, statusRequest(RoomStatus.ACTIVE))
+                        .getStatus())
                 .isEqualTo(RoomStatus.ACTIVE);
 
         verify(repository, never()).saveAndFlush(any());
@@ -203,7 +213,7 @@ class RoomApplicationServiceTest {
         var room = room();
         when(repository.findForUpdateByIdAndDeletedFalse(1L)).thenReturn(Optional.of(room));
 
-        service.delete(1L);
+        service.deleteRoom(1L);
 
         assertThat(room.isDeleted()).isTrue();
         assertThat(room.getRoomCode()).isEqualTo("102-TA1");
@@ -223,7 +233,7 @@ class RoomApplicationServiceTest {
         when(repository.findAll(org.mockito.ArgumentMatchers.<Specification<Room>>any(), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(room()), pageable, 6));
 
-        var result = service.search(request);
+        var result = service.searchRooms(request);
 
         assertThat(result.getPageNumber()).isEqualTo(1);
         assertThat(result.getTotalElements()).isEqualTo(6);
@@ -241,7 +251,7 @@ class RoomApplicationServiceTest {
                         ClassSchedule.builder().moduleClass(moduleClass).build()));
 
         for (Runnable action : List.<Runnable>of(
-                () -> service.changeStatus(1L, statusRequest(RoomStatus.INACTIVE)), () -> service.delete(1L))) {
+                () -> service.changeRoomStatus(1L, statusRequest(RoomStatus.INACTIVE)), () -> service.deleteRoom(1L))) {
             assertThatThrownBy(action::run).isInstanceOfSatisfying(RoomConflictException.class, exception -> {
                 assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ROOM_IN_USE);
                 assertThat(exception.getErrors()).singleElement().satisfies(error -> {
@@ -269,7 +279,7 @@ class RoomApplicationServiceTest {
                                 .build()));
         var update = updateRequest();
         update.setCapacity(50);
-        assertThatThrownBy(() -> service.update(1L, update))
+        assertThatThrownBy(() -> service.updateRoom(1L, update))
                 .isInstanceOfSatisfying(RoomConflictException.class, exception -> {
                     assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ROOM_CAPACITY_BELOW_CLASS);
                     assertThat(exception.getErrors()).singleElement().satisfies(error -> assertThat(error.getMessage())
@@ -290,7 +300,7 @@ class RoomApplicationServiceTest {
         when(repository.saveAndFlush(room)).thenReturn(room);
         var update = updateRequest();
         update.setCapacity(60);
-        assertThat(service.update(1L, update).getCapacity()).isEqualTo(60);
+        assertThat(service.updateRoom(1L, update).getCapacity()).isEqualTo(60);
     }
 
     @Test
@@ -305,7 +315,7 @@ class RoomApplicationServiceTest {
             saved.setId(1L);
             return saved;
         });
-        var result = service.create(request);
+        var result = service.createRoom(request);
         assertThat(result.getRoomCode()).isEqualTo("102-TA1");
         assertThat(result.getRoomName()).isEqualTo("Phòng học 102");
         assertThat(result.getCampus()).isEqualTo("CS1");
@@ -318,7 +328,7 @@ class RoomApplicationServiceTest {
     void a1RejectsInvalidCodeFormat(String code) {
         var request = createRequest();
         request.setRoomCode(code);
-        assertError(() -> service.create(request), ErrorCode.INVALID_ROOM_CODE);
+        assertError(() -> service.createRoom(request), ErrorCode.INVALID_ROOM_CODE);
         org.mockito.Mockito.verifyNoInteractions(repository);
     }
 
@@ -333,7 +343,8 @@ class RoomApplicationServiceTest {
         update.setRoomNumber(number);
         update.setBuildingCode(building);
 
-        for (Runnable action : List.<Runnable>of(() -> service.create(create), () -> service.update(1L, update))) {
+        for (Runnable action :
+                List.<Runnable>of(() -> service.createRoom(create), () -> service.updateRoom(1L, update))) {
             assertThatThrownBy(action::run).isInstanceOfSatisfying(RoomConflictException.class, exception -> {
                 assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.VALIDATION_ERROR);
                 assertThat(exception.getErrors()).singleElement().satisfies(error -> {

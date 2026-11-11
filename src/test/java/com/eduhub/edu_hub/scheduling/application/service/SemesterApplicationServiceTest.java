@@ -1,4 +1,4 @@
-package com.eduhub.edu_hub.scheduling.application;
+package com.eduhub.edu_hub.scheduling.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -20,11 +20,11 @@ import com.eduhub.edu_hub.scheduling.domain.repository.ModuleClassRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.SemesterRepository;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import com.eduhub.edu_hub.shared.config.TimeConfiguration;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,7 +45,9 @@ import org.springframework.data.jpa.domain.Specification;
 @ExtendWith(MockitoExtension.class)
 class SemesterApplicationServiceTest {
     // UTC vẫn là 31/08, nhưng ngày nghiệp vụ ở Việt Nam đã là 01/09.
-    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-08-31T17:30:00Z"), ZoneOffset.UTC);
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-08-31T17:30:00Z"),
+            new TimeConfiguration().applicationClock().getZone());
 
     @Mock
     private SemesterRepository repository;

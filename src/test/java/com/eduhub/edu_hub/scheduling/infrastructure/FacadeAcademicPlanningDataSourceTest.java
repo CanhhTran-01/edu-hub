@@ -11,7 +11,8 @@ import com.eduhub.edu_hub.enrollment.application.facade.dto.LearningAttemptRespo
 import com.eduhub.edu_hub.enrollment.application.facade.dto.LearningHistoryResponse;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.application.facade.dto.StudentPlanningResponse;
-import com.eduhub.edu_hub.scheduling.application.port.PlanningSnapshot;
+import com.eduhub.edu_hub.scheduling.domain.enums.LearningOutcome;
+import com.eduhub.edu_hub.scheduling.domain.model.AcademicPlanningSnapshot;
 import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
@@ -59,10 +60,10 @@ class FacadeAcademicPlanningDataSourceTest {
 
         assertThat(result.source()).isEqualTo("DATABASE");
         assertThat(result.students())
-                .extracting(PlanningSnapshot.Student::curriculumCode)
+                .extracting(AcademicPlanningSnapshot.PlanningStudent::curriculumCode)
                 .containsExactly("CQ", "LT");
         assertThat(result.attempts()).singleElement().satisfies(attempt -> assertThat(attempt.status())
-                .isEqualTo(PlanningSnapshot.Outcome.FAILED));
+                .isEqualTo(LearningOutcome.FAILED));
     }
 
     @Test

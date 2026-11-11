@@ -1,4 +1,4 @@
-package com.eduhub.edu_hub.scheduling.application;
+package com.eduhub.edu_hub.scheduling.application.service;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -20,10 +20,12 @@ import com.eduhub.edu_hub.scheduling.application.port.ModuleClassEnrollmentQuery
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
 import com.eduhub.edu_hub.scheduling.domain.model.ModuleClass;
 import com.eduhub.edu_hub.scheduling.domain.model.Semester;
+import com.eduhub.edu_hub.scheduling.domain.policy.OpeningDemandPolicy;
 import com.eduhub.edu_hub.scheduling.domain.repository.ModuleClassRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.SemesterRepository;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import com.eduhub.edu_hub.shared.config.TimeConfiguration;
 import jakarta.persistence.EntityManager;
 import java.time.*;
 import java.util.*;
@@ -37,7 +39,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class ModuleClassManagementServiceTest {
-    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-11-02T18:00:00Z"), ZoneOffset.UTC);
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-02T18:00:00Z"),
+            new TimeConfiguration().applicationClock().getZone());
 
     @Mock
     private SemesterRepository semesters;
@@ -72,7 +76,7 @@ class ModuleClassManagementServiceTest {
                 people,
                 planningData,
                 enrollments,
-                new OpeningDemandCalculator(),
+                new OpeningDemandPolicy(),
                 entityManager,
                 CLOCK);
         semester = Semester.builder()
@@ -89,7 +93,7 @@ class ModuleClassManagementServiceTest {
         prepareResponse(item);
         var request = update(40);
 
-        var result = service.update(101L, request);
+        var result = service.updateModuleClassCapacity(101L, request);
 
         assertThat(result.getLecturerId()).isEqualTo(5001L);
         assertThat(result.getLecturerName()).isEqualTo("Giảng viên từ People");
@@ -111,7 +115,7 @@ class ModuleClassManagementServiceTest {
     void reducingCapacityBelowSizeKeepsTheClassUnchanged() {
         var item = prepare(ModuleClassStatus.UNSCHEDULED, 30);
 
-        assertThatThrownBy(() -> service.update(101L, update(29)))
+        assertThatThrownBy(() -> service.updateModuleClassCapacity(101L, update(29)))
                 .isInstanceOfSatisfying(ModuleClassConflictException.class, error -> {
                     assertThat(error.getErrorCode()).isEqualTo(ErrorCode.MODULE_CLASS_CAPACITY_BELOW_SIZE);
                     assertThat(error.getErrors()).singleElement().satisfies(detail -> {
@@ -133,7 +137,7 @@ class ModuleClassManagementServiceTest {
         var item = prepare(status, 30);
         prepareResponse(item);
 
-        var result = service.update(101L, update(30));
+        var result = service.updateModuleClassCapacity(101L, update(30));
 
         assertThat(result.getMaxCapacity()).isEqualTo(30);
         assertThat(result.getLecturerId()).isEqualTo(5001L);
@@ -145,7 +149,7 @@ class ModuleClassManagementServiceTest {
         var item = prepare(ModuleClassStatus.OPEN, 10, 5009L);
         prepareResponse(item);
 
-        var result = service.update(101L, update(40));
+        var result = service.updateModuleClassCapacity(101L, update(40));
 
         assertThat(result.getMaxCapacity()).isEqualTo(40);
         assertThat(result.getLecturerId()).isEqualTo(5009L);
@@ -158,7 +162,7 @@ class ModuleClassManagementServiceTest {
         var item = prepare(ModuleClassStatus.UNSCHEDULED, 0, null);
         prepareResponse(item);
 
-        var result = service.update(101L, update(40));
+        var result = service.updateModuleClassCapacity(101L, update(40));
 
         assertThat(result.getMaxCapacity()).isEqualTo(40);
         assertThat(result.getLecturerId()).isNull();
@@ -174,7 +178,7 @@ class ModuleClassManagementServiceTest {
         prepareResponse(item);
         when(enrollments.summarize(101L, item.getModuleClassCode())).thenReturn(new Usage(true, 0, 0, "DEV_FIXTURE"));
 
-        var result = service.cancel(101L, cancelRequest());
+        var result = service.cancelModuleClass(101L, cancelRequest());
 
         assertThat(result.getStatus()).isEqualTo(ModuleClassStatus.CANCELLED);
         assertThat(result.getId()).isEqualTo(101L);
@@ -192,7 +196,7 @@ class ModuleClassManagementServiceTest {
         var item = prepare(ModuleClassStatus.UNSCHEDULED, 0);
         when(enrollments.summarize(101L, item.getModuleClassCode())).thenReturn(new Usage(true, 3, 2, "DEV_FIXTURE"));
 
-        assertThatThrownBy(() -> service.cancel(101L, cancelRequest()))
+        assertThatThrownBy(() -> service.cancelModuleClass(101L, cancelRequest()))
                 .isInstanceOfSatisfying(ModuleClassConflictException.class, error -> {
                     assertThat(error.getErrorCode()).isEqualTo(ErrorCode.MODULE_CLASS_HAS_ENROLLMENTS);
                     assertThat(error.getErrors().get(0).getMessage()).contains("3", "đã hủy/ẩn");
@@ -205,7 +209,7 @@ class ModuleClassManagementServiceTest {
     @Test
     void aNonEmptyRosterBlocksCancellationEvenIfTheHistorySourceIsUnavailable() {
         var item = prepare(ModuleClassStatus.OPEN, 12);
-        assertError(() -> service.cancel(101L, cancelRequest()), ErrorCode.MODULE_CLASS_HAS_ENROLLMENTS);
+        assertError(() -> service.cancelModuleClass(101L, cancelRequest()), ErrorCode.MODULE_CLASS_HAS_ENROLLMENTS);
         assertThat(item.getStatus()).isEqualTo(ModuleClassStatus.OPEN);
         verifyNoInteractions(enrollments);
         verify(classes, never()).saveAndFlush(any());
@@ -215,7 +219,9 @@ class ModuleClassManagementServiceTest {
     void incompleteHistoryIsNotTreatedAsZeroEnrollments() {
         var item = prepare(ModuleClassStatus.UNSCHEDULED, 0);
         when(enrollments.summarize(101L, item.getModuleClassCode())).thenReturn(new Usage(false, 0, 0, "TEST"));
-        assertError(() -> service.cancel(101L, cancelRequest()), ErrorCode.MODULE_CLASS_ENROLLMENT_DATA_UNAVAILABLE);
+        assertError(
+                () -> service.cancelModuleClass(101L, cancelRequest()),
+                ErrorCode.MODULE_CLASS_ENROLLMENT_DATA_UNAVAILABLE);
         assertThat(item.getStatus()).isEqualTo(ModuleClassStatus.UNSCHEDULED);
         verify(classes, never()).saveAndFlush(any());
     }
@@ -223,8 +229,8 @@ class ModuleClassManagementServiceTest {
     @Test
     void cancelledClassesCannotBeUpdatedOrCancelledAgain() {
         prepare(ModuleClassStatus.CANCELLED, 0);
-        assertError(() -> service.update(101L, update(50)), ErrorCode.MODULE_CLASS_CANCELLED);
-        assertError(() -> service.cancel(101L, cancelRequest()), ErrorCode.MODULE_CLASS_CANCELLED);
+        assertError(() -> service.updateModuleClassCapacity(101L, update(50)), ErrorCode.MODULE_CLASS_CANCELLED);
+        assertError(() -> service.cancelModuleClass(101L, cancelRequest()), ErrorCode.MODULE_CLASS_CANCELLED);
         verify(classes, never()).saveAndFlush(any());
         verifyNoInteractions(people, curriculum, enrollments);
     }
@@ -234,8 +240,8 @@ class ModuleClassManagementServiceTest {
         semester.setEndDate(LocalDate.parse("2026-11-02"));
         when(classes.findSemesterIdByIdAndDeletedFalse(101L)).thenReturn(Optional.of(9L));
         when(semesters.findForUpdateByIdAndDeletedFalse(9L)).thenReturn(Optional.of(semester));
-        assertError(() -> service.update(101L, update(50)), ErrorCode.SEMESTER_ENDED);
-        assertError(() -> service.cancel(101L, cancelRequest()), ErrorCode.SEMESTER_ENDED);
+        assertError(() -> service.updateModuleClassCapacity(101L, update(50)), ErrorCode.SEMESTER_ENDED);
+        assertError(() -> service.cancelModuleClass(101L, cancelRequest()), ErrorCode.SEMESTER_ENDED);
         verify(classes, never()).findForUpdateByIdAndDeletedFalse(anyLong());
     }
 
@@ -244,15 +250,15 @@ class ModuleClassManagementServiceTest {
         semester.setLocked(true);
         when(classes.findSemesterIdByIdAndDeletedFalse(101L)).thenReturn(Optional.of(9L));
         when(semesters.findForUpdateByIdAndDeletedFalse(9L)).thenReturn(Optional.of(semester));
-        assertError(() -> service.update(101L, update(50)), ErrorCode.SEMESTER_LOCKED);
-        assertError(() -> service.cancel(101L, cancelRequest()), ErrorCode.SEMESTER_LOCKED);
+        assertError(() -> service.updateModuleClassCapacity(101L, update(50)), ErrorCode.SEMESTER_LOCKED);
+        assertError(() -> service.cancelModuleClass(101L, cancelRequest()), ErrorCode.SEMESTER_LOCKED);
         verify(classes, never()).findForUpdateByIdAndDeletedFalse(anyLong());
     }
 
     @Test
     void missingOrHiddenClassIsNotFound() {
-        assertError(() -> service.update(101L, update(50)), ErrorCode.MODULE_CLASS_NOT_FOUND);
-        assertError(() -> service.cancel(101L, cancelRequest()), ErrorCode.MODULE_CLASS_NOT_FOUND);
+        assertError(() -> service.updateModuleClassCapacity(101L, update(50)), ErrorCode.MODULE_CLASS_NOT_FOUND);
+        assertError(() -> service.cancelModuleClass(101L, cancelRequest()), ErrorCode.MODULE_CLASS_NOT_FOUND);
         verifyNoInteractions(semesters, people, curriculum, enrollments);
     }
 

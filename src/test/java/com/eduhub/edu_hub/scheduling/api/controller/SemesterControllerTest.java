@@ -1,4 +1,4 @@
-package com.eduhub.edu_hub.scheduling.api;
+package com.eduhub.edu_hub.scheduling.api.controller;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
@@ -12,18 +12,17 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.eduhub.edu_hub.scheduling.api.controller.SemesterController;
 import com.eduhub.edu_hub.scheduling.api.dto.request.CreateSemesterRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.SemesterSearchRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.UpdateSemesterRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.response.SemesterResponse;
 import com.eduhub.edu_hub.scheduling.api.exception.SemesterExceptionHandler;
-import com.eduhub.edu_hub.scheduling.application.SemesterApplicationService;
 import com.eduhub.edu_hub.scheduling.application.exception.SemesterConflictException;
+import com.eduhub.edu_hub.scheduling.application.exception.SemesterException;
+import com.eduhub.edu_hub.scheduling.application.service.SemesterApplicationService;
 import com.eduhub.edu_hub.scheduling.domain.enums.SemesterStatus;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
 import com.eduhub.edu_hub.shared.common.PageResponse;
-import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;
 import java.sql.SQLException;
@@ -150,7 +149,7 @@ class SemesterControllerTest {
 
     @Test
     void missingSemesterReturns404() throws Exception {
-        when(service.getSemesterById(99L)).thenThrow(new BaseException(ErrorCode.SEMESTER_NOT_FOUND));
+        when(service.getSemesterById(99L)).thenThrow(new SemesterException(ErrorCode.SEMESTER_NOT_FOUND));
 
         mvc.perform(get("/api/v1/semesters/99"))
                 .andExpect(status().isNotFound())

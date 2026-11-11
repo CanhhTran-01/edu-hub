@@ -1,4 +1,4 @@
-package com.eduhub.edu_hub.scheduling.api;
+package com.eduhub.edu_hub.scheduling.api.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -8,17 +8,16 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-import com.eduhub.edu_hub.scheduling.api.controller.RoomController;
 import com.eduhub.edu_hub.scheduling.api.dto.request.ChangeRoomStatusRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.CreateRoomRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.RoomSearchRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.UpdateRoomRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.response.RoomResponse;
 import com.eduhub.edu_hub.scheduling.api.exception.RoomExceptionHandler;
-import com.eduhub.edu_hub.scheduling.application.RoomApplicationService;
+import com.eduhub.edu_hub.scheduling.application.exception.RoomException;
+import com.eduhub.edu_hub.scheduling.application.service.RoomApplicationService;
 import com.eduhub.edu_hub.scheduling.domain.enums.RoomStatus;
 import com.eduhub.edu_hub.shared.common.PageResponse;
-import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;
 import java.sql.SQLException;
@@ -59,7 +58,7 @@ class RoomControllerTest {
 
     @Test
     void createsRoomAndReturns201WithDtoEnvelope() throws Exception {
-        when(service.create(any(CreateRoomRequest.class))).thenReturn(room());
+        when(service.createRoom(any(CreateRoomRequest.class))).thenReturn(room());
 
         mvc.perform(post("/api/v1/rooms")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -116,7 +115,7 @@ class RoomControllerTest {
 
     @Test
     void searchBindsAllFiltersAndReturnsEmptyPage() throws Exception {
-        when(service.search(any(RoomSearchRequest.class)))
+        when(service.searchRooms(any(RoomSearchRequest.class)))
                 .thenReturn(PageResponse.<RoomResponse>builder()
                         .content(List.of())
                         .pageNumber(0)
@@ -137,7 +136,7 @@ class RoomControllerTest {
                 .andExpect(jsonPath("$.data.last").value(true));
 
         var captor = ArgumentCaptor.forClass(RoomSearchRequest.class);
-        verify(service).search(captor.capture());
+        verify(service).searchRooms(captor.capture());
         org.assertj.core.api.Assertions.assertThat(captor.getValue()).satisfies(request -> {
             org.assertj.core.api.Assertions.assertThat(request.getKeyword()).isEqualTo("102");
             org.assertj.core.api.Assertions.assertThat(request.getBuildingCode())
@@ -158,8 +157,8 @@ class RoomControllerTest {
 
     @Test
     void returnsDetailsOr404UsingBusinessErrorCode() throws Exception {
-        when(service.findById(1L)).thenReturn(room());
-        when(service.findById(99L)).thenThrow(new BaseException(ErrorCode.ROOM_NOT_FOUND));
+        when(service.findRoomById(1L)).thenReturn(room());
+        when(service.findRoomById(99L)).thenThrow(new RoomException(ErrorCode.ROOM_NOT_FOUND));
 
         mvc.perform(get("/api/v1/rooms/1"))
                 .andExpect(status().isOk())
@@ -171,7 +170,7 @@ class RoomControllerTest {
 
     @Test
     void updatesRoomWithoutReason() throws Exception {
-        when(service.update(eq(1L), any(UpdateRoomRequest.class))).thenReturn(room());
+        when(service.updateRoom(eq(1L), any(UpdateRoomRequest.class))).thenReturn(room());
 
         mvc.perform(put("/api/v1/rooms/1")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -184,7 +183,8 @@ class RoomControllerTest {
     void changesStatusWithoutReason() throws Exception {
         var room = room();
         room.setStatus(RoomStatus.INACTIVE);
-        when(service.changeStatus(eq(1L), any(ChangeRoomStatusRequest.class))).thenReturn(room);
+        when(service.changeRoomStatus(eq(1L), any(ChangeRoomStatusRequest.class)))
+                .thenReturn(room);
 
         mvc.perform(patch("/api/v1/rooms/1/status")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -210,13 +210,13 @@ class RoomControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data").doesNotExist());
-        verify(service).delete(eq(1L));
+        verify(service).deleteRoom(eq(1L));
     }
 
     @ParameterizedTest
     @CsvSource({"uk_rooms_code,4327", "uk_rooms_location,4328"})
     void concurrentUniqueConstraintViolationsReturn409(String constraint, int code) throws Exception {
-        when(service.create(any(CreateRoomRequest.class)))
+        when(service.createRoom(any(CreateRoomRequest.class)))
                 .thenThrow(new DataIntegrityViolationException(
                         "Could not insert",
                         new ConstraintViolationException("Duplicate", new SQLException("rejected"), constraint)));
@@ -231,7 +231,7 @@ class RoomControllerTest {
 
     @Test
     void unknownDatabaseFailureDoesNotLeakSql() throws Exception {
-        when(service.create(any(CreateRoomRequest.class)))
+        when(service.createRoom(any(CreateRoomRequest.class)))
                 .thenThrow(new DataIntegrityViolationException("SQL details must not be returned"));
 
         mvc.perform(post("/api/v1/rooms")
@@ -262,7 +262,7 @@ class RoomControllerTest {
     void a2AndA3ReturnAffectedClassesInErrors() throws Exception {
         var errors = List.of(new com.eduhub.edu_hub.shared.common.FieldErrorDetail(
                 "moduleClasses[20]", "MC_TEST_20; sức chứa tối đa: 60"));
-        when(service.changeStatus(eq(1L), any(ChangeRoomStatusRequest.class)))
+        when(service.changeRoomStatus(eq(1L), any(ChangeRoomStatusRequest.class)))
                 .thenThrow(new com.eduhub.edu_hub.scheduling.application.exception.RoomConflictException(
                         ErrorCode.ROOM_IN_USE, errors));
         mvc.perform(patch("/api/v1/rooms/1/status")
@@ -271,7 +271,7 @@ class RoomControllerTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value(4330))
                 .andExpect(jsonPath("$.errors[0].message").value(org.hamcrest.Matchers.containsString("MC_TEST_20")));
-        when(service.update(eq(1L), any(UpdateRoomRequest.class)))
+        when(service.updateRoom(eq(1L), any(UpdateRoomRequest.class)))
                 .thenThrow(new com.eduhub.edu_hub.scheduling.application.exception.RoomConflictException(
                         ErrorCode.ROOM_CAPACITY_BELOW_CLASS, errors));
         mvc.perform(put("/api/v1/rooms/1")

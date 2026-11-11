@@ -4,7 +4,7 @@ import com.eduhub.edu_hub.scheduling.api.dto.request.CreateSemesterRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.SemesterSearchRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.UpdateSemesterRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.response.SemesterResponse;
-import com.eduhub.edu_hub.scheduling.application.SemesterApplicationService;
+import com.eduhub.edu_hub.scheduling.application.service.SemesterApplicationService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import jakarta.validation.Valid;

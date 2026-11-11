@@ -15,7 +15,7 @@ import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.application.facade.dto.*;
 import com.eduhub.edu_hub.people.domain.model.*;
 import com.eduhub.edu_hub.people.domain.repository.*;
-import com.eduhub.edu_hub.scheduling.application.SchedulingFacade;
+import com.eduhub.edu_hub.scheduling.application.facade.SchedulingFacade;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;

@@ -1,31 +1,28 @@
-package com.eduhub.edu_hub.scheduling.application;
+package com.eduhub.edu_hub.scheduling.application.service;
 
 import com.eduhub.edu_hub.scheduling.api.dto.request.CreateSemesterRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.SemesterSearchRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.UpdateSemesterRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.response.SemesterResponse;
+import com.eduhub.edu_hub.scheduling.api.mapper.SemesterResponseMapper;
 import com.eduhub.edu_hub.scheduling.application.exception.SemesterConflictException;
+import com.eduhub.edu_hub.scheduling.application.exception.SemesterException;
 import com.eduhub.edu_hub.scheduling.application.specification.SemesterSpecification;
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
-import com.eduhub.edu_hub.scheduling.domain.enums.SemesterStatus;
 import com.eduhub.edu_hub.scheduling.domain.model.Semester;
+import com.eduhub.edu_hub.scheduling.domain.policy.SemesterPolicy;
 import com.eduhub.edu_hub.scheduling.domain.repository.ModuleClassRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.SemesterRepository;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
 import com.eduhub.edu_hub.shared.common.PageResponse;
-import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.mapper.PageMapper;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -34,43 +31,33 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Slf4j
 public class SemesterApplicationService {
-    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
-    private static final Pattern SEMESTER_NAME =
-            Pattern.compile("^Học kì ([1-9][0-9]*) năm học ([0-9]{4})-([0-9]{4})$");
-
     private final SemesterRepository semesterRepository;
     private final ModuleClassRepository moduleClassRepository;
     private final Clock clock;
 
-    @Autowired
     public SemesterApplicationService(
-            SemesterRepository semesterRepository, ModuleClassRepository moduleClassRepository) {
-        this(semesterRepository, moduleClassRepository, Clock.system(BUSINESS_ZONE));
-    }
-
-    SemesterApplicationService(
             SemesterRepository semesterRepository, ModuleClassRepository moduleClassRepository, Clock clock) {
         this.semesterRepository = semesterRepository;
         this.moduleClassRepository = moduleClassRepository;
-        this.clock = clock.withZone(BUSINESS_ZONE);
+        this.clock = clock;
     }
 
     @Transactional
     public SemesterResponse createSemester(CreateSemesterRequest request) {
 
         // chuẩn hóa lại tên kì học
-        String name = normalizeName(request.getSemesterName());
+        String semesterName = SemesterPolicy.normalizeSemesterName(request.getSemesterName());
 
         // vaidate nghiệp vụ
-        validateDates(
+        SemesterPolicy.validateDates(
                 request.getStartDate(),
                 request.getEndDate(),
                 request.getRegistrationStart(),
                 request.getRegistrationEnd());
 
         // check trùng tên
-        if (semesterRepository.existsBySemesterName(name)) {
-            throw new BaseException(ErrorCode.DUPLICATE_SEMESTER_NAME);
+        if (semesterRepository.existsBySemesterName(semesterName)) {
+            throw new SemesterException(ErrorCode.DUPLICATE_SEMESTER_NAME);
         }
 
         // check khoảng thời gian chồng lấn
@@ -83,51 +70,51 @@ public class SemesterApplicationService {
 
         // tạo entity
         Semester semester = Semester.builder()
-                .semesterName(name)
-                .semesterCode(toCode(name))
+                .semesterName(semesterName)
+                .semesterCode(SemesterPolicy.generateSemesterCode(semesterName))
                 .startDate(request.getStartDate())
                 .endDate(request.getEndDate())
                 .registrationStart(request.getRegistrationStart())
                 .registrationEnd(request.getRegistrationEnd())
                 .build();
 
-        LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
-        semester.setCreatedAt(now);
-        semester.setUpdatedAt(now);
+        LocalDateTime createdAt = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
+        semester.setCreatedAt(createdAt);
+        semester.setUpdatedAt(createdAt);
 
         // ghi xuống database (ép ghi ngay)
-        Semester saved = semesterRepository.saveAndFlush(semester);
-        logChange("Tạo", saved);
+        Semester savedSemester = semesterRepository.saveAndFlush(semester);
+        logChange("Tạo", savedSemester);
 
-        return toResponse(saved, LocalDate.now(clock));
+        return SemesterResponseMapper.toResponse(savedSemester, LocalDate.now(clock));
     }
 
     @Transactional
-    public SemesterResponse updateSemester(Long id, UpdateSemesterRequest request) {
+    public SemesterResponse updateSemester(Long semesterId, UpdateSemesterRequest request) {
 
         Semester semester = semesterRepository
-                .findForUpdateByIdAndDeletedFalse(id)
-                .orElseThrow(() -> new BaseException(ErrorCode.SEMESTER_NOT_FOUND));
+                .findForUpdateByIdAndDeletedFalse(semesterId)
+                .orElseThrow(() -> new SemesterException(ErrorCode.SEMESTER_NOT_FOUND));
 
         // Kì này end rồi thì không cho cập nhật ?
         LocalDate today = LocalDate.now(clock);
         if (today.isAfter(semester.getEndDate())) {
-            throw new BaseException(ErrorCode.SEMESTER_ENDED);
+            throw new SemesterException(ErrorCode.SEMESTER_ENDED);
         }
 
         // chuẩn hóa tên
-        String name = normalizeName(request.getSemesterName());
+        String semesterName = SemesterPolicy.normalizeSemesterName(request.getSemesterName());
 
         // validate nghiệp vụ cho ngày
-        validateDates(
+        SemesterPolicy.validateDates(
                 request.getStartDate(),
                 request.getEndDate(),
                 request.getRegistrationStart(),
                 request.getRegistrationEnd());
 
         // check trùng tên
-        if (semesterRepository.existsBySemesterNameAndIdNot(name, id)) {
-            throw new BaseException(ErrorCode.DUPLICATE_SEMESTER_NAME);
+        if (semesterRepository.existsBySemesterNameAndIdNot(semesterName, semesterId)) {
+            throw new SemesterException(ErrorCode.DUPLICATE_SEMESTER_NAME);
         }
 
         // check khoảng thời gian chồng lấn
@@ -136,7 +123,7 @@ public class SemesterApplicationService {
                 request.getEndDate(),
                 request.getRegistrationStart(),
                 request.getRegistrationEnd(),
-                id);
+                semesterId);
 
         // TODO: cần làm rõ tại đây, cho cập nhật khoảng date hay không ? chắc là không
         // check ngày thay đổi
@@ -148,15 +135,15 @@ public class SemesterApplicationService {
         // date chưa bị thay đổi, phải được xác nhận từ client, kì chưa có lớp hoặc có nhưng đã hủy thì mới update được
         if (datesChanged
                 && !request.isConfirmDateChange()
-                && moduleClassRepository.existsBySemester_IdAndStatusNot(id, ModuleClassStatus.CANCELLED)) {
-            throw new BaseException(ErrorCode.SEMESTER_DATE_CHANGE_CONFIRMATION_REQUIRED);
+                && moduleClassRepository.existsBySemester_IdAndStatusNot(semesterId, ModuleClassStatus.CANCELLED)) {
+            throw new SemesterException(ErrorCode.SEMESTER_DATE_CHANGE_CONFIRMATION_REQUIRED);
         }
 
         // TODO(CLASS_SCHEDULE_INTEGRATION): chekc lịch đã xếp vẫn nằm trong khoảng ngày mới (nếu cho update date).
 
         // cập nhật field
-        semester.setSemesterName(name);
-        semester.setSemesterCode(toCode(name));
+        semester.setSemesterName(semesterName);
+        semester.setSemesterCode(SemesterPolicy.generateSemesterCode(semesterName));
         semester.setStartDate(request.getStartDate());
         semester.setEndDate(request.getEndDate());
         semester.setRegistrationStart(request.getRegistrationStart());
@@ -164,21 +151,21 @@ public class SemesterApplicationService {
         semester.setUpdatedAt(LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
 
         // ghi xuống database
-        Semester saved = semesterRepository.saveAndFlush(semester);
-        logChange("Cập nhật", saved);
+        Semester savedSemester = semesterRepository.saveAndFlush(semester);
+        logChange("Cập nhật", savedSemester);
 
-        return toResponse(saved, today);
+        return SemesterResponseMapper.toResponse(savedSemester, today);
     }
 
     @Transactional(readOnly = true)
-    public SemesterResponse getSemesterById(Long id) {
+    public SemesterResponse getSemesterById(Long semesterId) {
 
         Semester semester = semesterRepository
-                .findByIdAndDeletedFalse(id)
-                .orElseThrow(() -> new BaseException(ErrorCode.SEMESTER_NOT_FOUND));
+                .findByIdAndDeletedFalse(semesterId)
+                .orElseThrow(() -> new SemesterException(ErrorCode.SEMESTER_NOT_FOUND));
 
         LocalDate today = LocalDate.now(clock);
-        return toResponse(semester, today);
+        return SemesterResponseMapper.toResponse(semester, today);
     }
 
     @Transactional(readOnly = true)
@@ -191,54 +178,17 @@ public class SemesterApplicationService {
 
         var semesters = semesterRepository.findAll(SemesterSpecification.search(request, today), pageable);
 
-        return PageMapper.toPageResponse(semesters.map(semester -> toResponse(semester, today)));
-    }
-
-    private String normalizeName(String rawName) {
-        if (rawName == null) {
-            throw new BaseException(ErrorCode.INVALID_SEMESTER_NAME);
-        }
-
-        String name = rawName.trim();
-        Matcher matcher = SEMESTER_NAME.matcher(name);
-        if (!matcher.matches()) {
-            throw new BaseException(ErrorCode.INVALID_SEMESTER_NAME);
-        }
-
-        int firstYear = Integer.parseInt(matcher.group(2));
-        int secondYear = Integer.parseInt(matcher.group(3));
-
-        if (firstYear < 1 || secondYear != firstYear + 1) {
-            throw new BaseException(ErrorCode.INVALID_SEMESTER_NAME);
-        }
-
-        return name;
-    }
-
-    private String toCode(String name) {
-        return SEMESTER_NAME.matcher(name).replaceFirst("HK_$1_$2_$3");
-    }
-
-    private void validateDates(
-            LocalDate semesterStart, LocalDate semesterEnd, LocalDate registrationStart, LocalDate registrationEnd) {
-        if (semesterStart == null || semesterEnd == null || registrationStart == null || registrationEnd == null) {
-            throw new BaseException(ErrorCode.VALIDATION_ERROR);
-        }
-
-        // kiểm tra khoảng thời gian hợp lệ
-        // registrationStart < registrationEnd < semesterStart < semesterEnd
-        if (!semesterStart.isBefore(semesterEnd)) {
-            throw new BaseException(ErrorCode.INVALID_SEMESTER_DATES);
-        }
-        if (!registrationStart.isBefore(registrationEnd) || !registrationEnd.isBefore(semesterStart)) {
-            throw new BaseException(ErrorCode.INVALID_REGISTRATION_PERIOD);
-        }
+        return PageMapper.toPageResponse(semesters.map(semester -> SemesterResponseMapper.toResponse(semester, today)));
     }
 
     private void checkOverlaps(
-            LocalDate start, LocalDate end, LocalDate registrationStart, LocalDate registrationEnd, Long excludedId) {
+            LocalDate startDate,
+            LocalDate endDate,
+            LocalDate registrationStart,
+            LocalDate registrationEnd,
+            Long excludedSemesterId) {
         List<Semester> studyConflicts = semesterRepository.findAll(
-                SemesterSpecification.overlappingStudyPeriod(start, end, excludedId), Sort.by("id"));
+                SemesterSpecification.overlappingStudyPeriod(startDate, endDate, excludedSemesterId), Sort.by("id"));
         if (!studyConflicts.isEmpty()) {
             throw new SemesterConflictException(
                     ErrorCode.SEMESTER_DATE_OVERLAP,
@@ -250,7 +200,8 @@ public class SemesterApplicationService {
                             .toList());
         }
         List<Semester> registrationConflicts = semesterRepository.findAll(
-                SemesterSpecification.overlappingRegistrationPeriod(registrationStart, registrationEnd, excludedId),
+                SemesterSpecification.overlappingRegistrationPeriod(
+                        registrationStart, registrationEnd, excludedSemesterId),
                 Sort.by("id"));
         if (!registrationConflicts.isEmpty()) {
             throw new SemesterConflictException(
@@ -262,29 +213,6 @@ public class SemesterApplicationService {
                                             + semester.getRegistrationEnd() + ")"))
                             .toList());
         }
-    }
-
-    private SemesterResponse toResponse(Semester semester, LocalDate today) {
-
-        // lấy giờ trong clock, check và cập nhật động trạng thái kì
-        SemesterStatus status = today.isBefore(semester.getStartDate())
-                ? SemesterStatus.UPCOMING
-                : today.isAfter(semester.getEndDate()) ? SemesterStatus.ENDED : SemesterStatus.ONGOING;
-
-        // TODO: isLocked và lockedGrade cần phân định rõ ràng, có thực sự cần isLocked không ?
-
-        return SemesterResponse.builder()
-                .id(semester.getId())
-                .semesterCode(semester.getSemesterCode())
-                .semesterName(semester.getSemesterName())
-                .startDate(semester.getStartDate())
-                .endDate(semester.getEndDate())
-                .registrationStart(semester.getRegistrationStart())
-                .registrationEnd(semester.getRegistrationEnd())
-                .status(status)
-                .isLocked(semester.isLocked())
-                .lockedGrade(semester.isLockedGrade())
-                .build();
     }
 
     private void logChange(String action, Semester semester) {
