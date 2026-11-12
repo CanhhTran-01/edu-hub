@@ -48,6 +48,9 @@ class SubjectApplicationServiceTest {
     @Mock
     private SubjectPrerequisiteRepository subjectPrerequisiteRepository;
 
+    @Mock
+    private com.eduhub.edu_hub.scheduling.application.facade.SchedulingFacade.TeachingAssignments teachingAssignments;
+
     @InjectMocks
     private SubjectApplicationService service;
 
@@ -233,7 +236,7 @@ class SubjectApplicationServiceTest {
         subject.setCreatedAt(createdAt);
         when(subjectPrerequisiteRepository.findAllBySubject_IdInAndDeletedFalse(List.of(14L)))
                 .thenReturn(List.of(link(subject, subject(1L, "CS100", "Nhập môn"))));
-        when(subjectRepository.findByIdAndDeletedFalse(14L)).thenReturn(Optional.of(subject));
+        when(subjectRepository.findForUpdateById(14L)).thenReturn(Optional.of(subject));
         when(subjectRepository.save(subject)).thenReturn(subject);
         UpdateSubjectRequest request = updateRequest();
         request.setSubjectCode("CS101");
@@ -258,7 +261,7 @@ class SubjectApplicationServiceTest {
     @Test
     void allowsKeepingTheCurrentSubjectName() {
         Subject subject = subject(14L, "CS101", "Lập trình cơ bản");
-        when(subjectRepository.findByIdAndDeletedFalse(14L)).thenReturn(Optional.of(subject));
+        when(subjectRepository.findForUpdateById(14L)).thenReturn(Optional.of(subject));
         when(subjectRepository.save(subject)).thenReturn(subject);
         UpdateSubjectRequest request = updateRequest();
         request.setSubjectName(subject.getSubjectName());
@@ -271,7 +274,7 @@ class SubjectApplicationServiceTest {
 
     @Test
     void rejectsUpdatingMissingOrDeletedSubject() {
-        when(subjectRepository.findByIdAndDeletedFalse(99L)).thenReturn(Optional.empty());
+        when(subjectRepository.findForUpdateById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.updateSubject(99L, updateRequest()))
                 .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
@@ -289,7 +292,7 @@ class SubjectApplicationServiceTest {
                 .status(SubjectStatus.INACTIVE)
                 .build();
         subject.setId(14L);
-        when(subjectRepository.findByIdAndDeletedFalse(14L)).thenReturn(Optional.of(subject));
+        when(subjectRepository.findForUpdateById(14L)).thenReturn(Optional.of(subject));
 
         assertThatThrownBy(() -> service.updateSubject(14L, updateRequest()))
                 .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
@@ -301,7 +304,7 @@ class SubjectApplicationServiceTest {
     @Test
     void rejectsChangingSubjectCode() {
         Subject subject = subject(14L, "CS101", "Lập trình cơ bản");
-        when(subjectRepository.findByIdAndDeletedFalse(14L)).thenReturn(Optional.of(subject));
+        when(subjectRepository.findForUpdateById(14L)).thenReturn(Optional.of(subject));
         UpdateSubjectRequest request = updateRequest();
         request.setSubjectCode("CS999");
 
@@ -316,7 +319,7 @@ class SubjectApplicationServiceTest {
     @Test
     void rejectsUpdatingNameToAnotherSubjectsName() {
         Subject subject = subject(14L, "CS101", "Lập trình cơ bản");
-        when(subjectRepository.findByIdAndDeletedFalse(14L)).thenReturn(Optional.of(subject));
+        when(subjectRepository.findForUpdateById(14L)).thenReturn(Optional.of(subject));
         when(subjectRepository.existsBySubjectNameAndIdNot("Lập trình nâng cao", 14L))
                 .thenReturn(true);
 
@@ -334,7 +337,7 @@ class SubjectApplicationServiceTest {
         Subject subject = subject(14L, "CS101", "Lập trình cơ bản");
         when(subjectPrerequisiteRepository.findAllBySubject_IdInAndDeletedFalse(List.of(14L)))
                 .thenReturn(List.of(link(subject, subject(1L, "CS100", "Nhập môn"))));
-        when(subjectRepository.findByIdAndDeletedFalse(14L)).thenReturn(Optional.of(subject));
+        when(subjectRepository.findForUpdateById(14L)).thenReturn(Optional.of(subject));
         when(subjectRepository.save(subject)).thenReturn(subject);
 
         SubjectResponse response = service.deactivateSubject(14L, actionRequest(true));
@@ -352,7 +355,7 @@ class SubjectApplicationServiceTest {
     @Test
     void softDeletesSubjectWithoutPhysicallyRemovingIt() {
         Subject subject = subject(14L, "CS101", "Lập trình cơ bản");
-        when(subjectRepository.findByIdAndDeletedFalse(14L)).thenReturn(Optional.of(subject));
+        when(subjectRepository.findForUpdateById(14L)).thenReturn(Optional.of(subject));
 
         service.deleteSubject(14L, actionRequest(true));
 
@@ -370,7 +373,7 @@ class SubjectApplicationServiceTest {
         Subject subject = subject(14L, "CS101", "Lập trình cơ bản");
         when(subjectPrerequisiteRepository.findAllByPrerequisiteSubject_IdInAndDeletedFalse(List.of(14L)))
                 .thenReturn(List.of(link(subject(20L, "CS201", "Cấu trúc dữ liệu"), subject)));
-        when(subjectRepository.findByIdAndDeletedFalse(14L)).thenReturn(Optional.of(subject));
+        when(subjectRepository.findForUpdateById(14L)).thenReturn(Optional.of(subject));
 
         assertThatThrownBy(() -> service.deactivateSubject(14L, actionRequest(true)))
                 .isInstanceOfSatisfying(
@@ -389,7 +392,7 @@ class SubjectApplicationServiceTest {
         Subject subject = subject(14L, "CS101", "Lập trình cơ bản");
         when(subjectPrerequisiteRepository.findAllByPrerequisiteSubject_IdInAndDeletedFalse(List.of(14L)))
                 .thenReturn(List.of(link(subject(20L, "CS201", "Cấu trúc dữ liệu"), subject)));
-        when(subjectRepository.findByIdAndDeletedFalse(14L)).thenReturn(Optional.of(subject));
+        when(subjectRepository.findForUpdateById(14L)).thenReturn(Optional.of(subject));
 
         assertThatThrownBy(() -> service.deleteSubject(14L, actionRequest(true)))
                 .isInstanceOf(SubjectHasDependentsException.class);
@@ -418,7 +421,7 @@ class SubjectApplicationServiceTest {
 
     @Test
     void rejectsDeletionOfMissingOrAlreadyDeletedSubject() {
-        when(subjectRepository.findByIdAndDeletedFalse(99L)).thenReturn(Optional.empty());
+        when(subjectRepository.findForUpdateById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.deleteSubject(99L, actionRequest(true)))
                 .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
@@ -438,7 +441,7 @@ class SubjectApplicationServiceTest {
         deletedLink.setDeleted(true);
         when(subjectPrerequisiteRepository.findAllByPrerequisiteSubject_IdInAndDeletedFalse(List.of(14L)))
                 .thenReturn(List.of(link(inactiveDependent, subject), link(deletedDependent, subject), deletedLink));
-        when(subjectRepository.findByIdAndDeletedFalse(14L)).thenReturn(Optional.of(subject));
+        when(subjectRepository.findForUpdateById(14L)).thenReturn(Optional.of(subject));
 
         service.deleteSubject(14L, actionRequest(true));
 
@@ -452,6 +455,21 @@ class SubjectApplicationServiceTest {
         request.setReason("Không còn sử dụng trong danh mục mới");
         request.setConfirmed(confirmed);
         return request;
+    }
+
+    @Test
+    void blocksChangingTeachingPeriodsWhileOfficialSchedulesRemain() {
+        var subject = subject(14L, "CS101", "Lập trình cơ bản");
+        subject.setTotalTeachingPeriods(45);
+        when(subjectRepository.findForUpdateById(14L)).thenReturn(Optional.of(subject));
+        when(teachingAssignments.hasUnfinishedScheduledClassesForSubject(14L)).thenReturn(true);
+        var request = updateRequest();
+        request.setTotalTeachingPeriods(46);
+        assertThatThrownBy(() -> service.updateSubject(14L, request))
+                .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.SUBJECT_SCHEDULE_IN_USE));
+        assertThat(subject.getTotalTeachingPeriods()).isEqualTo(45);
+        verify(subjectRepository, never()).save(any());
     }
 
     private UpdateSubjectRequest updateRequest() {
@@ -486,6 +504,7 @@ class SubjectApplicationServiceTest {
         request.setSubjectCode("CS101");
         request.setSubjectName("Lập trình cơ bản");
         request.setCredits(3);
+        request.setTotalTeachingPeriods(45);
         request.setDescription("Kiến thức nhập môn lập trình");
         return request;
     }

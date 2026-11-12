@@ -7,12 +7,20 @@ import com.eduhub.edu_hub.scheduling.api.dto.response.SemesterResponse;
 import com.eduhub.edu_hub.scheduling.api.mapper.SemesterResponseMapper;
 import com.eduhub.edu_hub.scheduling.application.exception.SemesterConflictException;
 import com.eduhub.edu_hub.scheduling.application.exception.SemesterException;
+import com.eduhub.edu_hub.scheduling.application.specification.ClassScheduleSpecification;
 import com.eduhub.edu_hub.scheduling.application.specification.SemesterSpecification;
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
+import com.eduhub.edu_hub.scheduling.domain.enums.TimetablePlanState;
+import com.eduhub.edu_hub.scheduling.domain.model.ModuleClass;
 import com.eduhub.edu_hub.scheduling.domain.model.Semester;
+import com.eduhub.edu_hub.scheduling.domain.model.TimetableAllocation;
 import com.eduhub.edu_hub.scheduling.domain.policy.SemesterPolicy;
+import com.eduhub.edu_hub.scheduling.domain.policy.TimetablePolicy;
+import com.eduhub.edu_hub.scheduling.domain.repository.ClassScheduleRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.ModuleClassRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.SemesterRepository;
+import com.eduhub.edu_hub.scheduling.domain.repository.TimetablePlanRepository;
+import com.eduhub.edu_hub.scheduling.infrastructure.persistence.TimetablePlanCodec;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
@@ -34,12 +42,23 @@ public class SemesterApplicationService {
     private final SemesterRepository semesterRepository;
     private final ModuleClassRepository moduleClassRepository;
     private final Clock clock;
+    private final ClassScheduleRepository classScheduleRepository;
+    private final TimetablePlanRepository timetablePlanRepository;
+    private final TimetablePlanCodec timetablePlanCodec;
 
     public SemesterApplicationService(
-            SemesterRepository semesterRepository, ModuleClassRepository moduleClassRepository, Clock clock) {
+            SemesterRepository semesterRepository,
+            ModuleClassRepository moduleClassRepository,
+            Clock clock,
+            ClassScheduleRepository classScheduleRepository,
+            TimetablePlanRepository timetablePlanRepository,
+            TimetablePlanCodec timetablePlanCodec) {
         this.semesterRepository = semesterRepository;
         this.moduleClassRepository = moduleClassRepository;
         this.clock = clock;
+        this.classScheduleRepository = classScheduleRepository;
+        this.timetablePlanRepository = timetablePlanRepository;
+        this.timetablePlanCodec = timetablePlanCodec;
     }
 
     @Transactional
@@ -139,7 +158,34 @@ public class SemesterApplicationService {
             throw new SemesterException(ErrorCode.SEMESTER_DATE_CHANGE_CONFIRMATION_REQUIRED);
         }
 
-        // TODO(CLASS_SCHEDULE_INTEGRATION): chekc lịch đã xếp vẫn nằm trong khoảng ngày mới (nếu cho update date).
+        // Xác nhận đổi ngày không được bỏ qua lịch đã áp dụng hoặc làm sai tuần bắt đầu đợt.
+        if (datesChanged) {
+            var classIds = moduleClassRepository.findAllBySemester_IdOrderByIdAsc(semesterId).stream()
+                    .filter(moduleClass ->
+                            !moduleClass.isDeleted() && moduleClass.getStatus() != ModuleClassStatus.CANCELLED)
+                    .map(ModuleClass::getId)
+                    .toList();
+            if (!classIds.isEmpty()) {
+                var schedules = classScheduleRepository.findAll(
+                        ClassScheduleSpecification.forModuleClasses(classIds), Sort.by("id"));
+                boolean outsideDates = schedules.stream()
+                        .flatMap(schedule ->
+                                TimetablePolicy.occurrenceDates(TimetableSnapshotService.toExistingSession(schedule))
+                                        .stream())
+                        .anyMatch(date -> date.isBefore(request.getStartDate()) || date.isAfter(request.getEndDate()));
+                if (outsideDates) throw new SemesterException(ErrorCode.TIMETABLE_SCHEDULE_IN_USE);
+                var appliedPlan =
+                        timetablePlanRepository.findFirstBySemesterIdAndStateAndDeletedFalseOrderByAppliedAtDesc(
+                                semesterId, TimetablePlanState.APPLIED);
+                if (!schedules.isEmpty() && appliedPlan.isPresent()) {
+                    var allocation =
+                            timetablePlanCodec.read(appliedPlan.get().getAllocationJson(), TimetableAllocation.class);
+                    if (!TimetablePolicy.firstTeachingMonday(request.getStartDate())
+                            .equals(allocation.phaseOneStart()))
+                        throw new SemesterException(ErrorCode.TIMETABLE_SCHEDULE_IN_USE);
+                }
+            }
+        }
 
         // cập nhật field
         semester.setSemesterName(semesterName);

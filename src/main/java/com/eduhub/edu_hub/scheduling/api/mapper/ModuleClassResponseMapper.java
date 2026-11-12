@@ -13,6 +13,14 @@ public final class ModuleClassResponseMapper {
             ModuleClass moduleClass,
             Map<Long, SubjectSimpleResponse> subjectsById,
             Map<Long, String> lecturerNamesById) {
+        return toResponse(moduleClass, subjectsById, lecturerNamesById, List.of());
+    }
+
+    public static ModuleClassResponse toResponse(
+            ModuleClass moduleClass,
+            Map<Long, SubjectSimpleResponse> subjectsById,
+            Map<Long, String> lecturerNamesById,
+            List<com.eduhub.edu_hub.scheduling.api.dto.response.ClassScheduleResponse> schedules) {
 
         var subject = subjectsById.get(moduleClass.getSubject().getId());
         Long lecturerId = moduleClass.getLecturer() == null
@@ -36,8 +44,7 @@ public final class ModuleClassResponseMapper {
                 .currentSize(moduleClass.getCurrentSize())
                 .status(moduleClass.getStatus())
                 .dataSource("DATABASE")
-                // TODO(CLASS_SCHEDULE_INTEGRATION): đọc lịch thật khi module xếp lịch được triển khai.
-                .schedules(List.of())
+                .schedules(schedules)
                 .build();
     }
 }

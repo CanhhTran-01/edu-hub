@@ -1,11 +1,13 @@
 package com.eduhub.edu_hub.people.domain.repository;
 
 import com.eduhub.edu_hub.people.api.dto.response.AccountProfileContactResponse;
+import com.eduhub.edu_hub.people.domain.enums.LecturerStatus;
 import com.eduhub.edu_hub.people.domain.model.Lecturer;
 import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -14,6 +16,13 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface LecturerRepository extends JpaRepository<Lecturer, Long>, JpaSpecificationExecutor<Lecturer> {
+    @Query(
+            "select distinct lecturer from Lecturer lecturer, LecturerTeachingSubject teaching "
+                    + "where teaching.lecturerId = lecturer.id and teaching.subjectId in :subjectIds "
+                    + "and teaching.deleted = false and lecturer.deleted = false and lecturer.status = :status order by lecturer.id")
+    List<Lecturer> findTimetableCandidates(
+            @Param("subjectIds") Set<Long> subjectIds, @Param("status") LecturerStatus status);
+
     @Query(
             "select lecturer.fullName from Lecturer lecturer where lecturer.userId = :userId and lecturer.deleted = false")
     Optional<String> findFullNameByUserId(@Param("userId") Long userId);

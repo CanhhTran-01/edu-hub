@@ -67,6 +67,11 @@ public enum ErrorCode {
             4119, "Đã hết dải 999 mã giảng viên trong cùng khoa và năm tuyển dụng", HttpStatus.CONFLICT),
     INVALID_LECTURER_CODE_FACULTY(4121, "Khoa chưa có mã định danh hợp lệ để cấp MSGV", HttpStatus.BAD_REQUEST),
     SUBJECT_NOT_TEACHABLE(4212, "Môn có thể dạy phải đang hoạt động và chưa bị xóa", HttpStatus.BAD_REQUEST),
+    SUBJECT_SCHEDULE_IN_USE(
+            4213, "Môn có lịch chưa kết thúc, không được đổi tổng tiết hoặc ngừng sử dụng", HttpStatus.CONFLICT),
+    LECTURER_NOT_AVAILABLE(4122, "Giảng viên đã ngừng hoạt động, không thể phân công mới", HttpStatus.CONFLICT),
+    LECTURER_TEACHING_ASSIGNMENT_IN_USE(
+            4123, "Không được gỡ môn còn được dùng trong phân công giảng dạy", HttpStatus.CONFLICT),
     SUBJECT_NOT_FOUND(4201, "Không tìm thấy học phần", HttpStatus.NOT_FOUND),
     CURRICULUM_NOT_FOUND(4202, "Không tìm thấy chương trình đào tạo", HttpStatus.NOT_FOUND),
     PREREQUISITE_CYCLE(4203, "Phát hiện chu trình tiên quyết", HttpStatus.BAD_REQUEST),
@@ -124,6 +129,16 @@ public enum ErrorCode {
     ROOM_IN_USE(
             4330, "Phòng có lịch học thuộc kỳ chưa kết thúc, không được ngừng sử dụng hoặc xóa", HttpStatus.CONFLICT),
     ROOM_CAPACITY_BELOW_CLASS(4331, "Sức chứa phòng nhỏ hơn sức chứa tối đa của lớp đang xếp", HttpStatus.CONFLICT),
+
+    TIMETABLE_INVALID_INPUT(4332, "Chưa đủ dữ liệu hợp lệ để xếp thời khóa biểu", HttpStatus.BAD_REQUEST),
+    TIMETABLE_PLAN_NOT_FOUND(4333, "Không tìm thấy phương án thời khóa biểu", HttpStatus.NOT_FOUND),
+    TIMETABLE_SOLVER_BUSY(4334, "Đang có tác vụ xếp lịch, hãy đợi hoặc dừng tác vụ hiện tại", HttpStatus.CONFLICT),
+    TIMETABLE_STATE_CONFLICT(4335, "Trạng thái phương án hoặc lớp không cho phép thao tác", HttpStatus.CONFLICT),
+    TIMETABLE_STALE_PLAN(
+            4336, "Phương án hoặc dữ liệu đầu vào đã thay đổi, hãy tải lại và xếp lại", HttpStatus.CONFLICT),
+    TIMETABLE_INVALID_ALLOCATION(4337, "Phương án chưa đáp ứng đầy đủ các điều kiện xếp lịch", HttpStatus.CONFLICT),
+    TIMETABLE_REGISTRATION_STARTED(4338, "Chỉ được xếp hoặc thay lịch trước khi mở đăng ký", HttpStatus.CONFLICT),
+    TIMETABLE_SCHEDULE_IN_USE(4339, "Thay đổi làm ảnh hưởng lịch đã áp dụng", HttpStatus.CONFLICT),
 
     // Enrollment
     ENROLLMENT_NOT_FOUND(4401, "Không tìm thấy đăng ký", HttpStatus.NOT_FOUND),

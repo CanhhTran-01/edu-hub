@@ -18,6 +18,11 @@ public interface SubjectRepository extends JpaRepository<Subject, Long>, JpaSpec
 
     Optional<Subject> findByIdAndDeletedFalse(Long id);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query(
+            "select subject from Subject subject where subject.id = :id and subject.deleted = false")
+    Optional<Subject> findForUpdateById(@org.springframework.data.repository.query.Param("id") Long id);
+
     @Lock(LockModeType.PESSIMISTIC_READ)
     List<Subject> findAllByIdInAndDeletedFalseOrderByIdAsc(Set<Long> ids);
 

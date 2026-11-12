@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice(assignableTypes = RoomController.class)
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class RoomExceptionHandler {
+
     @ExceptionHandler(RoomConflictException.class)
     public ResponseEntity<ApiResponse<Void>> handleConflict(
             RoomConflictException exception, HttpServletRequest request) {

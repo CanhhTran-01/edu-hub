@@ -12,6 +12,7 @@ import com.eduhub.edu_hub.people.domain.model.LecturerTeachingSubject;
 import com.eduhub.edu_hub.people.domain.policy.LecturerProfileUpdatePolicy;
 import com.eduhub.edu_hub.people.domain.repository.LecturerRepository;
 import com.eduhub.edu_hub.people.domain.repository.LecturerTeachingSubjectRepository;
+import com.eduhub.edu_hub.scheduling.application.facade.SchedulingFacade;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.text.TextsNormalizer;
 import java.time.LocalDate;
@@ -37,6 +38,7 @@ public class LecturerAdminUpdateService {
     private final CurriculumFacade.TeachingSubjects curriculumTeachingSubjects;
     private final ProfileAccountEmailService profileAccountEmailService;
     private final LecturerResponseMapper lecturerResponseMapper;
+    private final SchedulingFacade.TeachingAssignments teachingAssignments;
 
     @Transactional
     public LecturerResponse updateLecturerProfile(
@@ -74,6 +76,14 @@ public class LecturerAdminUpdateService {
         List<SubjectSimpleResponse> teachingSubjects = teachingSubjectIds == null
                 ? findCurrentTeachingSubjects(existingTeachingLinks)
                 : curriculumTeachingSubjects.requireActiveTeachingSubjects(teachingSubjectIds);
+
+        // Khóa Lecturer đã giữ ở trên: không gỡ năng lực đang được dùng bởi lớp chưa hoàn tất.
+        if (teachingSubjectIds != null
+                && !teachingSubjectIds.containsAll(teachingAssignments.findRequiredTeachingSubjectIds(lecturerId)))
+            throw new LecturerProfileException(
+                    ErrorCode.LECTURER_TEACHING_ASSIGNMENT_IN_USE,
+                    "teachingSubjectIds",
+                    "Giảng viên còn lớp chưa hoàn tất cần môn bị gỡ; hãy điều chỉnh phân công trước");
 
         // Email có giá trị mới được ghi vào User trong transaction hiện tại; lỗi phải rollback cả hồ sơ/môn.
         // Bỏ field/null giữ nguyên, chuỗi trắng đã được DTO giữ thành "" để yêu cầu xóa email.

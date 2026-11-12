@@ -32,8 +32,6 @@ public class ModuleClass extends BaseEntity {
     @JoinColumn(name = "subject_id", nullable = false)
     private Subject subject;
 
-    // TODO(LECTURER_REFERENCE_DATA): đối soát ID giảng viên cũ và validate FK còn NOT VALID trước khi đọc entity trực
-    // tiếp.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "lecturer_id")
     private Lecturer lecturer;
@@ -57,5 +55,18 @@ public class ModuleClass extends BaseEntity {
 
     public void cancel() {
         this.status = ModuleClassStatus.CANCELLED;
+    }
+
+    public void applyTeachingAssignment(Lecturer lecturer) {
+        this.lecturer = lecturer;
+        this.status = ModuleClassStatus.SCHEDULED;
+    }
+
+    public void closeRegistration() {
+        if (status == ModuleClassStatus.OPEN) status = ModuleClassStatus.CLOSED;
+    }
+
+    public void completeTeaching() {
+        if (status == ModuleClassStatus.CLOSED) status = ModuleClassStatus.COMPLETED;
     }
 }

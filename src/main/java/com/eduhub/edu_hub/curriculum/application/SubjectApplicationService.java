@@ -8,6 +8,7 @@ import com.eduhub.edu_hub.curriculum.api.dto.request.UpdateSubjectRequest;
 import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectResponse;
 import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.exception.PrerequisiteCycleException;
+import com.eduhub.edu_hub.curriculum.application.exception.SubjectException;
 import com.eduhub.edu_hub.curriculum.application.exception.SubjectHasDependentsException;
 import com.eduhub.edu_hub.curriculum.application.specification.SubjectSpecification;
 import com.eduhub.edu_hub.curriculum.domain.enums.SubjectStatus;
@@ -15,8 +16,8 @@ import com.eduhub.edu_hub.curriculum.domain.model.Subject;
 import com.eduhub.edu_hub.curriculum.domain.model.SubjectPrerequisite;
 import com.eduhub.edu_hub.curriculum.domain.repository.SubjectPrerequisiteRepository;
 import com.eduhub.edu_hub.curriculum.domain.repository.SubjectRepository;
+import com.eduhub.edu_hub.scheduling.application.facade.SchedulingFacade;
 import com.eduhub.edu_hub.shared.common.PageResponse;
-import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.mapper.PageMapper;
 import java.time.LocalDateTime;
@@ -45,16 +46,20 @@ import org.springframework.transaction.annotation.Transactional;
 public class SubjectApplicationService {
     private final SubjectRepository subjectRepository;
     private final SubjectPrerequisiteRepository subjectPrerequisiteRepository;
+    private final SchedulingFacade.TeachingAssignments teachingAssignments;
 
     @Transactional
     public SubjectResponse createSubject(CreateSubjectRequest request) {
 
+        if (request.getTotalTeachingPeriods() == null || request.getTotalTeachingPeriods() <= 0)
+            throw new SubjectException(ErrorCode.VALIDATION_ERROR);
+
         // checking
         if (subjectRepository.existsBySubjectCode(request.getSubjectCode())) {
-            throw new BaseException(ErrorCode.DUPLICATE_SUBJECT_CODE);
+            throw new SubjectException(ErrorCode.DUPLICATE_SUBJECT_CODE);
         }
         if (subjectRepository.existsBySubjectName(request.getSubjectName())) {
-            throw new BaseException(ErrorCode.DUPLICATE_SUBJECT_NAME);
+            throw new SubjectException(ErrorCode.DUPLICATE_SUBJECT_NAME);
         }
 
         // TODO: cần thống nhất về lại 1 múi giờ
@@ -65,6 +70,7 @@ public class SubjectApplicationService {
                 .subjectCode(request.getSubjectCode())
                 .subjectName(request.getSubjectName())
                 .credits(request.getCredits())
+                .totalTeachingPeriods(request.getTotalTeachingPeriods())
                 .description(request.getDescription())
                 .status(SubjectStatus.ACTIVE)
                 .build();
@@ -80,6 +86,7 @@ public class SubjectApplicationService {
                 .subjectCode(saved.getSubjectCode())
                 .subjectName(saved.getSubjectName())
                 .credits(saved.getCredits())
+                .totalTeachingPeriods(saved.getTotalTeachingPeriods())
                 .description(saved.getDescription())
                 .status(saved.getStatus())
                 .prerequisites(List.of())
@@ -91,24 +98,33 @@ public class SubjectApplicationService {
     public SubjectResponse updateSubject(Long id, UpdateSubjectRequest request) {
 
         Subject subject = subjectRepository
-                .findByIdAndDeletedFalse(id)
-                .orElseThrow(() -> new BaseException(ErrorCode.SUBJECT_NOT_FOUND));
+                .findForUpdateById(id)
+                .orElseThrow(() -> new SubjectException(ErrorCode.SUBJECT_NOT_FOUND));
 
         // checking
         if (subject.getStatus() != SubjectStatus.ACTIVE) {
-            throw new BaseException(ErrorCode.SUBJECT_NOT_ACTIVE);
+            throw new SubjectException(ErrorCode.SUBJECT_NOT_ACTIVE);
         }
         if (request.getSubjectCode() != null && !request.getSubjectCode().equals(subject.getSubjectCode())) {
-            throw new BaseException(ErrorCode.SUBJECT_CODE_IMMUTABLE);
+            throw new SubjectException(ErrorCode.SUBJECT_CODE_IMMUTABLE);
         }
         if (subjectRepository.existsBySubjectNameAndIdNot(request.getSubjectName(), id)) {
-            throw new BaseException(ErrorCode.DUPLICATE_SUBJECT_NAME);
+            throw new SubjectException(ErrorCode.DUPLICATE_SUBJECT_NAME);
         }
         // TODO: Kiểm tra điểm và lớp đang mở qua Facade khi enrollment/scheduling sẵn sàng.
+
+        if (request.getTotalTeachingPeriods() != null) {
+            if (request.getTotalTeachingPeriods() <= 0) throw new SubjectException(ErrorCode.VALIDATION_ERROR);
+            if (!request.getTotalTeachingPeriods().equals(subject.getTotalTeachingPeriods())
+                    && teachingAssignments.hasUnfinishedScheduledClassesForSubject(id))
+                throw new SubjectException(ErrorCode.SUBJECT_SCHEDULE_IN_USE);
+        }
 
         // update field
         subject.setSubjectName(request.getSubjectName());
         subject.setCredits(request.getCredits());
+        if (request.getTotalTeachingPeriods() != null)
+            subject.setTotalTeachingPeriods(request.getTotalTeachingPeriods());
         subject.setDescription(request.getDescription());
         subject.setUpdatedAt(LocalDateTime.now(ZoneOffset.UTC));
 
@@ -167,10 +183,10 @@ public class SubjectApplicationService {
         // lôi subject mà client cần lập/gỡ môn tiên quyết cho nó ra
         Subject subject = subjectsById.get(id);
         if (subject == null) {
-            throw new BaseException(ErrorCode.SUBJECT_NOT_FOUND);
+            throw new SubjectException(ErrorCode.SUBJECT_NOT_FOUND);
         }
         if (subject.getStatus() != SubjectStatus.ACTIVE) {
-            throw new BaseException(ErrorCode.SUBJECT_NOT_ACTIVE);
+            throw new SubjectException(ErrorCode.SUBJECT_NOT_ACTIVE);
         }
 
         // lôi các môn tiên quyết cần lập do request gửi về ra
@@ -179,15 +195,15 @@ public class SubjectApplicationService {
         // checking các môn tiên quyết cần lập
         if (requestedIds.contains(id)) {
             // không cho phép 1 môn làm tiên quyết của chính mình
-            throw new BaseException(ErrorCode.PREREQUISITE_SELF_REFERENCE);
+            throw new SubjectException(ErrorCode.PREREQUISITE_SELF_REFERENCE);
         }
         for (Long prerequisiteId : requestedIds) {
             Subject prerequisite = subjectsById.get(prerequisiteId);
             if (prerequisite == null) {
-                throw new BaseException(ErrorCode.SUBJECT_NOT_FOUND);
+                throw new SubjectException(ErrorCode.SUBJECT_NOT_FOUND);
             }
             if (prerequisite.getStatus() != SubjectStatus.ACTIVE) {
-                throw new BaseException(ErrorCode.PREREQUISITE_NOT_ACTIVE);
+                throw new SubjectException(ErrorCode.PREREQUISITE_NOT_ACTIVE);
             }
         }
 
@@ -341,7 +357,7 @@ public class SubjectApplicationService {
 
         Subject subject = subjectRepository
                 .findByIdAndDeletedFalse(id)
-                .orElseThrow(() -> new BaseException(ErrorCode.SUBJECT_NOT_FOUND));
+                .orElseThrow(() -> new SubjectException(ErrorCode.SUBJECT_NOT_FOUND));
 
         return toResponse(subject);
     }
@@ -350,13 +366,16 @@ public class SubjectApplicationService {
 
         // cờ xác nhận thao tác từ client gửi về
         if (!request.isConfirmed()) {
-            throw new BaseException(ErrorCode.SUBJECT_ACTION_NOT_CONFIRMED);
+            throw new SubjectException(ErrorCode.SUBJECT_ACTION_NOT_CONFIRMED);
         }
 
         // lôi subject lên
         Subject subject = subjectRepository
-                .findByIdAndDeletedFalse(id)
-                .orElseThrow(() -> new BaseException(ErrorCode.SUBJECT_NOT_FOUND));
+                .findForUpdateById(id)
+                .orElseThrow(() -> new SubjectException(ErrorCode.SUBJECT_NOT_FOUND));
+
+        if (teachingAssignments.hasUnfinishedScheduledClassesForSubject(id))
+            throw new SubjectException(ErrorCode.SUBJECT_SCHEDULE_IN_USE);
 
         // lấy danh sách các môn các môn cần môn vừa lôi lên làm tiên quyết
         List<SubjectSimpleResponse> dependents =
@@ -441,6 +460,7 @@ public class SubjectApplicationService {
                 .subjectCode(subject.getSubjectCode())
                 .subjectName(subject.getSubjectName())
                 .credits(subject.getCredits())
+                .totalTeachingPeriods(subject.getTotalTeachingPeriods())
                 .description(subject.getDescription())
                 .status(subject.getStatus())
                 .prerequisites(prerequisites)
@@ -454,6 +474,7 @@ public class SubjectApplicationService {
                 .subjectCode(subject.getSubjectCode())
                 .subjectName(subject.getSubjectName())
                 .credits(subject.getCredits())
+                .totalTeachingPeriods(subject.getTotalTeachingPeriods())
                 .build();
     }
 }

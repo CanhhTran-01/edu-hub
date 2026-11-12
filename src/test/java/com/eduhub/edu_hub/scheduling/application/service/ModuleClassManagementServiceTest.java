@@ -23,9 +23,9 @@ import com.eduhub.edu_hub.scheduling.domain.model.Semester;
 import com.eduhub.edu_hub.scheduling.domain.policy.OpeningDemandPolicy;
 import com.eduhub.edu_hub.scheduling.domain.repository.ModuleClassRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.SemesterRepository;
+import com.eduhub.edu_hub.shared.config.TimeConfiguration;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
-import com.eduhub.edu_hub.shared.config.TimeConfiguration;
 import jakarta.persistence.EntityManager;
 import java.time.*;
 import java.util.*;
@@ -64,6 +64,15 @@ class ModuleClassManagementServiceTest {
     @Mock
     private EntityManager entityManager;
 
+    @Mock
+    private ClassScheduleQueryService classScheduleQueryService;
+
+    @Mock
+    private com.eduhub.edu_hub.scheduling.domain.repository.ClassScheduleRepository classScheduleRepository;
+
+    @Mock
+    private com.eduhub.edu_hub.scheduling.domain.repository.RoomRepository roomRepository;
+
     private ModuleClassApplicationService service;
     private Semester semester;
 
@@ -78,7 +87,10 @@ class ModuleClassManagementServiceTest {
                 enrollments,
                 new OpeningDemandPolicy(),
                 entityManager,
-                CLOCK);
+                CLOCK,
+                classScheduleQueryService,
+                classScheduleRepository,
+                roomRepository);
         semester = Semester.builder()
                 .semesterCode("HK_1_2026_2027")
                 .startDate(LocalDate.parse("2026-08-11"))
@@ -264,6 +276,35 @@ class ModuleClassManagementServiceTest {
 
     private ModuleClass prepare(ModuleClassStatus status, int size) {
         return prepare(status, size, 5001L);
+    }
+
+    @Test
+    void increasingCapacityMustStillFitEveryScheduledRoom() {
+        var item = prepare(ModuleClassStatus.SCHEDULED, 20);
+        item.changeCapacity(40);
+        when(people.findLecturersByIds(Set.of(5001L))).thenReturn(List.of());
+        when(curriculum.findSubjectsByIds(Set.of(1L))).thenReturn(List.of());
+        var room = com.eduhub.edu_hub.scheduling.domain.model.Room.builder()
+                .roomCode("101-TA1")
+                .capacity(50)
+                .build();
+        room.setId(501L);
+        var schedule = com.eduhub.edu_hub.scheduling.domain.model.ClassSchedule.builder()
+                .moduleClass(item)
+                .room(room)
+                .build();
+        when(classScheduleRepository.findAll(
+                        org.mockito.ArgumentMatchers
+                                .<org.springframework.data.jpa.domain.Specification<
+                                                com.eduhub.edu_hub.scheduling.domain.model.ClassSchedule>>
+                                        any(),
+                        any(org.springframework.data.domain.Sort.class)))
+                .thenReturn(List.of(schedule));
+        when(roomRepository.findForUpdateByIdAndDeletedFalse(501L)).thenReturn(Optional.of(room));
+        assertError(() -> service.updateModuleClassCapacity(101L, update(60)), ErrorCode.ROOM_CAPACITY_BELOW_CLASS);
+        assertThat(item.getMaxCapacity()).isEqualTo(40);
+        verify(classes, never()).saveAndFlush(any());
+        verify(entityManager).refresh(room, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
     }
 
     private ModuleClass prepare(ModuleClassStatus status, int size, Long lecturerId) {

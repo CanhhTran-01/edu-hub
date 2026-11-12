@@ -22,6 +22,6 @@ public class ModuleClassResponse {
     private String semesterCode;
     private int maxCapacity;
     private int currentSize;
-    private ModuleClassStatus status; // UNSCHEDULED, SCHEDULED, OPEN, CANCELLED
+    private ModuleClassStatus status; // UNSCHEDULED, SCHEDULED, OPEN, CLOSED, COMPLETED, CANCELLED
     private List<ClassScheduleResponse> schedules;
 }

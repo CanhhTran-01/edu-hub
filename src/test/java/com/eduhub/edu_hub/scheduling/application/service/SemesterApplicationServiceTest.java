@@ -18,9 +18,9 @@ import com.eduhub.edu_hub.scheduling.domain.enums.SemesterStatus;
 import com.eduhub.edu_hub.scheduling.domain.model.Semester;
 import com.eduhub.edu_hub.scheduling.domain.repository.ModuleClassRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.SemesterRepository;
+import com.eduhub.edu_hub.shared.config.TimeConfiguration;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
-import com.eduhub.edu_hub.shared.config.TimeConfiguration;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -55,11 +55,26 @@ class SemesterApplicationServiceTest {
     @Mock
     private ModuleClassRepository moduleClassRepository;
 
+    @Mock
+    private com.eduhub.edu_hub.scheduling.domain.repository.ClassScheduleRepository classScheduleRepository;
+
+    @Mock
+    private com.eduhub.edu_hub.scheduling.domain.repository.TimetablePlanRepository timetablePlanRepository;
+
+    @Mock
+    private com.eduhub.edu_hub.scheduling.infrastructure.persistence.TimetablePlanCodec timetablePlanCodec;
+
     private SemesterApplicationService service;
 
     @BeforeEach
     void setUp() {
-        service = new SemesterApplicationService(repository, moduleClassRepository, CLOCK);
+        service = new SemesterApplicationService(
+                repository,
+                moduleClassRepository,
+                CLOCK,
+                classScheduleRepository,
+                timetablePlanRepository,
+                timetablePlanCodec);
     }
 
     @Test
@@ -278,6 +293,39 @@ class SemesterApplicationServiceTest {
         assertThatThrownBy(action)
                 .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
                         .isEqualTo(error));
+    }
+
+    @Test
+    void confirmedDateChangeStillCannotCutOffExistingTeachingSessions() {
+        var semester = semester(LocalDate.parse("2026-09-01"), LocalDate.parse("2026-12-31"));
+        when(repository.findForUpdateByIdAndDeletedFalse(1L)).thenReturn(Optional.of(semester));
+        var moduleClass = com.eduhub.edu_hub.scheduling.domain.model.ModuleClass.builder()
+                .semester(semester)
+                .status(ModuleClassStatus.SCHEDULED)
+                .build();
+        moduleClass.setId(101L);
+        when(moduleClassRepository.findAllBySemester_IdOrderByIdAsc(1L)).thenReturn(List.of(moduleClass));
+        var room = com.eduhub.edu_hub.scheduling.domain.model.Room.builder().build();
+        room.setId(501L);
+        var schedule = com.eduhub.edu_hub.scheduling.domain.model.ClassSchedule.builder()
+                .moduleClass(moduleClass)
+                .room(room)
+                .dayOfWeek(4)
+                .lessonOrderStart(1)
+                .lessonOrderEnd(3)
+                .startDate(LocalDate.parse("2026-12-30"))
+                .endDate(LocalDate.parse("2026-12-30"))
+                .build();
+        when(classScheduleRepository.findAll(
+                        ArgumentMatchers.<Specification<com.eduhub.edu_hub.scheduling.domain.model.ClassSchedule>>any(),
+                        any(Sort.class)))
+                .thenReturn(List.of(schedule));
+        var request = validUpdate();
+        request.setEndDate(LocalDate.parse("2026-12-01"));
+        request.setConfirmDateChange(true);
+        assertBusinessError(() -> service.updateSemester(1L, request), ErrorCode.TIMETABLE_SCHEDULE_IN_USE);
+        assertThat(semester.getEndDate()).isEqualTo(LocalDate.parse("2026-12-31"));
+        verify(repository, never()).saveAndFlush(any());
     }
 
     private CreateSemesterRequest validRequest() {

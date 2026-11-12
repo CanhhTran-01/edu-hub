@@ -20,6 +20,7 @@ import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassOpeningExc
 import com.eduhub.edu_hub.scheduling.application.exception.SemesterException;
 import com.eduhub.edu_hub.scheduling.application.port.AcademicPlanningDataSource;
 import com.eduhub.edu_hub.scheduling.application.port.ModuleClassEnrollmentQuery;
+import com.eduhub.edu_hub.scheduling.application.specification.ClassScheduleSpecification;
 import com.eduhub.edu_hub.scheduling.application.specification.ModuleClassSpecification;
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
 import com.eduhub.edu_hub.scheduling.domain.model.ModuleClass;
@@ -27,17 +28,19 @@ import com.eduhub.edu_hub.scheduling.domain.model.Semester;
 import com.eduhub.edu_hub.scheduling.domain.policy.ModuleClassPolicy;
 import com.eduhub.edu_hub.scheduling.domain.policy.OpeningDemandPolicy;
 import com.eduhub.edu_hub.scheduling.domain.policy.SemesterPolicy;
+import com.eduhub.edu_hub.scheduling.domain.repository.ClassScheduleRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.ModuleClassRepository;
+import com.eduhub.edu_hub.scheduling.domain.repository.RoomRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.SemesterRepository;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.mapper.PageMapper;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.time.*;
 import java.util.*;
 import java.util.stream.Collectors;
-
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
@@ -57,6 +60,9 @@ public class ModuleClassApplicationService {
     private final OpeningDemandPolicy openingDemandPolicy;
     private final EntityManager entityManager;
     private final Clock clock;
+    private final ClassScheduleQueryService classScheduleQueryService;
+    private final ClassScheduleRepository classScheduleRepository;
+    private final RoomRepository roomRepository;
 
     @Transactional(readOnly = true)
     public List<OpeningSubjectResponse> findSubjectsToOpen(Long semesterId) {
@@ -228,6 +234,29 @@ public class ModuleClassApplicationService {
                 Set.of(moduleClass.getSubject().getId())));
         int oldCapacity = moduleClass.getMaxCapacity();
 
+        // Tăng sức chứa phải đồng bộ với luồng giảm capacity phòng: khóa phòng trước khi đối chiếu.
+        if (request.getMaxCapacity() > oldCapacity) {
+            var schedules = classScheduleRepository.findAll(
+                    ClassScheduleSpecification.forModuleClasses(List.of(moduleClassId)), Sort.by("id"));
+            for (Long roomId : schedules.stream()
+                    .map(schedule -> schedule.getRoom().getId())
+                    .distinct()
+                    .sorted()
+                    .toList()) {
+                var room = roomRepository
+                        .findForUpdateByIdAndDeletedFalse(roomId)
+                        .orElseThrow(() -> new ModuleClassException(ErrorCode.ROOM_NOT_FOUND));
+                // Lịch đã tải Room vào persistence context trước lúc chờ khóa; phải đọc lại trạng thái mới nhất.
+                entityManager.refresh(room, LockModeType.PESSIMISTIC_WRITE);
+                if (room.getCapacity() < request.getMaxCapacity())
+                    throw new ModuleClassConflictException(
+                            ErrorCode.ROOM_CAPACITY_BELOW_CLASS,
+                            List.of(new FieldErrorDetail(
+                                    "maxCapacity",
+                                    "Phòng " + room.getRoomCode() + " chỉ có sức chứa " + room.getCapacity())));
+            }
+        }
+
         // Chỉ thay đổi entity sau khi mọi điều kiện và dữ liệu trả về đã được kiểm tra.
         moduleClass.changeCapacity(request.getMaxCapacity());
         moduleClass.setUpdatedAt(LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
@@ -244,7 +273,7 @@ public class ModuleClassApplicationService {
 
         // TODO(AUDIT_TRAIL): ghi actor và dữ liệu trước/sau vào AuditLog qua contract shared.
 
-        return ModuleClassResponseMapper.toResponse(savedModuleClass, subjectsById, lecturerNamesById);
+        return toResponseWithSchedules(savedModuleClass, subjectsById, lecturerNamesById);
     }
 
     @Transactional
@@ -300,7 +329,14 @@ public class ModuleClassApplicationService {
         moduleClass.cancel();
         moduleClass.setUpdatedAt(LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
 
-        // TODO(CLASS_SCHEDULE_INTEGRATION): ngừng hiệu lực lịch liên quan trong cùng transaction.
+        // Ngừng hiệu lực lịch cùng transaction hủy lớp; giữ bản ghi lịch sử và không giải phóng mã lớp.
+        var schedules = classScheduleRepository.findAll(
+                ClassScheduleSpecification.forModuleClasses(List.of(moduleClassId)), Sort.by("id"));
+        schedules.forEach(schedule -> {
+            schedule.setDeleted(true);
+            schedule.setUpdatedAt(LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
+        });
+        classScheduleRepository.saveAll(schedules);
 
         // ghi kết quả sau khi cập nhật xuống DB
         var savedModuleClass = moduleClassRepository.saveAndFlush(moduleClass);
@@ -315,7 +351,7 @@ public class ModuleClassApplicationService {
 
         // TODO(AUDIT_TRAIL): ghi actor và lý do hủy vào AuditLog qua contract shared.
 
-        return ModuleClassResponseMapper.toResponse(savedModuleClass, subjectsById, lecturerNamesById);
+        return toResponseWithSchedules(savedModuleClass, subjectsById, lecturerNamesById);
     }
 
     private ModuleClass lockModuleClassForChange(Long moduleClassId) {
@@ -339,6 +375,8 @@ public class ModuleClassApplicationService {
 
         if (moduleClass.getStatus() == ModuleClassStatus.CANCELLED)
             throw new ModuleClassException(ErrorCode.MODULE_CLASS_CANCELLED);
+        if (moduleClass.getStatus() == ModuleClassStatus.COMPLETED)
+            throw new ModuleClassException(ErrorCode.TIMETABLE_STATE_CONFLICT);
 
         // TODO(ENROLLMENT_INTEGRATION): đăng ký/hủy đăng ký phải cùng lock hàng lớp rồi kiểm tra trạng thái và
         //  tiến hành cập nhật currentSize, tránh thêm Enrollment trong lúc admin hủy/giảm sức chứa.
@@ -364,9 +402,14 @@ public class ModuleClassApplicationService {
 
         // gom dữ liệu giảng viên: Map<Long, String>
         var lecturerNamesById = loadLecturerNamesById(moduleClassPage.getContent());
+        var schedulesByClassId = classScheduleQueryService.findSchedulesByClassIds(
+                moduleClassPage.stream().map(ModuleClass::getId).toList());
 
-        return PageMapper.toPageResponse(moduleClassPage.map(
-                moduleClass -> ModuleClassResponseMapper.toResponse(moduleClass, subjectsById, lecturerNamesById)));
+        return PageMapper.toPageResponse(moduleClassPage.map(moduleClass -> ModuleClassResponseMapper.toResponse(
+                moduleClass,
+                subjectsById,
+                lecturerNamesById,
+                schedulesByClassId.getOrDefault(moduleClass.getId(), List.of()))));
     }
 
     @Transactional(readOnly = true)
@@ -384,7 +427,42 @@ public class ModuleClassApplicationService {
         // lấy dữ liệu giảng viên: Map<Long, String> của lớp học phần
         var lecturerNamesById = loadLecturerNamesById(List.of(moduleClass));
 
-        return ModuleClassResponseMapper.toResponse(moduleClass, subjectsById, lecturerNamesById);
+        return toResponseWithSchedules(moduleClass, subjectsById, lecturerNamesById);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ModuleClassResponse> findSemesterModuleClasses(Long semesterId) {
+        var classes = moduleClassRepository.findAllBySemester_IdOrderByIdAsc(semesterId).stream()
+                .filter(moduleClass ->
+                        !moduleClass.isDeleted() && moduleClass.getStatus() != ModuleClassStatus.CANCELLED)
+                .toList();
+        if (classes.isEmpty()) return List.of();
+        var subjectsById = indexSubjectsById(curriculumFacade.findSubjectsByIds(classes.stream()
+                .map(moduleClass -> moduleClass.getSubject().getId())
+                .collect(Collectors.toSet())));
+        var lecturerNamesById = loadLecturerNamesById(classes);
+        var schedulesByClassId = classScheduleQueryService.findSchedulesByClassIds(
+                classes.stream().map(ModuleClass::getId).toList());
+        return classes.stream()
+                .map(moduleClass -> ModuleClassResponseMapper.toResponse(
+                        moduleClass,
+                        subjectsById,
+                        lecturerNamesById,
+                        schedulesByClassId.getOrDefault(moduleClass.getId(), List.of())))
+                .toList();
+    }
+
+    private ModuleClassResponse toResponseWithSchedules(
+            ModuleClass moduleClass,
+            Map<Long, SubjectSimpleResponse> subjectsById,
+            Map<Long, String> lecturerNamesById) {
+        return ModuleClassResponseMapper.toResponse(
+                moduleClass,
+                subjectsById,
+                lecturerNamesById,
+                classScheduleQueryService
+                        .findSchedulesByClassIds(List.of(moduleClass.getId()))
+                        .getOrDefault(moduleClass.getId(), List.of()));
     }
 
     private Set<Long> validateBatch(CreateModuleClassesRequest request) {

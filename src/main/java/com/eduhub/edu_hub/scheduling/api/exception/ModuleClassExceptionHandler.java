@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @Slf4j
 public class ModuleClassExceptionHandler {
+
     @ExceptionHandler(ModuleClassConflictException.class)
     public ResponseEntity<ApiResponse<Void>> handleConflict(
             ModuleClassConflictException exception, HttpServletRequest request) {

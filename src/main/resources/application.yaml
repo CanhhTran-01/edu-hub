@@ -76,6 +76,13 @@ admission:
 people:
   lecturer-code-format: "[MaKhoa][NamTuyenDung][SttGV]"
 
+scheduling:
+  timetabling:
+    spent-limit-seconds: ${TIMETABLE_SOLVING_SECONDS:60}
+    maximum-sessions-per-plan: ${TIMETABLE_MAXIMUM_SESSIONS:10000}
+    recovery-delay-ms: 60000
+    lifecycle-delay-ms: 60000
+
 notification:
   mail:
     brand-name: ${NOTIFICATION_MAIL_BRAND_NAME:EduHub}

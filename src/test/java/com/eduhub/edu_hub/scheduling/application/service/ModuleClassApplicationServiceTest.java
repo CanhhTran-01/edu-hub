@@ -24,10 +24,10 @@ import com.eduhub.edu_hub.scheduling.domain.model.Semester;
 import com.eduhub.edu_hub.scheduling.domain.policy.OpeningDemandPolicy;
 import com.eduhub.edu_hub.scheduling.domain.repository.ModuleClassRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.SemesterRepository;
+import com.eduhub.edu_hub.shared.config.TimeConfiguration;
 import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
-import com.eduhub.edu_hub.shared.config.TimeConfiguration;
 import jakarta.persistence.EntityManager;
 import java.time.*;
 import java.util.*;
@@ -67,6 +67,15 @@ class ModuleClassApplicationServiceTest {
     @Mock
     private EntityManager entityManager;
 
+    @Mock
+    private ClassScheduleQueryService classScheduleQueryService;
+
+    @Mock
+    private com.eduhub.edu_hub.scheduling.domain.repository.ClassScheduleRepository classScheduleRepository;
+
+    @Mock
+    private com.eduhub.edu_hub.scheduling.domain.repository.RoomRepository roomRepository;
+
     private ModuleClassApplicationService service;
 
     @BeforeEach
@@ -80,7 +89,10 @@ class ModuleClassApplicationServiceTest {
                 enrollmentQuery,
                 new OpeningDemandPolicy(),
                 entityManager,
-                CLOCK);
+                CLOCK,
+                classScheduleQueryService,
+                classScheduleRepository,
+                roomRepository);
     }
 
     @Test
