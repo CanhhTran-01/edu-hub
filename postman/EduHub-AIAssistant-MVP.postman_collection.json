@@ -1,0 +1,379 @@
+{
+  "info": {
+    "name": "EduHub - AI Assistant - MVP",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Test UC-32/UC-35. Chọn environment EduHub MVP, điền tài khoản ACADEMIC_ADMIN và STUDENT. Ở request upload, chọn file TXT trực tiếp trong Body > form-data. Chạy tuần tự các request."
+  },
+  "variable": [
+    { "key": "aiSessionId", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "01 - Admin học vụ",
+      "item": [
+        {
+          "name": "01 - Đăng nhập ACADEMIC_ADMIN",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{academicAdminUsername}}\",\n  \"password\": \"{{academicAdminEffectivePassword}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "auth": { "type": "noauth" },
+            "description": "Tài khoản ACADEMIC_ADMIN, ACTIVE và đã hoàn tất first-login."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get('academicAdminUsername')) throw new Error('Điền academicAdminUsername');",
+                  "if (!pm.environment.get('academicAdminEffectivePassword')) throw new Error('Điền academicAdminEffectivePassword');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Đăng nhập thành công', () => pm.expect(body.success).to.eql(true));",
+                  "if (body.success) {",
+                  "  pm.environment.set('academicAdminAccessToken', body.data.accessToken);",
+                  "  pm.test('Không còn first-login', () => pm.expect(body.data.requirePasswordChange).to.eql(false));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "02 - Upload tài liệu TXT",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/ai/documents",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "" }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{academicAdminAccessToken}}", "type": "string" }]
+            },
+            "description": "File .txt UTF-8 không rỗng, tối đa 20 MB. Upload lại cùng tên sẽ thay vector cũ."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get('academicAdminAccessToken')) throw new Error('Đăng nhập Admin học vụ trước');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Upload thành công', () => pm.expect(body.success).to.eql(true));",
+                  "if (body.success) {",
+                  "  pm.test('Có chunk', () => pm.expect(body.data.chunkCount).to.be.above(0));",
+                  "  pm.environment.set('aiUploadedSourceTitle', body.data.sourceTitle);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 - Sinh viên chat RAG",
+      "item": [
+        {
+          "name": "01 - Đăng nhập STUDENT",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{studentUsername}}\",\n  \"password\": \"{{studentEffectivePassword}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "auth": { "type": "noauth" },
+            "description": "Tài khoản STUDENT, ACTIVE và đã hoàn tất first-login."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get('studentUsername')) throw new Error('Điền studentUsername');",
+                  "if (!pm.environment.get('studentEffectivePassword')) throw new Error('Điền studentEffectivePassword');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Đăng nhập thành công', () => pm.expect(body.success).to.eql(true));",
+                  "if (body.success) {",
+                  "  pm.environment.set('studentAccessToken', body.data.accessToken);",
+                  "  pm.environment.set('studentRefreshToken', body.data.refreshToken);",
+                  "  pm.environment.set('studentUserId', String(body.data.user.id));",
+                  "  pm.test('Không còn first-login', () => pm.expect(body.data.requirePasswordChange).to.eql(false));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "02 - Chat kiến thức - tạo session",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/ai/chat",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": null,\n  \"message\": \"Theo tài liệu, sinh viên cần thực hiện những gì?\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{studentAccessToken}}", "type": "string" }]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get('studentAccessToken')) throw new Error('Đăng nhập Sinh viên trước');",
+                  "pm.collectionVariables.unset('aiSessionId');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Chat thành công', () => pm.expect(body.success).to.eql(true));",
+                  "if (body.success) {",
+                  "  pm.collectionVariables.set('aiSessionId', body.data.sessionId);",
+                  "  pm.test('Intent KNOWLEDGE', () => pm.expect(body.data.intent).to.eql('KNOWLEDGE'));",
+                  "  pm.test('Có citation', () => pm.expect(body.data.citations).to.be.an('array').that.is.not.empty);",
+                  "  pm.test('Đúng nguồn', () => pm.expect(body.data.citations[0].sourceTitle).to.eql(pm.environment.get('aiUploadedSourceTitle')));",
+                  "  pm.test('Scenario null', () => pm.expect(body.data.scenario).to.eql(null));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "03 - Chat tiếp cùng session - memory",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/ai/chat",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": \"{{aiSessionId}}\",\n  \"message\": \"Hãy giải thích ngắn gọn hơn câu trả lời vừa rồi.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{studentAccessToken}}", "type": "string" }]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["if (!pm.collectionVariables.get('aiSessionId')) throw new Error('Chạy request tạo session trước');"]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Đúng session', () => pm.expect(body.data.sessionId).to.eql(pm.collectionVariables.get('aiSessionId')));",
+                  "pm.test('Scenario null', () => pm.expect(body.data.scenario).to.eql(null));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 - Xem lịch sử",
+      "item": [
+        {
+          "name": "01 - Danh sách session của tôi",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/ai/sessions?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "ai", "sessions"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" }
+              ]
+            },
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{studentAccessToken}}", "type": "string" }]
+            },
+            "description": "Trả session của chính sinh viên đang đăng nhập, mới nhất trước."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Danh sách phân trang', () => {",
+                  "  pm.expect(body.success).to.eql(true);",
+                  "  pm.expect(body.data.content).to.be.an('array');",
+                  "  pm.expect(body.data.pageNumber).to.eql(0);",
+                  "});",
+                  "const sessionId = pm.collectionVariables.get('aiSessionId');",
+                  "if (sessionId) pm.test('Có session vừa tạo', () => pm.expect(body.data.content.map(item => item.sessionId)).to.include(sessionId));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "02 - Chi tiết session và citations",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/ai/sessions/{{aiSessionId}}",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{studentAccessToken}}", "type": "string" }]
+            },
+            "description": "Trả toàn bộ message theo thứ tự cũ đến mới; mỗi assistant message có citations riêng."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["if (!pm.collectionVariables.get('aiSessionId')) throw new Error('Chạy POST /chat tạo session trước');"]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Đúng session', () => pm.expect(body.data.sessionId).to.eql(pm.collectionVariables.get('aiSessionId')));",
+                  "pm.test('Có lịch sử message', () => pm.expect(body.data.messages).to.be.an('array').that.is.not.empty);",
+                  "pm.test('Mỗi message có citations', () => body.data.messages.forEach(message => pm.expect(message.citations).to.be.an('array')));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04 - Fallback ngoài phạm vi",
+      "item": [
+        {
+          "name": "01 - Không có document liên quan",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/ai/chat",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": null,\n  \"message\": \"Thời tiết trên sao Hỏa hôm nay như thế nào?\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{studentAccessToken}}", "type": "string" }]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Intent OUT_OF_SCOPE', () => pm.expect(body.data.intent).to.eql('OUT_OF_SCOPE'));",
+                  "pm.test('Citation rỗng', () => pm.expect(body.data.citations).to.be.an('array').that.is.empty);",
+                  "pm.test('Fallback cố định', () => pm.expect(body.data.content).to.eql('Tôi không tìm thấy thông tin này trong tài liệu hiện có, vui lòng liên hệ phòng đào tạo.'));",
+                  "pm.test('Scenario null', () => pm.expect(body.data.scenario).to.eql(null));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    }
+  ]
+}

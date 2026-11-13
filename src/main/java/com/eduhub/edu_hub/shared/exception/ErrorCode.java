@@ -139,6 +139,9 @@ public enum ErrorCode {
     // AI
     KNOWLEDGE_SOURCE_NOT_FOUND(4601, "Không tìm thấy nguồn tri thức", HttpStatus.NOT_FOUND),
     CHAT_SESSION_NOT_FOUND(4602, "Không tìm thấy phiên hội thoại", HttpStatus.NOT_FOUND),
+    INVALID_AI_DOCUMENT(4603, "Tài liệu phải là file TXT hợp lệ và không được để trống", HttpStatus.BAD_REQUEST),
+    AI_DOCUMENT_TOO_LARGE(4604, "Tài liệu vượt quá dung lượng cho phép", HttpStatus.BAD_REQUEST),
+    AI_SERVICE_UNAVAILABLE(4605, "Dịch vụ trợ lý AI hiện không khả dụng", HttpStatus.SERVICE_UNAVAILABLE),
 
     // Security
     UNAUTHENTICATED(4000, "Vui lòng đăng nhập", HttpStatus.UNAUTHORIZED),
