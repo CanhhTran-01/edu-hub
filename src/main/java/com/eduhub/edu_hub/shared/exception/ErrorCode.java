@@ -139,6 +139,9 @@ public enum ErrorCode {
     TIMETABLE_INVALID_ALLOCATION(4337, "Phương án chưa đáp ứng đầy đủ các điều kiện xếp lịch", HttpStatus.CONFLICT),
     TIMETABLE_REGISTRATION_STARTED(4338, "Chỉ được xếp hoặc thay lịch trước khi mở đăng ký", HttpStatus.CONFLICT),
     TIMETABLE_SCHEDULE_IN_USE(4339, "Thay đổi làm ảnh hưởng lịch đã áp dụng", HttpStatus.CONFLICT),
+    MODULE_CLASS_PUBLICATION_INVALID(4340, "Các lớp được chọn chưa đủ điều kiện công bố", HttpStatus.CONFLICT),
+    REGISTRATION_PERIOD_IN_USE(
+            4341, "Không được đổi khoảng đăng ký khi kỳ có lớp đã công bố hoặc chốt", HttpStatus.CONFLICT),
 
     // Enrollment
     ENROLLMENT_NOT_FOUND(4401, "Không tìm thấy đăng ký", HttpStatus.NOT_FOUND),
@@ -146,6 +149,17 @@ public enum ErrorCode {
     PREREQUISITE_NOT_MET(4403, "Chưa đủ điều kiện tiên quyết", HttpStatus.BAD_REQUEST),
     CAPACITY_FULL(4404, "Lớp học phần đã hết chỗ", HttpStatus.CONFLICT),
     ALREADY_ENROLLED(4405, "Đã đăng ký lớp học phần này", HttpStatus.CONFLICT),
+    ENROLLMENT_STUDENT_INELIGIBLE(4406, "Hồ sơ sinh viên không đủ điều kiện đăng ký", HttpStatus.CONFLICT),
+    ENROLLMENT_SCOPE_UNSUPPORTED(4407, "Khóa học chưa thuộc phạm vi dữ liệu được hỗ trợ", HttpStatus.CONFLICT),
+    ENROLLMENT_SUBJECT_NOT_IN_CURRICULUM(
+            4408, "Học phần không thuộc chương trình đào tạo của sinh viên", HttpStatus.CONFLICT),
+    ENROLLMENT_SUBJECT_COMPLETED(4409, "Sinh viên đã đạt học phần này", HttpStatus.CONFLICT),
+    ENROLLMENT_SCHEDULE_CONFLICT(4410, "Lịch học trùng với lớp đã đăng ký", HttpStatus.CONFLICT),
+    ENROLLMENT_CREDIT_LIMIT_EXCEEDED(4411, "Tổng tín chỉ vượt giới hạn đăng ký của kỳ", HttpStatus.CONFLICT),
+    ENROLLMENT_CLASS_NOT_OPEN(4412, "Lớp học phần chưa mở hoặc đã đóng đăng ký", HttpStatus.CONFLICT),
+    ENROLLMENT_DATA_INCOMPLETE(
+            4413, "Dữ liệu đăng ký hoặc chương trình đào tạo chưa đầy đủ", HttpStatus.SERVICE_UNAVAILABLE),
+    ENROLLMENT_CONFIGURATION_INVALID(4414, "Cấu hình đăng ký học phần không hợp lệ", HttpStatus.INTERNAL_SERVER_ERROR),
 
     // Academic
     GRADE_LOCKED(4501, "Điểm đã bị khóa", HttpStatus.BAD_REQUEST),

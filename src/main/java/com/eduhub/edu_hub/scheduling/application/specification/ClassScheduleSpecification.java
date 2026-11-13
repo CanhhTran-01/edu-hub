@@ -9,7 +9,7 @@ import org.springframework.data.jpa.domain.Specification;
 public final class ClassScheduleSpecification {
     private ClassScheduleSpecification() {}
 
-    public static Specification<ClassSchedule> forModuleClasses(Collection<Long> classIds) {
+    public static Specification<ClassSchedule> notDeletedAndModuleClassIdIn(Collection<Long> classIds) {
         return (root, query, builder) -> builder.and(
                 builder.isFalse(root.get("deleted")),
                 root.get("moduleClass").get("id").in(classIds));

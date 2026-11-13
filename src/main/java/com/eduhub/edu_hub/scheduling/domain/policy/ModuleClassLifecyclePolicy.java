@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public final class ModuleClassLifecyclePolicy {
 
-    // TODO(ENROLLMENT_REGISTRATION): Use-case đăng ký sẽ chuyển SCHEDULED sang OPEN và chặn CLOSED/COMPLETED.
+    // Công bố chuyển SCHEDULED sang OPEN; đăng ký/hủy kiểm tra OPEN và khoảng ngày ngay tại service.
 
     public static ModuleClassStatus determineNextStatus(
             ModuleClassStatus currentStatus,

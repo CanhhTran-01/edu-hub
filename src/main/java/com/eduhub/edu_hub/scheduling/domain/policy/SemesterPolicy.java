@@ -62,12 +62,10 @@ public final class SemesterPolicy {
     }
 
     public static void requireClassChangesAllowed(LocalDate endDate, boolean locked, LocalDate today) {
-
         // kỳ học đã kết thúc
         if (today.isAfter(endDate)) {
             throw new SemesterException(ErrorCode.SEMESTER_ENDED);
         }
-
         // kì học đã khóa
         if (locked) {
             throw new SemesterException(ErrorCode.SEMESTER_LOCKED);

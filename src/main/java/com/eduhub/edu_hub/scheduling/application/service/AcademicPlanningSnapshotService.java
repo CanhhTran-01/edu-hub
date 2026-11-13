@@ -1,4 +1,4 @@
-package com.eduhub.edu_hub.scheduling.infrastructure;
+package com.eduhub.edu_hub.scheduling.application.service;
 
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
@@ -6,7 +6,6 @@ import com.eduhub.edu_hub.enrollment.application.EnrollmentFacade;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.application.facade.dto.StudentPlanningResponse;
 import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassException;
-import com.eduhub.edu_hub.scheduling.application.port.AcademicPlanningDataSource;
 import com.eduhub.edu_hub.scheduling.domain.enums.LearningOutcome;
 import com.eduhub.edu_hub.scheduling.domain.model.AcademicPlanningSnapshot;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
@@ -14,17 +13,18 @@ import java.util.*;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
-@Component
+/** Tải bản chụp phục vụ tính nhu cầu mở lớp từ các facade sở hữu dữ liệu. */
+@Service
 @RequiredArgsConstructor
-public class FacadeAcademicPlanningDataSource implements AcademicPlanningDataSource {
+public class AcademicPlanningSnapshotService {
     private final PeopleFacade.Scheduling peopleFacade;
     private final CurriculumFacade.ReferenceData curriculumFacade;
     private final ObjectProvider<EnrollmentFacade.Planning> enrollmentFacadeProvider;
 
-    @Override
-    public AcademicPlanningSnapshot snapshot() {
+    /** DTO đầu vào từ facade People, Curriculum và lịch sử Enrollment. */
+    public AcademicPlanningSnapshot loadPlanningSnapshot() {
 
         // lấy ta toàn bộ sinh viên cần học
         var students = peopleFacade.findStudentsForPlanning();
@@ -35,6 +35,27 @@ public class FacadeAcademicPlanningDataSource implements AcademicPlanningDataSou
 
         // validate nghiệp vụ cho toàn bộ sinh viên vừa lấy, có bị khuyết field nào không ?
         students.forEach(this::requireCompleteStudent);
+
+        var enrollmentFacade = enrollmentFacadeProvider.getIfAvailable();
+        if (enrollmentFacade == null) throw new ModuleClassException(ErrorCode.PLANNING_DATA_UNAVAILABLE);
+        var scope = enrollmentFacade.findScope();
+        if (scope == null) throw new ModuleClassException(ErrorCode.PLANNING_DATA_UNAVAILABLE);
+        int originalStudentCount = students.size();
+        students = students.stream()
+                .filter(student -> student.admissionYear() >= scope.firstSupportedAdmissionYear())
+                .toList();
+        int excludedStudentCount = originalStudentCount - students.size();
+        if (students.isEmpty())
+            return new AcademicPlanningSnapshot(
+                    "DATABASE",
+                    true,
+                    List.of(),
+                    List.of(),
+                    scope.firstSupportedAdmissionYear(),
+                    excludedStudentCount,
+                    scope.notice());
+
+        // TODO(ENROLLMENT_LEGACY_HISTORY): Chuyển và đối soát lịch sử khóa cũ trước khi mở rộng phạm vi thống kê.
 
         // Gom các ngành (majorId) và khóa (cohortId) trong DS sinh viên lại
         var majorIds = students.stream().map(StudentPlanningResponse::majorId).collect(Collectors.toSet());
@@ -69,9 +90,6 @@ public class FacadeAcademicPlanningDataSource implements AcademicPlanningDataSou
                 .toList();
 
         // lấy lịch sử học của sinh viên
-        var enrollmentFacade = enrollmentFacadeProvider.getIfAvailable();
-        if (enrollmentFacade == null) throw new ModuleClassException(ErrorCode.PLANNING_DATA_UNAVAILABLE);
-
         var learningHistory = enrollmentFacade.findLearningHistory(
                 students.stream().map(StudentPlanningResponse::id).collect(Collectors.toSet()));
         if (learningHistory == null || !learningHistory.historyComplete() || learningHistory.attempts() == null)
@@ -87,7 +105,14 @@ public class FacadeAcademicPlanningDataSource implements AcademicPlanningDataSou
                             LearningOutcome.valueOf(attempt.status())))
                     .toList();
 
-            var planningSnapshot = new AcademicPlanningSnapshot("DATABASE", true, planningStudents, learningAttempts);
+            var planningSnapshot = new AcademicPlanningSnapshot(
+                    "DATABASE",
+                    true,
+                    planningStudents,
+                    learningAttempts,
+                    scope.firstSupportedAdmissionYear(),
+                    excludedStudentCount,
+                    scope.notice());
             planningSnapshot.validate();
 
             return planningSnapshot;

@@ -33,4 +33,6 @@ public interface ModuleClassRepository extends JpaRepository<ModuleClass, Long>,
     List<ModuleClass> findAllBySemester_IdOrderByIdAsc(Long semesterId);
 
     boolean existsBySemester_IdAndStatusNot(Long semesterId, ModuleClassStatus status);
+
+    boolean existsBySemester_IdAndStatusInAndDeletedFalse(Long semesterId, Collection<ModuleClassStatus> statuses);
 }

@@ -45,12 +45,10 @@ public class ModuleClassLifecycleService {
                         .map(moduleClass -> moduleClass.getSubject().getId())
                         .collect(Collectors.toSet()))
                 .stream()
-                .collect(Collectors.toMap(
-                        SubjectSimpleResponse::getId,
-                        Function.identity()));
+                .collect(Collectors.toMap(SubjectSimpleResponse::getId, Function.identity()));
         var schedulesByClassId = scheduleRepository
                 .findAll(
-                        ClassScheduleSpecification.forModuleClasses(classes.stream()
+                        ClassScheduleSpecification.notDeletedAndModuleClassIdIn(classes.stream()
                                 .map(com.eduhub.edu_hub.scheduling.domain.model.ModuleClass::getId)
                                 .toList()),
                         Sort.by("id"))
@@ -86,13 +84,12 @@ public class ModuleClassLifecycleService {
         }
 
         if (changedCount > 0) {
+            // TODO(AUDIT_LOG): Ghi các chuyển trạng thái tự động sau commit khi có hạ tầng audit.
             log.info(
                     "Đã đồng bộ trạng thái lớp: semesterId={}, đã quét={}, đã đổi={}",
                     semesterId,
                     classes.size(),
                     changedCount);
         }
-
-        // TODO(AUDIT_LOG): Ghi các chuyển trạng thái tự động sau commit khi có hạ tầng audit.
     }
 }

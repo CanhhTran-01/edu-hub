@@ -1,6 +1,7 @@
 package com.eduhub.edu_hub.people.application.facade;
 
 import com.eduhub.edu_hub.people.api.dto.response.AccountProfileContactResponse;
+import com.eduhub.edu_hub.people.api.dto.response.EnrollmentStudentResponse;
 import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
 import com.eduhub.edu_hub.people.api.dto.response.TimetableLecturerResponse;
 import com.eduhub.edu_hub.people.application.facade.dto.*;
@@ -9,6 +10,13 @@ import java.util.Optional;
 import java.util.Set;
 
 public interface PeopleFacade {
+    interface Enrollment {
+        EnrollmentStudentResponse findStudentByUserId(Long userId);
+
+        EnrollmentStudentResponse lockStudentByUserId(Long userId);
+
+        java.util.Map<Long, Integer> findAdmissionYearsByStudentIds(Set<Long> studentIds);
+    }
     /** Đọc thông tin liên hệ cho quản trị tài khoản theo User ID; không tải tài khoản từ Identity. */
     interface AccountProfile {
         Optional<AccountProfileContactResponse> findStudentContactByUserId(Long userId);

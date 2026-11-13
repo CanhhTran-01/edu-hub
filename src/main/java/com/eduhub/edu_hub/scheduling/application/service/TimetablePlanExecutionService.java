@@ -8,6 +8,7 @@ import com.eduhub.edu_hub.scheduling.infrastructure.persistence.TimetablePlanCod
 import java.time.*;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TimetablePlanExecutionService {
     public static final List<TimetablePlanState> ACTIVE_STATES =
             List.of(TimetablePlanState.QUEUED, TimetablePlanState.RUNNING, TimetablePlanState.STOP_REQUESTED);
@@ -81,12 +83,26 @@ public class TimetablePlanExecutionService {
 
     @Transactional
     public void expireInterruptedPlans() {
-        for (var plan : planRepository.findExpiredForUpdate(ACTIVE_STATES, now())) {
+        var expiredAt = now();
+        var expiredPlans = planRepository.findExpiredForUpdate(ACTIVE_STATES, expiredAt);
+
+        if (expiredPlans.isEmpty()) {
+            log.debug("Không có phương án thời khóa biểu nào quá hạn");
+            return;
+        }
+        for (var plan : expiredPlans) {
+            log.warn(
+                    "Đánh dấu phương án INTERRUPTED: planId={}, semesterId={}, stateCũ={}, hạn={}",
+                    plan.getId(),
+                    plan.getSemesterId(),
+                    plan.getState(),
+                    plan.getExpiresAt());
             plan.setState(TimetablePlanState.INTERRUPTED);
             plan.setDiagnosticsJson(codec.write(List.of("Tác vụ không hoàn tất trước hạn; hãy tạo phương án mới")));
-            plan.setUpdatedAt(now());
+            plan.setUpdatedAt(expiredAt);
         }
         planRepository.flush();
+        log.info("Đã đánh dấu {} phương án thời khóa biểu là INTERRUPTED", expiredPlans.size());
     }
 
     private LocalDateTime now() {

@@ -1,4 +1,4 @@
-package com.eduhub.edu_hub.scheduling.infrastructure;
+package com.eduhub.edu_hub.scheduling.application.service;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -26,7 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 
 @ExtendWith(MockitoExtension.class)
-class FacadeAcademicPlanningDataSourceTest {
+class AcademicPlanningSnapshotServiceTest {
     @Mock
     private PeopleFacade.Scheduling people;
 
@@ -40,7 +40,7 @@ class FacadeAcademicPlanningDataSourceTest {
     private EnrollmentFacade.Planning enrollment;
 
     @InjectMocks
-    private FacadeAcademicPlanningDataSource source;
+    private AcademicPlanningSnapshotService academicPlanningSnapshotService;
 
     @Test
     void matchesTheProgramByMajorCohortAndTrainingTypeAndMapsLearningHistory() {
@@ -52,11 +52,14 @@ class FacadeAcademicPlanningDataSourceTest {
                         new CurriculumAssignmentResponse(10L, "CQ", 3L, 4L, TrainingType.CHINH_QUY),
                         new CurriculumAssignmentResponse(11L, "LT", 3L, 4L, TrainingType.LIEN_THONG)));
         when(provider.getIfAvailable()).thenReturn(enrollment);
+        when(enrollment.findScope())
+                .thenReturn(new com.eduhub.edu_hub.enrollment.api.dto.response.EnrollmentScopeResponse(
+                        2026, "Phạm vi khóa mới"));
         when(enrollment.findLearningHistory(Set.of(1L, 2L)))
                 .thenReturn(new LearningHistoryResponse(
                         true, List.of(new LearningAttemptResponse(1L, "CS101", 2026, 1, "FAILED"))));
 
-        var result = source.snapshot();
+        var result = academicPlanningSnapshotService.loadPlanningSnapshot();
 
         assertThat(result.source()).isEqualTo("DATABASE");
         assertThat(result.students())
@@ -76,20 +79,42 @@ class FacadeAcademicPlanningDataSourceTest {
     @Test
     void missingCurriculumAssignmentDoesNotSilentlyExcludeTheStudent() {
         when(people.findStudentsForPlanning()).thenReturn(List.of(student(1L, TrainingType.CHINH_QUY, 2026)));
+        when(provider.getIfAvailable()).thenReturn(enrollment);
+        when(enrollment.findScope())
+                .thenReturn(new com.eduhub.edu_hub.enrollment.api.dto.response.EnrollmentScopeResponse(
+                        2026, "Phạm vi khóa mới"));
         assertUnavailable();
-        verifyNoInteractions(provider, enrollment);
+        verify(enrollment, never()).findLearningHistory(anySet());
     }
 
     @Test
     void missingEnrollmentModuleIsUnavailableRatherThanAnEmptyHistory() {
-        prepareStudentAndProgram();
+        when(people.findStudentsForPlanning()).thenReturn(List.of(student(1L, TrainingType.CHINH_QUY, 2026)));
         assertUnavailable();
+    }
+
+    @Test
+    void excludesUnmigratedCohortsAndReturnsTheScopeAlongsideCounts() {
+        when(people.findStudentsForPlanning()).thenReturn(List.of(student(1L, TrainingType.CHINH_QUY, 2025)));
+        when(provider.getIfAvailable()).thenReturn(enrollment);
+        when(enrollment.findScope())
+                .thenReturn(new com.eduhub.edu_hub.enrollment.api.dto.response.EnrollmentScopeResponse(
+                        2026, "Chưa bao gồm khóa cũ"));
+        var snapshot = academicPlanningSnapshotService.loadPlanningSnapshot();
+        assertThat(snapshot.students()).isEmpty();
+        assertThat(snapshot.excludedStudentCount()).isEqualTo(1);
+        assertThat(snapshot.scopeNotice()).contains("khóa cũ");
+        verifyNoInteractions(curriculum);
+        verify(enrollment, never()).findLearningHistory(anySet());
     }
 
     @Test
     void incompleteOrInvalidHistoryCannotBeUsedForEstimatingMissedSubjects() {
         prepareStudentAndProgram();
         when(provider.getIfAvailable()).thenReturn(enrollment);
+        when(enrollment.findScope())
+                .thenReturn(new com.eduhub.edu_hub.enrollment.api.dto.response.EnrollmentScopeResponse(
+                        2026, "Phạm vi khóa mới"));
         when(enrollment.findLearningHistory(Set.of(1L))).thenReturn(new LearningHistoryResponse(false, List.of()));
         assertUnavailable();
         when(enrollment.findLearningHistory(Set.of(1L)))
@@ -109,7 +134,7 @@ class FacadeAcademicPlanningDataSourceTest {
     }
 
     private void assertUnavailable() {
-        assertThatThrownBy(source::snapshot)
+        assertThatThrownBy(academicPlanningSnapshotService::loadPlanningSnapshot)
                 .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
                         .isEqualTo(ErrorCode.PLANNING_DATA_UNAVAILABLE));
     }

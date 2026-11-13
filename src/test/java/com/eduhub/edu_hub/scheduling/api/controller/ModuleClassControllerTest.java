@@ -7,8 +7,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.eduhub.edu_hub.scheduling.api.dto.request.CreateModuleClassesRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.ModuleClassSearchRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.UpdateModuleClassRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.response.ClassScheduleResponse;
 import com.eduhub.edu_hub.scheduling.api.dto.response.ModuleClassResponse;
+import com.eduhub.edu_hub.scheduling.api.dto.response.ModuleClassSimpleResponse;
 import com.eduhub.edu_hub.scheduling.api.exception.ModuleClassExceptionHandler;
 import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassConflictException;
 import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassException;
@@ -16,6 +19,7 @@ import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassOpeningExc
 import com.eduhub.edu_hub.scheduling.application.service.ModuleClassApplicationService;
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
+import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.exception.*;
 import java.sql.SQLException;
 import java.util.List;
@@ -42,11 +46,14 @@ class ModuleClassControllerTest {
     @Mock
     private ModuleClassApplicationService service;
 
+    @Mock
+    private com.eduhub.edu_hub.scheduling.application.service.ModuleClassPublicationService publicationService;
+
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
-        mvc = MockMvcBuilders.standaloneSetup(new ModuleClassController(service))
+        mvc = MockMvcBuilders.standaloneSetup(new ModuleClassController(service, publicationService))
                 .setControllerAdvice(new GlobalExceptionHandler(), new ModuleClassExceptionHandler())
                 .build();
     }
@@ -141,7 +148,10 @@ class ModuleClassControllerTest {
         mvc.perform(get("/api/v1/semesters/7/opening-subjects"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").isEmpty())
-                .andExpect(jsonPath("$.message").value("Không có học phần phù hợp để đề xuất mở lớp"));
+                .andExpect(
+                        jsonPath("$.message")
+                                .value(
+                                        "Không có học phần phù hợp trong phạm vi khóa mới được hỗ trợ; chưa bao gồm sinh viên chưa chuyển dữ liệu."));
     }
 
     @Test
@@ -241,5 +251,77 @@ class ModuleClassControllerTest {
     void searchValidatesPagination() throws Exception {
         mvc.perform(get("/api/v1/module-classes").param("size", "0")).andExpect(status().isBadRequest());
         verify(service, never()).searchModuleClasses(any());
+    }
+
+    @Test
+    void searchReturnsSimpleRowsAndPreservesPaginationAndFilters() throws Exception {
+        var moduleClass = ModuleClassSimpleResponse.builder()
+                .id(101L)
+                .moduleClassCode("MC_7_CS101_001")
+                .subjectCode("CS101")
+                .subjectName("Nhập môn lập trình")
+                .credits(3)
+                .semesterCode("HK_1_2026_2027")
+                .lecturerName("Giảng viên A")
+                .maxCapacity(80)
+                .currentSize(12)
+                .status(ModuleClassStatus.SCHEDULED)
+                .build();
+        when(service.searchModuleClasses(any()))
+                .thenReturn(PageResponse.<ModuleClassSimpleResponse>builder()
+                        .content(List.of(moduleClass))
+                        .pageNumber(1)
+                        .pageSize(20)
+                        .totalElements(21)
+                        .totalPages(2)
+                        .isLast(true)
+                        .build());
+        mvc.perform(get("/api/v1/module-classes")
+                        .param("semesterId", "7")
+                        .param("status", "SCHEDULED")
+                        .param("page", "1")
+                        .param("size", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pageNumber").value(1))
+                .andExpect(jsonPath("$.data.totalElements").value(21))
+                .andExpect(jsonPath("$.data.last").value(true))
+                .andExpect(jsonPath("$.data.content[0].id").value(101))
+                .andExpect(jsonPath("$.data.content[0].subjectName").value("Nhập môn lập trình"))
+                .andExpect(jsonPath("$.data.content[0].currentSize").value(12))
+                .andExpect(jsonPath("$.data.content[0].schedules").doesNotExist())
+                .andExpect(jsonPath("$.data.content[0].semesterId").doesNotExist())
+                .andExpect(jsonPath("$.data.content[0].subjectId").doesNotExist())
+                .andExpect(jsonPath("$.data.content[0].lecturerId").doesNotExist())
+                .andExpect(jsonPath("$.data.content[0].classSequence").doesNotExist())
+                .andExpect(jsonPath("$.data.content[0].dataSource").doesNotExist());
+        var request = ArgumentCaptor.forClass(ModuleClassSearchRequest.class);
+        verify(service).searchModuleClasses(request.capture());
+        assertThat(request.getValue().getSemesterId()).isEqualTo(7L);
+        assertThat(request.getValue().getStatus()).isEqualTo(ModuleClassStatus.SCHEDULED);
+        assertThat(request.getValue().getPage()).isEqualTo(1);
+    }
+
+    @Test
+    void detailStillReturnsClassReferencesAndSchedules() throws Exception {
+        when(service.findModuleClassById(101L))
+                .thenReturn(ModuleClassResponse.builder()
+                        .id(101L)
+                        .semesterId(7L)
+                        .subjectId(1L)
+                        .lecturerId(5001L)
+                        .classSequence(1)
+                        .dataSource("DATABASE")
+                        .schedules(List.of(ClassScheduleResponse.builder()
+                                .id(9L)
+                                .roomId(501L)
+                                .dayOfWeek(2)
+                                .build()))
+                        .build());
+        mvc.perform(get("/api/v1/module-classes/101"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.semesterId").value(7))
+                .andExpect(jsonPath("$.data.subjectId").value(1))
+                .andExpect(jsonPath("$.data.lecturerId").value(5001))
+                .andExpect(jsonPath("$.data.schedules[0].roomId").value(501));
     }
 }

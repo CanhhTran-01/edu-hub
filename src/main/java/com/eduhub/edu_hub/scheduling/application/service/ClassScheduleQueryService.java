@@ -21,7 +21,7 @@ public class ClassScheduleQueryService {
         if (classIds.isEmpty()) return Map.of();
         Map<Long, List<ClassScheduleResponse>> schedulesByClassId = new LinkedHashMap<>();
         for (var schedule : scheduleRepository.findAll(
-                ClassScheduleSpecification.forModuleClasses(classIds),
+                ClassScheduleSpecification.notDeletedAndModuleClassIdIn(classIds),
                 Sort.by("startDate", "lessonOrderStart", "id"))) {
             var room = schedule.getRoom();
             var teachingShift = TeachingShift.findByLessonRange(

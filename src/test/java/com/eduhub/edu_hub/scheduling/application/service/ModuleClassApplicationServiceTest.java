@@ -8,15 +8,15 @@ import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.curriculum.application.facade.dto.CurriculumOpeningSubjectResponse;
 import com.eduhub.edu_hub.curriculum.domain.model.Subject;
+import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.domain.model.Lecturer;
 import com.eduhub.edu_hub.scheduling.api.dto.request.CreateModuleClassRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.CreateModuleClassesRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.request.ModuleClassSearchRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.SubjectClassesRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.response.ModuleClassResponse;
 import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassOpeningException;
-import com.eduhub.edu_hub.scheduling.application.port.AcademicPlanningDataSource;
-import com.eduhub.edu_hub.scheduling.application.port.ModuleClassEnrollmentQuery;
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
 import com.eduhub.edu_hub.scheduling.domain.model.AcademicPlanningSnapshot;
 import com.eduhub.edu_hub.scheduling.domain.model.ModuleClass;
@@ -37,8 +37,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 
 @ExtendWith(MockitoExtension.class)
 class ModuleClassApplicationServiceTest {
@@ -59,10 +65,10 @@ class ModuleClassApplicationServiceTest {
     private PeopleFacade.Scheduling people;
 
     @Mock
-    private AcademicPlanningDataSource dataSource;
+    private AcademicPlanningSnapshotService academicPlanningSnapshotService;
 
     @Mock
-    private ModuleClassEnrollmentQuery enrollmentQuery;
+    private ModuleClassEnrollmentQueryService moduleClassEnrollmentQueryService;
 
     @Mock
     private EntityManager entityManager;
@@ -85,8 +91,8 @@ class ModuleClassApplicationServiceTest {
                 classes,
                 curriculum,
                 people,
-                dataSource,
-                enrollmentQuery,
+                academicPlanningSnapshotService,
+                moduleClassEnrollmentQueryService,
                 new OpeningDemandPolicy(),
                 entityManager,
                 CLOCK,
@@ -119,7 +125,7 @@ class ModuleClassApplicationServiceTest {
             assertThat(item.getDataSource()).isEqualTo("DATABASE");
         });
         assertThat(result).extracting(ModuleClassResponse::getMaxCapacity).containsExactly(80, 50, 30);
-        verifyNoInteractions(people, dataSource, enrollmentQuery);
+        verifyNoInteractions(people, academicPlanningSnapshotService, moduleClassEnrollmentQueryService);
         verify(semesters).findForUpdateByIdAndDeletedFalse(7L);
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<ModuleClass>> saved = ArgumentCaptor.forClass(List.class);
@@ -185,7 +191,7 @@ class ModuleClassApplicationServiceTest {
         assertError(
                 () -> service.createModuleClasses(7L, batch(subjectRequest(1, 80), subjectRequest(1, 80))),
                 ErrorCode.DUPLICATE_BATCH_SUBJECT);
-        verifyNoInteractions(semesters, classes, curriculum, dataSource);
+        verifyNoInteractions(semesters, classes, curriculum, academicPlanningSnapshotService);
     }
 
     @ParameterizedTest
@@ -194,7 +200,7 @@ class ModuleClassApplicationServiceTest {
         var subject = subjectRequest(1, 80);
         subject.getClasses().getFirst().setMaxCapacity(capacity);
         assertError(() -> service.createModuleClasses(7L, batch(subject)), ErrorCode.VALIDATION_ERROR);
-        verifyNoInteractions(semesters, classes, curriculum, dataSource);
+        verifyNoInteractions(semesters, classes, curriculum, academicPlanningSnapshotService);
     }
 
     @Test
@@ -203,7 +209,7 @@ class ModuleClassApplicationServiceTest {
         semester.setLocked(true);
         when(semesters.findForUpdateByIdAndDeletedFalse(7L)).thenReturn(Optional.of(semester));
         assertError(() -> service.createModuleClasses(7L, batch(subjectRequest(1, 80))), ErrorCode.SEMESTER_LOCKED);
-        verifyNoInteractions(classes, curriculum, dataSource);
+        verifyNoInteractions(classes, curriculum, academicPlanningSnapshotService);
     }
 
     @Test
@@ -212,7 +218,7 @@ class ModuleClassApplicationServiceTest {
         semester.setEndDate(LocalDate.parse("2026-11-01"));
         when(semesters.findForUpdateByIdAndDeletedFalse(7L)).thenReturn(Optional.of(semester));
         assertError(() -> service.createModuleClasses(7L, batch(subjectRequest(1, 80))), ErrorCode.SEMESTER_ENDED);
-        verifyNoInteractions(classes, curriculum, dataSource);
+        verifyNoInteractions(classes, curriculum, academicPlanningSnapshotService);
     }
 
     @Test
@@ -225,7 +231,7 @@ class ModuleClassApplicationServiceTest {
     void openingSuggestionsKeepDemandMetadataAndCountHiddenNonCancelledClasses() {
         var targetSemester = semester();
         when(semesters.findByIdAndDeletedFalse(7L)).thenReturn(Optional.of(targetSemester));
-        when(dataSource.snapshot())
+        when(academicPlanningSnapshotService.loadPlanningSnapshot())
                 .thenReturn(new AcademicPlanningSnapshot(
                         "DATABASE",
                         true,
@@ -259,19 +265,81 @@ class ModuleClassApplicationServiceTest {
             assertThat(openingSubject.getDataSource()).isEqualTo("DATABASE");
             assertThat(openingSubject.isHistoryComplete()).isTrue();
         });
-        verifyNoInteractions(people, enrollmentQuery, entityManager);
+        verifyNoInteractions(people, moduleClassEnrollmentQueryService, entityManager);
         verify(classes, never()).saveAllAndFlush(anyList());
     }
 
     @Test
     void openingSuggestionsDoNotTreatMissingHistoryAsEmptyDemand() {
         when(semesters.findByIdAndDeletedFalse(7L)).thenReturn(Optional.of(semester()));
-        when(dataSource.snapshot()).thenReturn(new AcademicPlanningSnapshot("DATABASE", false, List.of(), List.of()));
+        when(academicPlanningSnapshotService.loadPlanningSnapshot())
+                .thenReturn(new AcademicPlanningSnapshot("DATABASE", false, List.of(), List.of()));
         when(curriculum.findPlanningSubjects()).thenReturn(List.of());
 
         assertError(() -> service.findSubjectsToOpen(7L), ErrorCode.PLANNING_DATA_UNAVAILABLE);
 
-        verifyNoInteractions(classes, people, enrollmentQuery, entityManager);
+        verifyNoInteractions(classes, people, moduleClassEnrollmentQueryService, entityManager);
+    }
+
+    @Test
+    void searchBuildsSimpleRowsWithoutLoadingClassSchedules() {
+        var targetSemester = semester();
+        var scheduledClass = historical(targetSemester, 1, ModuleClassStatus.SCHEDULED, false);
+        scheduledClass.setId(101L);
+        var unscheduledClass = ModuleClass.builder()
+                .semester(targetSemester)
+                .subject(scheduledClass.getSubject())
+                .moduleClassCode("MC_7_CS101_002")
+                .maxCapacity(40)
+                .currentSize(0)
+                .status(ModuleClassStatus.UNSCHEDULED)
+                .build();
+        unscheduledClass.setId(102L);
+        var pageable = PageRequest.of(1, 2, Sort.by(Sort.Direction.DESC, "id"));
+        when(classes.findAll(ArgumentMatchers.<Specification<ModuleClass>>any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(scheduledClass, unscheduledClass), pageable, 5));
+        when(curriculum.findSubjectsByIds(Set.of(1L)))
+                .thenReturn(List.of(SubjectSimpleResponse.builder()
+                        .id(1L)
+                        .subjectCode("CS101")
+                        .subjectName("Nhập môn lập trình")
+                        .credits(3)
+                        .build()));
+        when(people.findLecturersByIds(Set.of(5001L)))
+                .thenReturn(List.of(LecturerResponse.builder()
+                        .id(5001L)
+                        .fullName("Giảng viên A")
+                        .build()));
+        var request = new ModuleClassSearchRequest();
+        request.setPage(1);
+        request.setSize(2);
+        var response = service.searchModuleClasses(request);
+        assertThat(response.getPageNumber()).isEqualTo(1);
+        assertThat(response.getPageSize()).isEqualTo(2);
+        assertThat(response.getTotalElements()).isEqualTo(5);
+        assertThat(response.getTotalPages()).isEqualTo(3);
+        assertThat(response.getContent()).hasSize(2);
+        assertThat(response.getContent().getFirst().getSubjectName()).isEqualTo("Nhập môn lập trình");
+        assertThat(response.getContent().getFirst().getLecturerName()).isEqualTo("Giảng viên A");
+        assertThat(response.getContent().getFirst().getSemesterCode()).isEqualTo("HK_1_2026_2027");
+        assertThat(response.getContent().get(1).getLecturerName()).isNull();
+        verify(classes).findAll(ArgumentMatchers.<Specification<ModuleClass>>any(), eq(pageable));
+        verifyNoInteractions(classScheduleQueryService, classScheduleRepository, roomRepository);
+    }
+
+    @Test
+    void emptySearchKeepsTotalCountWithoutLoadingDisplayData() {
+        var pageable = PageRequest.of(2, 2, Sort.by(Sort.Direction.DESC, "id"));
+        when(classes.findAll(ArgumentMatchers.<Specification<ModuleClass>>any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 3));
+        var request = new ModuleClassSearchRequest();
+        request.setPage(2);
+        request.setSize(2);
+        var response = service.searchModuleClasses(request);
+        assertThat(response.getContent()).isEmpty();
+        assertThat(response.getTotalElements()).isEqualTo(3);
+        assertThat(response.getPageNumber()).isEqualTo(2);
+        verifyNoInteractions(curriculum, people, classScheduleQueryService);
     }
 
     private void prepare(Semester semester) {

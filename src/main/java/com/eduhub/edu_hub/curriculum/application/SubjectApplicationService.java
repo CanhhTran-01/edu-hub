@@ -113,6 +113,9 @@ public class SubjectApplicationService {
         }
         // TODO: Kiểm tra điểm và lớp đang mở qua Facade khi enrollment/scheduling sẵn sàng.
 
+        if (subject.getCredits() != request.getCredits() && teachingAssignments.hasPublishedClassesForSubject(id))
+            throw new SubjectException(ErrorCode.SUBJECT_SCHEDULE_IN_USE);
+
         if (request.getTotalTeachingPeriods() != null) {
             if (request.getTotalTeachingPeriods() <= 0) throw new SubjectException(ErrorCode.VALIDATION_ERROR);
             if (!request.getTotalTeachingPeriods().equals(subject.getTotalTeachingPeriods())

@@ -55,6 +55,90 @@ public final class TimetablePolicy {
         return dates;
     }
 
+    /** Đối chiếu ngày thực tế và tiết, dùng chung cho công bố và đăng ký; hỗ trợ cả lịch lặp cũ. */
+    public static Optional<LocalDate> firstOverlapDate(ExistingSession first, ExistingSession second) {
+        if (first.lessonOrderStart() > second.lessonOrderEnd()
+                || second.lessonOrderStart() > first.lessonOrderEnd()
+                || first.startDate() == null
+                || first.endDate() == null
+                || second.startDate() == null
+                || second.endDate() == null) return Optional.empty();
+        return occurrenceDates(first).stream()
+                .filter(date -> occursOn(second, date))
+                .findFirst();
+    }
+
+    /** Kiểm tra ràng buộc cứng của lịch đang vận hành; không chạy solver hoặc xét ưu tiên tối ưu mềm. */
+    public static Map<Long, List<String>> findOfficialScheduleViolations(TimetableProblem problem) {
+        Map<Long, List<String>> violationsByClassId = new LinkedHashMap<>();
+
+        var allSchedules = new ArrayList<>(problem.existingSessions());
+        allSchedules.addAll(problem.replacedSessions());
+        for (var requirement : problem.classes()) {
+            List<String> violations = new ArrayList<>();
+
+            var schedules = problem.replacedSessions().stream()
+                    .filter(schedule -> schedule.moduleClassId().equals(requirement.moduleClassId()))
+                    .toList();
+
+            if (requirement.maxCapacity() < 1 || requirement.maxCapacity() > ModuleClassPolicy.MAX_CAPACITY)
+                violations.add("Sức chứa lớp phải từ 1 đến " + ModuleClassPolicy.MAX_CAPACITY);
+
+            if (requirement.lecturerId() == null
+                    || problem.lecturers().stream()
+                            .noneMatch(lecturer -> lecturer.lecturerId().equals(requirement.lecturerId())
+                                    && lecturer.teachingSubjectIds().contains(requirement.subjectId())))
+                violations.add("Giảng viên không còn đủ điều kiện giảng dạy");
+
+            List<LocalDate> teachingDates = new ArrayList<>();
+            for (var schedule : schedules) {
+
+                if (schedule.startDate() == null
+                        || schedule.endDate() == null
+                        || schedule.dayOfWeek() < 2
+                        || schedule.dayOfWeek() > 7
+                        || schedule.lessonOrderStart() < 1
+                        || schedule.lessonOrderStart() > 10
+                        || (schedule.lessonOrderStart() - 1) % 3 != 0
+                        || schedule.lessonOrderEnd() != schedule.lessonOrderStart() + 2) {
+                    violations.add("Ngày hoặc ca của lịch chính thức không hợp lệ");
+                    continue;
+                }
+
+                var dates = occurrenceDates(schedule);
+                teachingDates.addAll(dates);
+
+                if (dates.isEmpty()
+                        || dates.stream()
+                                .anyMatch(
+                                        date -> date.isBefore(problem.startDate()) || date.isAfter(problem.endDate())))
+                    violations.add("Buổi học thiếu ngày hoặc nằm ngoài khoảng học của kỳ");
+
+                if (problem.rooms().stream()
+                        .noneMatch(room -> room.roomId().equals(schedule.roomId())
+                                && room.capacity() >= requirement.maxCapacity()))
+                    violations.add("Phòng không còn hoạt động hoặc không đủ sức chứa lớp");
+
+                for (var other : allSchedules) {
+                    if (Objects.equals(schedule.scheduleId(), other.scheduleId())) continue;
+                    if (!Objects.equals(schedule.roomId(), other.roomId())
+                            && !Objects.equals(schedule.lecturerId(), other.lecturerId())) continue;
+                    firstOverlapDate(schedule, other)
+                            .ifPresent(date -> violations.add(
+                                    "Trùng phòng/giảng viên ngày " + date + " với lớp ID " + other.moduleClassId()));
+                }
+            }
+            if (teachingDates.size() != requiredSessions(requirement.totalTeachingPeriods())
+                    || teachingDates.stream().distinct().count() != teachingDates.size())
+                violations.add("Lịch chính thức chưa đủ số buổi hoặc có nhiều buổi trùng ngày");
+            if (!violations.isEmpty())
+                violationsByClassId.put(
+                        requirement.moduleClassId(),
+                        violations.stream().distinct().toList());
+        }
+        return violationsByClassId;
+    }
+
     public static Assessment assess(TimetableProblem problem, TimetableAllocation allocation, boolean explain) {
         Penalties penalties = new Penalties(explain);
         if (allocation == null) {

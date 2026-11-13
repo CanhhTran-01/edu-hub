@@ -11,6 +11,7 @@ import com.eduhub.edu_hub.scheduling.api.dto.request.CreateModuleClassesRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.ModuleClassSearchRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.UpdateModuleClassRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.response.ModuleClassResponse;
+import com.eduhub.edu_hub.scheduling.api.dto.response.ModuleClassSimpleResponse;
 import com.eduhub.edu_hub.scheduling.api.dto.response.OpeningSubjectResponse;
 import com.eduhub.edu_hub.scheduling.api.mapper.ModuleClassResponseMapper;
 import com.eduhub.edu_hub.scheduling.api.mapper.OpeningSubjectResponseMapper;
@@ -18,8 +19,6 @@ import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassConflictEx
 import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassException;
 import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassOpeningException;
 import com.eduhub.edu_hub.scheduling.application.exception.SemesterException;
-import com.eduhub.edu_hub.scheduling.application.port.AcademicPlanningDataSource;
-import com.eduhub.edu_hub.scheduling.application.port.ModuleClassEnrollmentQuery;
 import com.eduhub.edu_hub.scheduling.application.specification.ClassScheduleSpecification;
 import com.eduhub.edu_hub.scheduling.application.specification.ModuleClassSpecification;
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
@@ -55,8 +54,8 @@ public class ModuleClassApplicationService {
     private final ModuleClassRepository moduleClassRepository;
     private final CurriculumFacade.ClassOpening curriculumFacade;
     private final PeopleFacade.Scheduling peopleFacade;
-    private final AcademicPlanningDataSource planningDataSource;
-    private final ModuleClassEnrollmentQuery enrollmentQuery;
+    private final AcademicPlanningSnapshotService academicPlanningSnapshotService;
+    private final ModuleClassEnrollmentQueryService moduleClassEnrollmentQueryService;
     private final OpeningDemandPolicy openingDemandPolicy;
     private final EntityManager entityManager;
     private final Clock clock;
@@ -80,7 +79,7 @@ public class ModuleClassApplicationService {
         // historyComplete: cho biết lịch sử học có đủ ko,vd tưởng SV chưa học môn tiên quyết nên không đưa vào nhu cầu
         // List<Student> students: Danh sách sinh viên thuộc diện lập kế hoạch
         // List<Attempt> attempts: Lịch sử học môn của các SV trên, Mỗi Attempt là một lần 1 SV học một môn
-        var planningSnapshot = planningDataSource.snapshot();
+        var planningSnapshot = academicPlanningSnapshotService.loadPlanningSnapshot();
 
         // lấy các học phần cần mở lớp dùng data vừa xử lý + kì hiện tại + toàn bộ các subject khả dụng trong DB
         var openingSubjects = openingDemandPolicy
@@ -237,7 +236,7 @@ public class ModuleClassApplicationService {
         // Tăng sức chứa phải đồng bộ với luồng giảm capacity phòng: khóa phòng trước khi đối chiếu.
         if (request.getMaxCapacity() > oldCapacity) {
             var schedules = classScheduleRepository.findAll(
-                    ClassScheduleSpecification.forModuleClasses(List.of(moduleClassId)), Sort.by("id"));
+                    ClassScheduleSpecification.notDeletedAndModuleClassIdIn(List.of(moduleClassId)), Sort.by("id"));
             for (Long roomId : schedules.stream()
                     .map(schedule -> schedule.getRoom().getId())
                     .distinct()
@@ -293,7 +292,7 @@ public class ModuleClassApplicationService {
         }
 
         // kiểm tra dữ liệu đăng ký
-        var enrollmentUsage = enrollmentQuery.summarize(moduleClass.getId(), moduleClass.getModuleClassCode());
+        var enrollmentUsage = moduleClassEnrollmentQueryService.summarizeModuleClassEnrollments(moduleClass.getId());
 
         // dữ liệu bị khuyết
         if (enrollmentUsage == null
@@ -331,7 +330,7 @@ public class ModuleClassApplicationService {
 
         // Ngừng hiệu lực lịch cùng transaction hủy lớp; giữ bản ghi lịch sử và không giải phóng mã lớp.
         var schedules = classScheduleRepository.findAll(
-                ClassScheduleSpecification.forModuleClasses(List.of(moduleClassId)), Sort.by("id"));
+                ClassScheduleSpecification.notDeletedAndModuleClassIdIn(List.of(moduleClassId)), Sort.by("id"));
         schedules.forEach(schedule -> {
             schedule.setDeleted(true);
             schedule.setUpdatedAt(LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
@@ -385,7 +384,7 @@ public class ModuleClassApplicationService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<ModuleClassResponse> searchModuleClasses(ModuleClassSearchRequest request) {
+    public PageResponse<ModuleClassSimpleResponse> searchModuleClasses(ModuleClassSearchRequest request) {
 
         Pageable pageable = PageRequest.of(request.getPage(), request.getSize(), Sort.by(Sort.Direction.DESC, "id"));
         Page<ModuleClass> moduleClassPage =
@@ -402,14 +401,9 @@ public class ModuleClassApplicationService {
 
         // gom dữ liệu giảng viên: Map<Long, String>
         var lecturerNamesById = loadLecturerNamesById(moduleClassPage.getContent());
-        var schedulesByClassId = classScheduleQueryService.findSchedulesByClassIds(
-                moduleClassPage.stream().map(ModuleClass::getId).toList());
 
-        return PageMapper.toPageResponse(moduleClassPage.map(moduleClass -> ModuleClassResponseMapper.toResponse(
-                moduleClass,
-                subjectsById,
-                lecturerNamesById,
-                schedulesByClassId.getOrDefault(moduleClass.getId(), List.of()))));
+        return PageMapper.toPageResponse(moduleClassPage.map(moduleClass ->
+                ModuleClassResponseMapper.toSimpleResponse(moduleClass, subjectsById, lecturerNamesById)));
     }
 
     @Transactional(readOnly = true)

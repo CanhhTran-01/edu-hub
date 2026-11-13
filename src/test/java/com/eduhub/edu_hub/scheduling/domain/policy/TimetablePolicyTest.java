@@ -212,4 +212,16 @@ class TimetablePolicyTest {
                 allocation.subjects(),
                 sessions);
     }
+
+    @Test
+    void equalWeekdayAndShiftInDifferentPhasesDoNotOverlap() {
+        var first = new TimetableProblem.ExistingSession(
+                1L, 100L, 201L, 501L, 2, 1, 3, LocalDate.of(2027, 8, 9), LocalDate.of(2027, 8, 30));
+        var laterPhase = new TimetableProblem.ExistingSession(
+                2L, 101L, 202L, 502L, 2, 1, 3, LocalDate.of(2027, 9, 20), LocalDate.of(2027, 10, 11));
+        assertThat(TimetablePolicy.firstOverlapDate(first, laterPhase)).isEmpty();
+        var sameDay = new TimetableProblem.ExistingSession(
+                3L, 102L, 202L, 502L, 2, 3, 5, LocalDate.of(2027, 8, 23), LocalDate.of(2027, 8, 23));
+        assertThat(TimetablePolicy.firstOverlapDate(first, sameDay)).contains(LocalDate.of(2027, 8, 23));
+    }
 }

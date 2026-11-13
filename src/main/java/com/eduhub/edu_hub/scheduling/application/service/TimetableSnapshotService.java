@@ -103,7 +103,7 @@ public class TimetableSnapshotService {
         var classIds = classes.stream().map(ModuleClass::getId).collect(Collectors.toCollection(TreeSet::new));
         var replacedSessions =
                 scheduleRepository
-                        .findAll(ClassScheduleSpecification.forModuleClasses(classIds), Sort.by("id"))
+                        .findAll(ClassScheduleSpecification.notDeletedAndModuleClassIdIn(classIds), Sort.by("id"))
                         .stream()
                         .map(TimetableSnapshotService::toExistingSession)
                         .toList();

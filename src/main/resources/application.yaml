@@ -88,3 +88,10 @@ notification:
     brand-name: ${NOTIFICATION_MAIL_BRAND_NAME:EduHub}
     login-url: ${NOTIFICATION_MAIL_LOGIN_URL:}
     support-email: ${NOTIFICATION_MAIL_SUPPORT_EMAIL:}
+
+enrollment:
+  registration:
+    # Các giá trị quy chế phải được cấu hình rõ ràng; không tự giả định ngưỡng hoặc phạm vi khóa.
+    minimum-credits: ${ENROLLMENT_MINIMUM_CREDITS:}
+    maximum-credits: ${ENROLLMENT_MAXIMUM_CREDITS:}
+    first-supported-admission-year: ${ENROLLMENT_FIRST_SUPPORTED_ADMISSION_YEAR:}

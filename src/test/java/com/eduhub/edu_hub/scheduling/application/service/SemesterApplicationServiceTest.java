@@ -338,6 +338,20 @@ class SemesterApplicationServiceTest {
         return request;
     }
 
+    @Test
+    void cannotChangeRegistrationDatesWhenAnyClassHasBeenPublishedOrClosed() {
+        var semester = semester(LocalDate.parse("2026-09-01"), LocalDate.parse("2026-12-31"));
+        when(repository.findForUpdateByIdAndDeletedFalse(1L)).thenReturn(Optional.of(semester));
+        when(moduleClassRepository.existsBySemester_IdAndStatusInAndDeletedFalse(
+                        1L, List.of(ModuleClassStatus.OPEN, ModuleClassStatus.CLOSED, ModuleClassStatus.COMPLETED)))
+                .thenReturn(true);
+        var request = validUpdate();
+        request.setRegistrationEnd(LocalDate.parse("2026-08-21"));
+        assertBusinessError(() -> service.updateSemester(1L, request), ErrorCode.REGISTRATION_PERIOD_IN_USE);
+        assertThat(semester.getRegistrationEnd()).isEqualTo(LocalDate.parse("2026-08-20"));
+        verify(repository, never()).saveAndFlush(any());
+    }
+
     private UpdateSemesterRequest validUpdate() {
         var request = new UpdateSemesterRequest();
         request.setSemesterName("Học kì 1 năm học 2026-2027");

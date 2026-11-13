@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.curriculum.domain.model.Subject;
+import com.eduhub.edu_hub.enrollment.application.facade.dto.ModuleClassUsageResponse;
 import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.domain.enums.LecturerStatus;
@@ -14,9 +15,6 @@ import com.eduhub.edu_hub.people.domain.model.Lecturer;
 import com.eduhub.edu_hub.scheduling.api.dto.request.CancelModuleClassRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.UpdateModuleClassRequest;
 import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassConflictException;
-import com.eduhub.edu_hub.scheduling.application.port.AcademicPlanningDataSource;
-import com.eduhub.edu_hub.scheduling.application.port.ModuleClassEnrollmentQuery;
-import com.eduhub.edu_hub.scheduling.application.port.ModuleClassEnrollmentQuery.Usage;
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
 import com.eduhub.edu_hub.scheduling.domain.model.ModuleClass;
 import com.eduhub.edu_hub.scheduling.domain.model.Semester;
@@ -56,10 +54,10 @@ class ModuleClassManagementServiceTest {
     private PeopleFacade.Scheduling people;
 
     @Mock
-    private AcademicPlanningDataSource planningData;
+    private AcademicPlanningSnapshotService academicPlanningSnapshotService;
 
     @Mock
-    private ModuleClassEnrollmentQuery enrollments;
+    private ModuleClassEnrollmentQueryService moduleClassEnrollmentQueryService;
 
     @Mock
     private EntityManager entityManager;
@@ -83,8 +81,8 @@ class ModuleClassManagementServiceTest {
                 classes,
                 curriculum,
                 people,
-                planningData,
-                enrollments,
+                academicPlanningSnapshotService,
+                moduleClassEnrollmentQueryService,
                 new OpeningDemandPolicy(),
                 entityManager,
                 CLOCK,
@@ -109,7 +107,7 @@ class ModuleClassManagementServiceTest {
 
         assertThat(result.getLecturerId()).isEqualTo(5001L);
         assertThat(result.getLecturerName()).isEqualTo("Giảng viên từ People");
-        verifyNoInteractions(planningData);
+        verifyNoInteractions(academicPlanningSnapshotService);
         assertThat(result.getMaxCapacity()).isEqualTo(40);
         assertThat(result.getCurrentSize()).isEqualTo(20);
         assertThat(result.getStatus()).isEqualTo(ModuleClassStatus.UNSCHEDULED);
@@ -120,7 +118,7 @@ class ModuleClassManagementServiceTest {
         assertThat(item.getCreatedAt()).isEqualTo(LocalDateTime.parse("2026-08-01T00:00:00"));
         assertThat(item.getUpdatedAt()).isEqualTo(LocalDateTime.parse("2026-11-02T18:00:00"));
         assertThat(item.isDeleted()).isFalse();
-        verifyNoInteractions(enrollments);
+        verifyNoInteractions(moduleClassEnrollmentQueryService);
     }
 
     @Test
@@ -138,7 +136,7 @@ class ModuleClassManagementServiceTest {
         assertThat(item.getLecturer().getId()).isEqualTo(5001L);
         assertThat(item.getMaxCapacity()).isEqualTo(80);
         verify(classes, never()).saveAndFlush(any());
-        verifyNoInteractions(people, curriculum, enrollments);
+        verifyNoInteractions(people, curriculum, moduleClassEnrollmentQueryService);
     }
 
     @ParameterizedTest
@@ -188,7 +186,8 @@ class ModuleClassManagementServiceTest {
     void cancellationWithACompleteEmptyHistoryKeepsTheClassVisibleAndReservesItsCode() {
         var item = prepare(ModuleClassStatus.UNSCHEDULED, 0, null);
         prepareResponse(item);
-        when(enrollments.summarize(101L, item.getModuleClassCode())).thenReturn(new Usage(true, 0, 0, "DEV_FIXTURE"));
+        when(moduleClassEnrollmentQueryService.summarizeModuleClassEnrollments(101L))
+                .thenReturn(new ModuleClassUsageResponse(true, 0, 0, "DEV_FIXTURE"));
 
         var result = service.cancelModuleClass(101L, cancelRequest());
 
@@ -206,7 +205,8 @@ class ModuleClassManagementServiceTest {
     @Test
     void anEmptyRosterWithHistoricalEnrollmentsStillCannotBeCancelled() {
         var item = prepare(ModuleClassStatus.UNSCHEDULED, 0);
-        when(enrollments.summarize(101L, item.getModuleClassCode())).thenReturn(new Usage(true, 3, 2, "DEV_FIXTURE"));
+        when(moduleClassEnrollmentQueryService.summarizeModuleClassEnrollments(101L))
+                .thenReturn(new ModuleClassUsageResponse(true, 3, 2, "DEV_FIXTURE"));
 
         assertThatThrownBy(() -> service.cancelModuleClass(101L, cancelRequest()))
                 .isInstanceOfSatisfying(ModuleClassConflictException.class, error -> {
@@ -223,14 +223,15 @@ class ModuleClassManagementServiceTest {
         var item = prepare(ModuleClassStatus.OPEN, 12);
         assertError(() -> service.cancelModuleClass(101L, cancelRequest()), ErrorCode.MODULE_CLASS_HAS_ENROLLMENTS);
         assertThat(item.getStatus()).isEqualTo(ModuleClassStatus.OPEN);
-        verifyNoInteractions(enrollments);
+        verifyNoInteractions(moduleClassEnrollmentQueryService);
         verify(classes, never()).saveAndFlush(any());
     }
 
     @Test
     void incompleteHistoryIsNotTreatedAsZeroEnrollments() {
         var item = prepare(ModuleClassStatus.UNSCHEDULED, 0);
-        when(enrollments.summarize(101L, item.getModuleClassCode())).thenReturn(new Usage(false, 0, 0, "TEST"));
+        when(moduleClassEnrollmentQueryService.summarizeModuleClassEnrollments(101L))
+                .thenReturn(new ModuleClassUsageResponse(false, 0, 0, "TEST"));
         assertError(
                 () -> service.cancelModuleClass(101L, cancelRequest()),
                 ErrorCode.MODULE_CLASS_ENROLLMENT_DATA_UNAVAILABLE);
@@ -244,7 +245,7 @@ class ModuleClassManagementServiceTest {
         assertError(() -> service.updateModuleClassCapacity(101L, update(50)), ErrorCode.MODULE_CLASS_CANCELLED);
         assertError(() -> service.cancelModuleClass(101L, cancelRequest()), ErrorCode.MODULE_CLASS_CANCELLED);
         verify(classes, never()).saveAndFlush(any());
-        verifyNoInteractions(people, curriculum, enrollments);
+        verifyNoInteractions(people, curriculum, moduleClassEnrollmentQueryService);
     }
 
     @Test
@@ -271,7 +272,7 @@ class ModuleClassManagementServiceTest {
     void missingOrHiddenClassIsNotFound() {
         assertError(() -> service.updateModuleClassCapacity(101L, update(50)), ErrorCode.MODULE_CLASS_NOT_FOUND);
         assertError(() -> service.cancelModuleClass(101L, cancelRequest()), ErrorCode.MODULE_CLASS_NOT_FOUND);
-        verifyNoInteractions(semesters, people, curriculum, enrollments);
+        verifyNoInteractions(semesters, people, curriculum, moduleClassEnrollmentQueryService);
     }
 
     private ModuleClass prepare(ModuleClassStatus status, int size) {

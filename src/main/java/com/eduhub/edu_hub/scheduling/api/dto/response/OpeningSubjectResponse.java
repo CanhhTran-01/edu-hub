@@ -17,4 +17,7 @@ public class OpeningSubjectResponse {
     private long existingClassCount;
     private String dataSource;
     private boolean historyComplete;
+    private Integer firstSupportedAdmissionYear;
+    private int excludedStudentCount;
+    private String scopeNotice;
 }

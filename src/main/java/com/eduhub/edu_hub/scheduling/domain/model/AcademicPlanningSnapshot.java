@@ -5,9 +5,22 @@ import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import java.util.*;
 
 public record AcademicPlanningSnapshot(
-        String source, boolean historyComplete, List<PlanningStudent> students, List<LearningAttempt> attempts) {
+        String source,
+        boolean historyComplete,
+        List<PlanningStudent> students,
+        List<LearningAttempt> attempts,
+        Integer firstSupportedAdmissionYear,
+        Integer excludedStudentCount,
+        String scopeNotice) {
+
+    public AcademicPlanningSnapshot(
+            String source, boolean historyComplete, List<PlanningStudent> students, List<LearningAttempt> attempts) {
+        this(source, historyComplete, students, attempts, null, 0, null);
+    }
+
     public AcademicPlanningSnapshot {
         Objects.requireNonNull(source);
+        excludedStudentCount = excludedStudentCount == null ? 0 : excludedStudentCount;
         students = List.copyOf(students);
         attempts = List.copyOf(attempts);
     }

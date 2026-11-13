@@ -13,11 +13,14 @@ public class EnrollmentResponse {
     private String studentCode;
     private String studentName;
     private Long moduleClassId;
+    private Long semesterId;
+    private Long subjectId;
     private String moduleClassCode;
     private String subjectCode;
     private String subjectName;
     private int credits;
     private LocalDateTime registeredAt;
+    private LocalDateTime droppedAt;
     private String status; // REGISTERED / DROPPED / COMPLETED / FAILED
     // điểm (không có thì null)
     private BigDecimal componentScore1;

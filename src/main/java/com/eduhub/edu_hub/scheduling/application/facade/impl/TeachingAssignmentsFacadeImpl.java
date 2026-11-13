@@ -2,6 +2,7 @@ package com.eduhub.edu_hub.scheduling.application.facade.impl;
 
 import com.eduhub.edu_hub.scheduling.application.facade.SchedulingFacade;
 import com.eduhub.edu_hub.scheduling.application.specification.ClassScheduleSpecification;
+import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
 import com.eduhub.edu_hub.scheduling.domain.repository.ClassScheduleRepository;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -18,6 +19,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class TeachingAssignmentsFacadeImpl implements SchedulingFacade.TeachingAssignments {
     private final ClassScheduleRepository classScheduleRepository;
     private final Clock clock;
+
+    @Override
+    public boolean hasPublishedClassesForSubject(Long subjectId) {
+        return classScheduleRepository.exists(ClassScheduleSpecification.unfinishedForSubject(
+                        subjectId, LocalDate.now(clock))
+                .and((root, query, builder) ->
+                        root.get("moduleClass").get("status").in(ModuleClassStatus.OPEN, ModuleClassStatus.CLOSED)));
+    }
 
     @Override
     public boolean hasUnfinishedScheduledClassesForSubject(Long subjectId) {

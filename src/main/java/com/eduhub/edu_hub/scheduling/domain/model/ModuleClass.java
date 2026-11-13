@@ -66,6 +66,22 @@ public class ModuleClass extends BaseEntity {
         if (status == ModuleClassStatus.OPEN) status = ModuleClassStatus.CLOSED;
     }
 
+    public void openRegistration() {
+        this.status = ModuleClassStatus.OPEN;
+    }
+
+    public void withdrawPublication() {
+        this.status = ModuleClassStatus.SCHEDULED;
+    }
+
+    public void reserveSeat() {
+        this.currentSize++;
+    }
+
+    public void releaseSeat() {
+        this.currentSize--;
+    }
+
     public void completeTeaching() {
         if (status == ModuleClassStatus.CLOSED) status = ModuleClassStatus.COMPLETED;
     }

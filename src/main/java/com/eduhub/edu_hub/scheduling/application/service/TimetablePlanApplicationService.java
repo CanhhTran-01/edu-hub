@@ -54,7 +54,9 @@ public class TimetablePlanApplicationService {
     private LocalDateTime now() {
         return LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
     }
+
     public record PlanCreated(Long planId) {}
+
     public record PlanStopRequested(Long planId) {}
 
     @Transactional
@@ -179,7 +181,7 @@ public class TimetablePlanApplicationService {
         }
         var classesById = classes.stream().collect(Collectors.toMap(ModuleClass::getId, Function.identity()));
         var schedules = scheduleRepository.findAll(
-                ClassScheduleSpecification.forModuleClasses(classesById.keySet()), Sort.by("id"));
+                ClassScheduleSpecification.notDeletedAndModuleClassIdIn(classesById.keySet()), Sort.by("id"));
         schedules.forEach(schedule -> {
             schedule.setDeleted(true);
             schedule.setUpdatedAt(now());

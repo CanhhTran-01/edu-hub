@@ -151,6 +151,17 @@ public class SemesterApplicationService {
 
         // TODO: đổi ngày đăng kí thì sao ? - ở use-case mở đăng ký
 
+        boolean registrationDatesChanged = !semester.getRegistrationStart().equals(request.getRegistrationStart())
+                || !semester.getRegistrationEnd().equals(request.getRegistrationEnd());
+        if (registrationDatesChanged
+                && moduleClassRepository.existsBySemester_IdAndStatusInAndDeletedFalse(
+                        semesterId,
+                        List.of(ModuleClassStatus.OPEN, ModuleClassStatus.CLOSED, ModuleClassStatus.COMPLETED)))
+            throw new SemesterException(ErrorCode.REGISTRATION_PERIOD_IN_USE);
+
+        // TODO(REGISTRATION_EXTENSION): Gia hạn/mở lại phải có use-case riêng để đồng bộ ngày đăng ký,
+        //  trạng thái CLOSED và điều kiện danh sách; đổi ngày đơn thuần không tự mở lại lớp.
+
         // date chưa bị thay đổi, phải được xác nhận từ client, kì chưa có lớp hoặc có nhưng đã hủy thì mới update được
         if (datesChanged
                 && !request.isConfirmDateChange()
@@ -167,7 +178,7 @@ public class SemesterApplicationService {
                     .toList();
             if (!classIds.isEmpty()) {
                 var schedules = classScheduleRepository.findAll(
-                        ClassScheduleSpecification.forModuleClasses(classIds), Sort.by("id"));
+                        ClassScheduleSpecification.notDeletedAndModuleClassIdIn(classIds), Sort.by("id"));
                 boolean outsideDates = schedules.stream()
                         .flatMap(schedule ->
                                 TimetablePolicy.occurrenceDates(TimetableSnapshotService.toExistingSession(schedule))
