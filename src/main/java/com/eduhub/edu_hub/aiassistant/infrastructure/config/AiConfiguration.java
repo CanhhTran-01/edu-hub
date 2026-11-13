@@ -13,6 +13,10 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 @EnableConfigurationProperties(AiRagProperties.class)
 public class AiConfiguration {
+    /**
+     * ChatClient dùng cho trợ lý học vụ. Memory advisor cung cấp lịch sử PostgreSQL, còn QuestionAnswerAdvisor bổ sung
+     * các đoạn tài liệu liên quan theo cấu hình eduhub.ai.rag.*.
+     */
     @Bean
     ChatClient aiAssistantChatClient(
             ChatClient.Builder builder, ChatMemory chatMemory, VectorStore vectorStore, AiRagProperties properties) {

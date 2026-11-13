@@ -24,7 +24,7 @@ public class PostgresChatMemoryAdapter implements ChatMemory {
 
     @Override
     public void add(String conversationId, List<Message> messages) {
-        // AiChatService is the single writer. The advisor must never persist messages.
+        // Cố ý no-op: AiChatService là nơi duy nhất ghi message, advisor không được tạo bản ghi trùng.
     }
 
     @Override
@@ -36,6 +36,7 @@ public class PostgresChatMemoryAdapter implements ChatMemory {
         } catch (NumberFormatException exception) {
             return List.of();
         }
+        // Lấy N tin mới nhất bằng index (session_id, id DESC), rồi đảo lại để prompt đi từ cũ đến mới.
         List<ChatMessage> stored = new ArrayList<>(messageRepository.findBySessionIdAndDeletedFalseOrderByIdDesc(
                 sessionId, PageRequest.of(0, properties.getMemoryMessageLimit())));
         Collections.reverse(stored);
@@ -44,7 +45,7 @@ public class PostgresChatMemoryAdapter implements ChatMemory {
 
     @Override
     public void clear(String conversationId) {
-        // Conversation history is owned by AiChatService and is not deleted by an advisor.
+        // Cố ý no-op: vòng đời lịch sử thuộc application service, không thuộc advisor.
     }
 
     private Message toSpringMessage(ChatMessage message) {

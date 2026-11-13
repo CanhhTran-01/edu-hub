@@ -17,6 +17,7 @@ public class PgVectorKnowledgeDocumentAdapter implements KnowledgeDocumentPort {
 
     @Override
     public void replace(String sourceTitle, List<KnowledgeChunk> chunks) {
+        // Dùng expression builder để filename được bind an toàn, không ghép chuỗi filter thủ công.
         FilterExpressionBuilder filters = new FilterExpressionBuilder();
         vectorStore.delete(filters.eq("source", sourceTitle).build());
         vectorStore.add(

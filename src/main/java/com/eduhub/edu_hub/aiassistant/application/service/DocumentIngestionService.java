@@ -28,10 +28,12 @@ public class DocumentIngestionService {
         validate(file);
         String sourceTitle = file.getOriginalFilename().trim();
         try {
+            // MVP chỉ nhận TXT UTF-8; chunker giữ ranh giới Điều và tách tiếp Điều quá dài.
             String content = new String(file.getBytes(), StandardCharsets.UTF_8);
             if (content.isBlank()) throw new AiAssistantException(ErrorCode.INVALID_AI_DOCUMENT);
             List<KnowledgeDocumentPort.KnowledgeChunk> chunks = chunkingPort.chunk(content);
             if (chunks.isEmpty()) throw new AiAssistantException(ErrorCode.INVALID_AI_DOCUMENT);
+            // Thay toàn bộ vector cùng source để không trộn nội dung của nhiều phiên bản file.
             documentPort.replace(sourceTitle, chunks);
             return new DocumentUploadResponse(sourceTitle, chunks.size());
         } catch (IOException exception) {

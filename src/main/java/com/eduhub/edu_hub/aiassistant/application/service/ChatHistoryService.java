@@ -52,6 +52,7 @@ public class ChatHistoryService {
         ChatSession session = ownedSession(sessionId, user.getId());
         List<ChatMessage> messages = messageRepository.findBySessionIdAndDeletedFalseOrderByIdAsc(session.getId());
         List<Long> messageIds = messages.stream().map(ChatMessage::getId).toList();
+        // Đọc citation theo lô rồi nhóm theo message, tránh một truy vấn riêng cho từng câu trả lời.
         Map<Long, List<ChatCitation>> citations = messageIds.isEmpty()
                 ? Map.of()
                 : citationRepository.findByMessageIdInAndDeletedFalseOrderByIdAsc(messageIds).stream()
@@ -101,6 +102,7 @@ public class ChatHistoryService {
 
     private ChatSession ownedSession(String sessionId, Long userId) {
         try {
+            // Không dùng findById đơn lẻ để không làm lộ session có tồn tại nhưng thuộc sinh viên khác.
             return sessionRepository
                     .findByIdAndUserIdAndDeletedFalse(Long.valueOf(sessionId), userId)
                     .orElseThrow(() -> new AiAssistantException(ErrorCode.CHAT_SESSION_NOT_FOUND));

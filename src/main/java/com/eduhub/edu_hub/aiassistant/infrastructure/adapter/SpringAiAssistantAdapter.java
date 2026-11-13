@@ -21,6 +21,7 @@ public class SpringAiAssistantAdapter implements AiAssistantPort {
 
     @Override
     public Answer answer(String message, String conversationId) {
+        // conversationId là session đã được application service xác minh ownership trước khi gọi adapter.
         ChatClientResponse response = chatClient
                 .prompt()
                 .user(message)
@@ -28,6 +29,7 @@ public class SpringAiAssistantAdapter implements AiAssistantPort {
                 .call()
                 .chatClientResponse();
 
+        // Citation lấy đúng từ advisor context; không search VectorStore lần hai vì có thể lệch khỏi prompt.
         List<Document> documents = retrievedDocuments(response);
         String content =
                 response.chatResponse() == null || response.chatResponse().getResult() == null
@@ -49,6 +51,7 @@ public class SpringAiAssistantAdapter implements AiAssistantPort {
 
     private Citation citation(Document document) {
         Map<String, Object> metadata = document.getMetadata();
+        // source/sectionTitle được gắn lúc ingest; nội dung chunk là snippet đã dùng làm ngữ cảnh.
         return new Citation(
                 stringValue(metadata.get("source")),
                 stringValue(metadata.get("sectionTitle")),

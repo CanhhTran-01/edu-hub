@@ -37,6 +37,8 @@ public class AiChatService {
         UserInfoResponse user = accessService.requireStudent(jwt);
         ChatSession session = resolveSession(request.getSessionId(), user.getId());
 
+        // Luôn gọi ChatClient trước; application service không tự search VectorStore. Adapter trả đúng các document
+        // mà QuestionAnswerAdvisor đã dùng để tạo prompt.
         AiAssistantPort.Answer answer =
                 assistantPort.answer(request.getMessage(), session.getId().toString());
         boolean hasContext = !answer.citations().isEmpty();
@@ -44,6 +46,8 @@ public class AiChatService {
         String content = hasContext ? answer.content() : properties.getFallbackMessage();
         List<AiAssistantPort.Citation> citations = hasContext ? answer.citations() : List.of();
 
+        // Chỉ service này ghi lịch sử. Lưu user message sau khi LLM trả về để câu hỏi hiện tại không xuất hiện hai lần
+        // trong prompt do memory advisor đọc lại từ PostgreSQL.
         messageRepository.save(new ChatMessage(session, ChatMessageRole.USER, request.getMessage(), null));
         ChatMessage assistantMessage =
                 messageRepository.save(new ChatMessage(session, ChatMessageRole.ASSISTANT, content, intent));
@@ -73,6 +77,7 @@ public class AiChatService {
             return sessionRepository.save(new ChatSession(userId));
         }
         try {
+            // Luôn lọc theo cả sessionId và userId; session của người khác cũng được trả về như không tồn tại.
             return sessionRepository
                     .findByIdAndUserIdAndDeletedFalse(Long.valueOf(requestedSessionId), userId)
                     .orElseThrow(() -> new AiAssistantException(ErrorCode.CHAT_SESSION_NOT_FOUND));
