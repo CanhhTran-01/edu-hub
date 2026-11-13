@@ -11,9 +11,9 @@ SELECT seed.username, seed.email,
        CURRENT_TIMESTAMP AT TIME ZONE 'UTC', CURRENT_TIMESTAMP AT TIME ZONE 'UTC',
        'postman-seed', 'postman-seed'
 FROM (VALUES
-    ('postman_academic_admin', 'postman-academic-admin@example.test', 'ACADEMIC_ADMIN'),
-    ('postman_lecturer', 'postman-lecturer@example.test', 'LECTURER'),
-    ('postman_student', 'postman-student@example.test', 'STUDENT')
+    ('academic_admin', 'postman-academic-admin@example.test', 'ACADEMIC_ADMIN'),
+    ('lecturer', 'postman-lecturer@example.test', 'LECTURER'),
+    ('student', 'postman-student@example.test', 'STUDENT')
 ) AS seed(username, email, role_name)
 JOIN roles role ON role.role_name = seed.role_name AND role.is_deleted = FALSE
 ON CONFLICT (username) DO NOTHING;

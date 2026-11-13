@@ -16,14 +16,16 @@ import org.springframework.web.bind.annotation.*;
 public class AdministrativeClassController {
     private final AdmissionClassPreparationService classPreparationService;
 
-    // Xem các lớp hiện có
+    // TODO: phía FE cần làm dropdown hiển thị list các kịch bản đã tạo do BE trả về (bước 5)
+
+    // 5. Lôi các kịch bản đã tạo lên
     @GetMapping
     public ApiResponse<List<AdministrativeClassResponse>> listAdministrativeClasses(
             @RequestParam Long majorId, @RequestParam Long cohortId) {
         return ApiResponse.success(classPreparationService.listAdministrativeClasses(majorId, cohortId));
     }
 
-    // Chọn kịch bản và chuẩn bị lớp
+    // 6. Chọn kịch bản ưng ý (nên theo đề xuất) và chuẩn bị lớp
     @PostMapping("/from-admission-plan")
     public ApiResponse<AdmissionPlanResponse> prepareClasses(
             @Valid @RequestBody PrepareAdmissionClassesRequest request) {

@@ -33,6 +33,8 @@ public class StudentAdmissionController {
     private final AdmissionConfirmationService confirmationService;
     private final AdmissionNotificationQueryService notificationQueryService;
 
+    // TODO: phần lấy cấu hình mặc định sẽ được làm ngầm sau khi tích hợp SystemParamConfig
+
     // 1. Lấy cấu hình mặc định: sĩ số tối đa, sĩ số tối thiểu, suất dự bị
     @GetMapping("/configuration")
     public ApiResponse<AdmissionCapacityResponse> getDefaultCapacityConfiguration() {
@@ -49,14 +51,13 @@ public class StudentAdmissionController {
                 .body(planningService.generateImportTemplate(majorId, cohortId));
     }
 
-    // 3. Lập phương án từ số sinh viên dự kiến
-    // Dùng khi Admin đã biết số lượng dự kiến nhưng chưa có DS chi tiết. Chưa tạo lớp, sinh viên, tài khoản
+    // 3a. Nhánh A: Lập phương án nhập học từ số lượng sinh viên dự kiến
     @PostMapping("/plans")
     public ApiResponse<AdmissionPlanResponse> createPlan(@Valid @RequestBody CreateAdmissionPlanRequest request) {
         return ApiResponse.success(planningService.createPlan(request));
     }
 
-    // 4. Lập phương án mới từ file tuyển sinh
+    // 3b. Nhánh B: Lập phương án nhập học từ danh sách thực tế được import
     @PostMapping(value = "/plans/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<AdmissionPlanResponse> createPlanFromFile(
             @RequestParam Long majorId,
@@ -69,14 +70,13 @@ public class StudentAdmissionController {
                 majorId, cohortId, minCapacity, maxCapacity, reserveCapacity, file)));
     }
 
-    // 5. Xem lại plan
+    // 4. Xem lại kịch bản
     @GetMapping("/plans/{id}")
     public ApiResponse<AdmissionPlanResponse> getPlan(@PathVariable("id") Long planId) {
         return ApiResponse.success(planningService.getPlan(planId));
     }
 
-    // 6. Nhập danh sách vào plan đã có
-    // sử dụng plan hiện có, không tạo mới, hồ sơ đã nhập học thành công được giữ nguyên khi xử lý phần nhập lại
+    // 7. Nhập danh sách vào plan
     @PostMapping(value = "/plans/{id}/applicants", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<AdmissionPlanResponse> importApplicants(
             @PathVariable("id") Long planId, @RequestParam long expectedRevision, @RequestParam MultipartFile file) {
@@ -84,28 +84,28 @@ public class StudentAdmissionController {
                 importService.importApplicants(planId, new ImportAdmissionApplicantsRequest(expectedRevision, file)));
     }
 
-    // 7. Chạy phân bổ và tạo bản xem trước
+    // 8. Chạy phân bổ học sinh vào các lớp theo plan và xem trước kết quả phân bổ
     @PostMapping("/plans/{id}/allocation/preview")
     public ApiResponse<AdmissionPlanResponse> previewAllocation(
             @PathVariable("id") Long planId, @Valid @RequestBody PreviewAdmissionAllocationRequest request) {
         return ApiResponse.success(allocationService.previewAllocation(planId, request));
     }
 
-    // 8. Điều chỉnh phân bổ thủ công
+    // 9. Điều chỉnh kết quả phân bổ thủ công
     @PatchMapping("/plans/{id}/allocation")
     public ApiResponse<AdmissionPlanResponse> adjustAssignments(
             @PathVariable("id") Long planId, @Valid @RequestBody AdjustAdmissionAssignmentsRequest request) {
         return ApiResponse.success(allocationService.adjustAssignments(planId, request));
     }
 
-    // 9. Xác nhận nhập học chính thức
+    // 10. Chốt kết quả phân bổ
     @PostMapping("/plans/{id}/confirm")
     public ApiResponse<AdmissionConfirmationResponse> confirmEnrollment(
             @PathVariable("id") Long planId, @Valid @RequestBody ConfirmAdmissionEnrollmentRequest request) {
         return ApiResponse.success(confirmationService.confirmEnrollment(planId, request));
     }
 
-    // 10. Xem kết quả gửi thông báo
+    // 11. xem kết quả gửi thông báo sau khi đã chốt kết quả phân bổ
     @GetMapping("/plans/{id}/notifications")
     public ApiResponse<List<AdmissionNotificationResponse>> listPlanNotifications(@PathVariable("id") Long planId) {
         planningService.getPlan(planId);
