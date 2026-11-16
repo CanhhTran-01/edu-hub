@@ -18,9 +18,13 @@ class EnrollmentMappingTest {
                 .applySetting("hibernate.dialect", "org.hibernate.dialect.PostgreSQLDialect")
                 .build();
         try (var migration = getClass()
-                .getResourceAsStream("/db/migration/V20261113055035__implement_module_class_enrollment.sql")) {
+                        .getResourceAsStream("/db/migration/V20261113055035__implement_module_class_enrollment.sql");
+                var noteMigration = getClass()
+                        .getResourceAsStream("/db/migration/V20261116134626__add_enrollment_process_score_note.sql")) {
             assertThat(migration).isNotNull();
-            String migrationSql = new String(migration.readAllBytes(), StandardCharsets.UTF_8);
+            assertThat(noteMigration).isNotNull();
+            String migrationSql = new String(migration.readAllBytes(), StandardCharsets.UTF_8) + "\n"
+                    + new String(noteMigration.readAllBytes(), StandardCharsets.UTF_8);
             var metadata = new MetadataSources(registry)
                     .addAnnotatedClass(Enrollment.class)
                     .getMetadataBuilder()
@@ -30,7 +34,7 @@ class EnrollmentMappingTest {
             assertThat(table.getName()).isEqualTo("enrollments");
             assertThat(table.getColumns()).isNotEmpty().allSatisfy(column -> assertThat(migrationSql)
                     .as("Cột được Hibernate ánh xạ: %s", column.getName())
-                    .containsPattern("(?m)^\\s+" + Pattern.quote(column.getName()) + "\\s"));
+                    .containsPattern("(?m)(?:^\\s+|ADD COLUMN\\s+)" + Pattern.quote(column.getName()) + "\\s"));
         } finally {
             StandardServiceRegistryBuilder.destroy(registry);
         }

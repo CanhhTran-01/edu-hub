@@ -6,7 +6,6 @@ import com.eduhub.edu_hub.scheduling.domain.model.ModuleClass;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.Locale;
-
 import lombok.NoArgsConstructor;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringUtils;

@@ -166,6 +166,10 @@ public enum ErrorCode {
     // Academic
     GRADE_LOCKED(4501, "Điểm đã bị khóa", HttpStatus.BAD_REQUEST),
     INVALID_SCORE(4502, "Điểm không hợp lệ", HttpStatus.BAD_REQUEST),
+    PROCESS_SCORE_CLASS_NOT_READY(
+            4503, "Chỉ nhập điểm cho lớp đã chốt danh sách hoặc kết thúc giảng dạy", HttpStatus.CONFLICT),
+    PROCESS_SCORE_IMPORT_INVALID(4504, "Tệp điểm quá trình không hợp lệ", HttpStatus.BAD_REQUEST),
+    PROCESS_SCORE_TEMPLATE_FAILED(4505, "Không tạo được mẫu điểm quá trình", HttpStatus.INTERNAL_SERVER_ERROR),
 
     // AI
     KNOWLEDGE_SOURCE_NOT_FOUND(4601, "Không tìm thấy nguồn tri thức", HttpStatus.NOT_FOUND),

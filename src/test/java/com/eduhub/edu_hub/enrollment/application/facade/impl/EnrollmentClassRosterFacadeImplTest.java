@@ -66,6 +66,17 @@ class EnrollmentClassRosterFacadeImplTest {
                         .isEqualTo(ErrorCode.ENROLLMENT_DATA_INCOMPLETE));
     }
 
+    @Test
+    void readsTheNoteStoredOnTheLearningAttempt() {
+        var enrollment = enrollment(10L, 1L, EnrollmentStatus.REGISTERED);
+        enrollment.updateProcessScores(BigDecimal.ZERO, null, null, "Đã đối chiếu bài tập", null);
+        when(repository.findAllByModuleClassIdAndDeletedFalseAndStatusInOrderByIdAsc(100L, ROSTER_STATUSES))
+                .thenReturn(List.of(enrollment));
+        when(people.findRosterStudentsByIds(Set.of(1L)))
+                .thenReturn(List.of(new StudentRosterProfileResponse(1L, "00001", "Nguyễn Văn Một")));
+        assertThat(facade.findStudentsByModuleClassId(100L).getFirst().note()).isEqualTo("Đã đối chiếu bài tập");
+    }
+
     private Enrollment enrollment(Long enrollmentId, Long studentId, EnrollmentStatus status) {
         var enrollment = Enrollment.builder()
                 .studentId(studentId)

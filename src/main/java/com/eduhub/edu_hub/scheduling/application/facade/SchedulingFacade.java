@@ -1,12 +1,20 @@
 package com.eduhub.edu_hub.scheduling.application.facade;
 
 import com.eduhub.edu_hub.scheduling.api.dto.response.ClassScheduleConflictResponse;
+import com.eduhub.edu_hub.scheduling.api.dto.response.ModuleClassGradingResponse;
 import com.eduhub.edu_hub.scheduling.api.dto.response.ModuleClassResponse;
 import com.eduhub.edu_hub.scheduling.api.dto.response.SemesterResponse;
 import java.util.List;
 import java.util.Set;
 
 public interface SchedulingFacade {
+
+    interface Grading {
+        ModuleClassGradingResponse findModuleClassForGrading(Long moduleClassId);
+
+        /** Khóa đọc kỳ rồi khóa ghi lớp trong transaction của consumer, không kiểm tra thời gian đăng ký. */
+        ModuleClassGradingResponse lockModuleClassForGrading(Long moduleClassId);
+    }
 
     interface Registration {
         List<ClassScheduleConflictResponse> findScheduleConflicts(Long targetClassId, Set<Long> registeredClassIds);
