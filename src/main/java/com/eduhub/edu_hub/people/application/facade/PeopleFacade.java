@@ -3,6 +3,7 @@ package com.eduhub.edu_hub.people.application.facade;
 import com.eduhub.edu_hub.people.api.dto.response.AccountProfileContactResponse;
 import com.eduhub.edu_hub.people.api.dto.response.EnrollmentStudentResponse;
 import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
+import com.eduhub.edu_hub.people.api.dto.response.StudentRosterProfileResponse;
 import com.eduhub.edu_hub.people.api.dto.response.TimetableLecturerResponse;
 import com.eduhub.edu_hub.people.application.facade.dto.*;
 import java.util.List;
@@ -11,6 +12,9 @@ import java.util.Set;
 
 public interface PeopleFacade {
     interface Enrollment {
+        /** Giữ hồ sơ lịch sử, kể cả đã ẩn/ngừng học, khi lượt đăng ký vẫn thuộc danh sách lớp. */
+        List<StudentRosterProfileResponse> findRosterStudentsByIds(Set<Long> studentIds);
+
         EnrollmentStudentResponse findStudentByUserId(Long userId);
 
         EnrollmentStudentResponse lockStudentByUserId(Long userId);
@@ -57,6 +61,9 @@ public interface PeopleFacade {
     }
 
     interface Scheduling {
+        /** Lecturer ID của hồ sơ chưa xóa gắn với User ID đã được consumer xác thực. */
+        Optional<Long> findLecturerIdByUserId(Long userId);
+
         List<TimetableLecturerResponse> findEligibleLecturers(Set<Long> subjectIds);
 
         List<TimetableLecturerResponse> lockLecturersForTimetabling(Set<Long> lecturerIds);

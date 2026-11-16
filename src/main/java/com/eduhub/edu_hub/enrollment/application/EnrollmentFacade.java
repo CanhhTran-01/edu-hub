@@ -2,6 +2,7 @@ package com.eduhub.edu_hub.enrollment.application;
 
 import com.eduhub.edu_hub.enrollment.api.dto.response.EnrollmentResponse;
 import com.eduhub.edu_hub.enrollment.api.dto.response.EnrollmentScopeResponse;
+import com.eduhub.edu_hub.enrollment.api.dto.response.ModuleClassStudentResponse;
 import com.eduhub.edu_hub.enrollment.application.facade.dto.LearningHistoryResponse;
 import com.eduhub.edu_hub.enrollment.application.facade.dto.ModuleClassUsageResponse;
 import java.util.List;
@@ -9,6 +10,11 @@ import java.util.Optional;
 import java.util.Set;
 
 public interface EnrollmentFacade {
+    interface ClassRoster {
+        /** REGISTERED/COMPLETED/FAILED chưa xóa, kèm danh tính hiện tại và điểm đã lưu; không gọi ngược Scheduling. */
+        List<ModuleClassStudentResponse> findStudentsByModuleClassId(Long moduleClassId);
+    }
+
     /** Contract đọc cho scheduling; chưa đăng ký bean cho tới khi có nguồn Enrollment thật. */
     interface Planning {
         EnrollmentScopeResponse findScope();

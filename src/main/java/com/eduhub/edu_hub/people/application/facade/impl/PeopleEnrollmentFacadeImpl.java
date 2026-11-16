@@ -1,6 +1,7 @@
 package com.eduhub.edu_hub.people.application.facade.impl;
 
 import com.eduhub.edu_hub.people.api.dto.response.EnrollmentStudentResponse;
+import com.eduhub.edu_hub.people.api.dto.response.StudentRosterProfileResponse;
 import com.eduhub.edu_hub.people.application.exception.StudentProfileException;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.domain.model.Student;
@@ -17,6 +18,19 @@ import org.springframework.transaction.annotation.*;
 public class PeopleEnrollmentFacadeImpl implements PeopleFacade.Enrollment {
     private final StudentRepository studentRepository;
     private final jakarta.persistence.EntityManager entityManager;
+
+    @Override
+    public List<StudentRosterProfileResponse> findRosterStudentsByIds(Set<Long> studentIds) {
+        // Chỉ đọc ba trường cần hiển thị; chia lô để không tạo một mệnh đề IN quá lớn.
+        var orderedStudentIds = studentIds.stream().sorted().toList();
+        var profiles = new ArrayList<StudentRosterProfileResponse>();
+        final int profileBatchSize = 500;
+        for (int startIndex = 0; startIndex < orderedStudentIds.size(); startIndex += profileBatchSize) {
+            profiles.addAll(studentRepository.findRosterProfilesByIds(orderedStudentIds.subList(
+                    startIndex, Math.min(startIndex + profileBatchSize, orderedStudentIds.size()))));
+        }
+        return profiles;
+    }
 
     @Override
     public EnrollmentStudentResponse findStudentByUserId(Long userId) {

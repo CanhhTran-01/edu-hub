@@ -142,6 +142,8 @@ public enum ErrorCode {
     MODULE_CLASS_PUBLICATION_INVALID(4340, "Các lớp được chọn chưa đủ điều kiện công bố", HttpStatus.CONFLICT),
     REGISTRATION_PERIOD_IN_USE(
             4341, "Không được đổi khoảng đăng ký khi kỳ có lớp đã công bố hoặc chốt", HttpStatus.CONFLICT),
+    MODULE_CLASS_EXPORT_FAILED(
+            4342, "Không thể tạo tệp danh sách sinh viên, vui lòng thử lại", HttpStatus.INTERNAL_SERVER_ERROR),
 
     // Enrollment
     ENROLLMENT_NOT_FOUND(4401, "Không tìm thấy đăng ký", HttpStatus.NOT_FOUND),

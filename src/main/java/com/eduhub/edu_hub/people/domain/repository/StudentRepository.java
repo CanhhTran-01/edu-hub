@@ -1,6 +1,7 @@
 package com.eduhub.edu_hub.people.domain.repository;
 
 import com.eduhub.edu_hub.people.api.dto.response.AccountProfileContactResponse;
+import com.eduhub.edu_hub.people.api.dto.response.StudentRosterProfileResponse;
 import com.eduhub.edu_hub.people.domain.model.Student;
 import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import java.util.List;
@@ -13,6 +14,11 @@ import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
 public interface StudentRepository extends JpaRepository<Student, Long>, JpaSpecificationExecutor<Student> {
+    @Query("select new com.eduhub.edu_hub.people.api.dto.response.StudentRosterProfileResponse("
+            + "student.id, student.studentCode, student.fullName) from Student student where student.id in :studentIds")
+    List<StudentRosterProfileResponse> findRosterProfilesByIds(
+            @Param("studentIds") java.util.Collection<Long> studentIds);
+
     List<Student> findByCitizenIdIn(List<String> citizenIds);
 
     Optional<Student> findByCitizenIdAndDeletedFalse(String citizenId);

@@ -2,6 +2,7 @@ package com.eduhub.edu_hub.shared.config;
 
 import org.jspecify.annotations.NonNull;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -13,6 +14,7 @@ public class WebCorsConfig implements WebMvcConfigurer {
                 .allowedOriginPatterns("*") // 2. Chỉ định rõ các domain FE được phép gọi API
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS") // 3. Các HTTP Method được phép gọi
                 .allowedHeaders("*") // 4. Cho phép tất cả các header trong request
+                .exposedHeaders(HttpHeaders.CONTENT_DISPOSITION)
                 .allowCredentials(true) // 5. Cho phép Frontend gửi thông tin xác thực
                 .maxAge(3600); // 6. Time lưu cache cho "Preflight Request"
     }

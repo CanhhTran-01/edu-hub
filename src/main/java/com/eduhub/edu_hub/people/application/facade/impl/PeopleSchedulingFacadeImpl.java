@@ -33,6 +33,11 @@ public class PeopleSchedulingFacadeImpl implements PeopleFacade.Scheduling {
     private final LecturerTeachingSubjectRepository teachingSubjectRepository;
 
     @Override
+    public java.util.Optional<Long> findLecturerIdByUserId(Long userId) {
+        return lecturerRepository.findLecturerIdByUserId(userId);
+    }
+
+    @Override
     public List<TimetableLecturerResponse> findEligibleLecturers(Set<Long> subjectIds) {
         if (subjectIds.isEmpty()) return List.of();
         return toTimetableLecturers(lecturerRepository.findTimetableCandidates(subjectIds, LecturerStatus.ACTIVE));

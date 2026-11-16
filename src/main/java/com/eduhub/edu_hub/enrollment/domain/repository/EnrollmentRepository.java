@@ -20,6 +20,9 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 
     List<Enrollment> findAllByModuleClassIdOrderByIdAsc(Long moduleClassId);
 
+    List<Enrollment> findAllByModuleClassIdAndDeletedFalseAndStatusInOrderByIdAsc(
+            Long moduleClassId, Collection<EnrollmentStatus> statuses);
+
     Optional<Enrollment> findByIdAndStudentIdAndDeletedFalse(Long enrollmentId, Long studentId);
 
     long countByModuleClassIdAndStatusAndDeletedFalse(Long moduleClassId, EnrollmentStatus status);

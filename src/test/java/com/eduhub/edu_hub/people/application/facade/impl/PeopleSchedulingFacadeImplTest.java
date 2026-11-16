@@ -39,6 +39,13 @@ class PeopleSchedulingFacadeImplTest {
     private PeopleSchedulingFacadeImpl facade;
 
     @Test
+    void resolvesLecturerIdFromUserIdWithoutLoadingAccountOrTeachingSubjects() {
+        when(lecturerRepository.findLecturerIdByUserId(9L)).thenReturn(Optional.of(201L));
+        assertThat(facade.findLecturerIdByUserId(9L)).contains(201L);
+        verifyNoInteractions(students, lecturers, teachingSubjectRepository);
+    }
+
+    @Test
     void loadsTeachingCandidatesWithoutStudentOrAccountQueries() {
         var lecturer = Lecturer.builder()
                 .fullName("Giảng viên")

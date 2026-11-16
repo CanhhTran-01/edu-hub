@@ -16,6 +16,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface LecturerRepository extends JpaRepository<Lecturer, Long>, JpaSpecificationExecutor<Lecturer> {
+    @Query("select lecturer.id from Lecturer lecturer where lecturer.userId = :userId and lecturer.deleted = false")
+    Optional<Long> findLecturerIdByUserId(@Param("userId") Long userId);
+
     @Query(
             "select distinct lecturer from Lecturer lecturer, LecturerTeachingSubject teaching "
                     + "where teaching.lecturerId = lecturer.id and teaching.subjectId in :subjectIds "
