@@ -63,8 +63,7 @@ public class AdmissionClassPreparationService {
         if (applicantRepository.findByPlan_IdOrderByRowNumber(plan.getId()).stream()
                 .anyMatch(applicant -> applicant.getState() == AdmissionApplicantStatus.ENROLLED))
             throw new AdmissionPlanException(ErrorCode.ADMISSION_INVALID_STATE);
-        if (plan.getTotalStudents() == 0)
-            throw new AdmissionPlanException(ErrorCode.VALIDATION_ERROR);
+        if (plan.getTotalStudents() == 0) throw new AdmissionPlanException(ErrorCode.VALIDATION_ERROR);
         var scenario = capacityPolicy
                 .generateScenarios(
                         plan.getTotalStudents(),

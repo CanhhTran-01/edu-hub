@@ -9,6 +9,10 @@ import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
 public interface ModuleClassRepository extends JpaRepository<ModuleClass, Long>, JpaSpecificationExecutor<ModuleClass> {
+    @Override
+    @EntityGraph(attributePaths = "semester")
+    List<ModuleClass> findAll(org.springframework.data.jpa.domain.Specification<ModuleClass> specification, Sort sort);
+
     @Query("select distinct moduleClass.semester.id from ModuleClass moduleClass "
             + "where moduleClass.deleted = false and moduleClass.semester.deleted = false "
             + "and moduleClass.status in :statuses order by moduleClass.semester.id")

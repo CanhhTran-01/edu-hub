@@ -3,6 +3,7 @@ package com.eduhub.edu_hub.curriculum.api.exception;
 import com.eduhub.edu_hub.curriculum.api.controller.SubjectController;
 import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.exception.PrerequisiteCycleException;
+import com.eduhub.edu_hub.curriculum.application.exception.StudentCurriculumException;
 import com.eduhub.edu_hub.curriculum.application.exception.SubjectHasDependentsException;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
@@ -19,6 +20,13 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice(basePackageClasses = SubjectController.class)
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class CurriculumExceptionHandler {
+    @ExceptionHandler(StudentCurriculumException.class)
+    public ResponseEntity<ApiResponse<Void>> handleStudentCurriculum(
+            StudentCurriculumException exception, HttpServletRequest request) {
+        var error = exception.getErrorCode();
+        return ResponseEntity.status(error.getHttpStatus()).body(ApiResponse.error(error, request.getRequestURI()));
+    }
+
     @ExceptionHandler(com.eduhub.edu_hub.curriculum.application.exception.SubjectException.class)
     public ResponseEntity<ApiResponse<Void>> handleSubject(
             com.eduhub.edu_hub.curriculum.application.exception.SubjectException exception,

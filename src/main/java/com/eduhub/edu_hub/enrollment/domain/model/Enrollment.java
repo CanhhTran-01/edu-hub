@@ -61,6 +61,11 @@ public class Enrollment extends BaseEntity {
     private BigDecimal componentScore2;
 
     private BigDecimal processScore;
+
+    @Builder.Default
+    @Column(nullable = false, length = 500)
+    private String note = "";
+
     private BigDecimal finalExamScore;
 
     @Column(name = "course_score_grade_10")
@@ -78,8 +83,22 @@ public class Enrollment extends BaseEntity {
         setUpdatedAt(droppedAt);
     }
 
-    // TODO(ENROLLMENT_GRADING): Luồng nhập/sửa điểm sẽ kiểm tra Semester.lockedGrade trước mọi thay đổi,
-    //  tính quá trình 0,3*TP1+0,7*TP2 rồi điểm học phần 0,3*quá trình+0,7*thi, HALF_UP một chữ số mỗi bước.
-    //  Chỉ đủ điểm mới quy đổi A+/A/B+/B/C+/C/D+/D/F và cập nhật COMPLETED/FAILED; thiếu điểm giữ null.
+    /** Chỉ thay đổi điểm quá trình và ghi chú; trạng thái lượt học và điểm thi/tổng kết giữ nguyên. */
+    public void updateProcessScores(
+            BigDecimal componentScore1,
+            BigDecimal componentScore2,
+            BigDecimal processScore,
+            String note,
+            LocalDateTime updatedAt) {
+        this.componentScore1 = componentScore1;
+        this.componentScore2 = componentScore2;
+        this.processScore = processScore;
+        this.note = note;
+        setUpdatedAt(updatedAt);
+    }
+
+    // TODO(FINAL_EXAM_GRADING): UC nhập điểm thi sẽ tính điểm học phần khi đủ quá trình và điểm thi:
+    //  0,3*quá trình+0,7*thi, HALF_UP một chữ số; quy đổi hệ điểm và cập nhật COMPLETED/FAILED
+    //  theo quy chế đã chốt. Hiện nhập điểm quá trình không thay điểm thi, tổng kết hoặc trạng thái lượt học.
     //  Lớp hết lịch giảng dạy không tự tạo điểm hoặc xác nhận sinh viên đã đạt môn.
 }

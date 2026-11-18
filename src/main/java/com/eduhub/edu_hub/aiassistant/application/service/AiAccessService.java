@@ -25,7 +25,8 @@ public class AiAccessService {
 
     private UserInfoResponse requireRole(Jwt jwt, RoleName requiredRole) {
         UserInfoResponse user = identityFacade.requireCurrentUser(jwt);
-        if (!UserStatus.ACTIVE.name().equals(user.getStatus()) || !requiredRole.name().equals(user.getRole())) {
+        if (!UserStatus.ACTIVE.name().equals(user.getStatus())
+                || !requiredRole.name().equals(user.getRole())) {
             throw new BaseException(ErrorCode.UNAUTHORIZED);
         }
         return user;

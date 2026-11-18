@@ -90,4 +90,22 @@ class ModuleClassSpreadsheetWriterTest {
             assertThat(sheet.getRow(10).getCell(0).getStringCellValue()).isEqualTo("Chưa có sinh viên đăng ký");
         }
     }
+
+    @Test
+    void writesStoredNotesAsLiteralText() throws Exception {
+        var student = new ModuleClassStudentResponse(
+                10L, 1L, "0000123", "Nguyễn Văn An", null, null, null, "=Ghi chú đã lưu");
+        byte[] spreadsheet = writer.writeStudents(
+                new ModuleClassRosterResponse(moduleClass, List.of(student)),
+                List.of(
+                        ModuleClassExportColumn.STUDENT_CODE,
+                        ModuleClassExportColumn.FULL_NAME,
+                        ModuleClassExportColumn.NOTE),
+                exportedAt);
+        try (var workbook = new XSSFWorkbook(new ByteArrayInputStream(spreadsheet))) {
+            var noteCell = workbook.getSheetAt(0).getRow(9).getCell(2);
+            assertThat(noteCell.getCellType()).isEqualTo(CellType.STRING);
+            assertThat(noteCell.getStringCellValue()).isEqualTo("=Ghi chú đã lưu");
+        }
+    }
 }

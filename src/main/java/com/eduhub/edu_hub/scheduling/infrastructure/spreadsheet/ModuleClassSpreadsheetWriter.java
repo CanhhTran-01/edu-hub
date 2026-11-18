@@ -67,7 +67,7 @@ public class ModuleClassSpreadsheetWriter {
             var identifierStyle = workbook.createCellStyle();
             identifierStyle.setDataFormat(workbook.createDataFormat().getFormat("@"));
             var scoreStyle = workbook.createCellStyle();
-            scoreStyle.setDataFormat(workbook.createDataFormat().getFormat("0.##"));
+            scoreStyle.setDataFormat(workbook.createDataFormat().getFormat("0.###"));
 
             var header = sheet.createRow(HEADER_ROW_INDEX);
             for (int columnIndex = 0; columnIndex < columns.size(); columnIndex++) {
@@ -97,7 +97,10 @@ public class ModuleClassSpreadsheetWriter {
                         case COMPONENT_SCORE_1 -> writeScore(cell, student.componentScore1(), scoreStyle);
                         case COMPONENT_SCORE_2 -> writeScore(cell, student.componentScore2(), scoreStyle);
                         case PROCESS_SCORE -> writeScore(cell, student.processScore(), scoreStyle);
-                        case NOTE -> cell.setBlank();
+                        case NOTE -> {
+                            if (student.note() == null || student.note().isEmpty()) cell.setBlank();
+                            else cell.setCellValue(student.note());
+                        }
                     }
                 }
             }

@@ -20,7 +20,6 @@ import com.eduhub.edu_hub.scheduling.domain.repository.SemesterRepository;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.mapper.PageMapper;
-
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -64,8 +63,8 @@ public class ModuleClassRosterService {
                 ModuleClassSpecification.matchesRosterCriteria(semesterId, actor.lecturerId(), request.getKeyword()),
                 PageRequest.of(request.getPage(), request.getSize(), Sort.by(Sort.Direction.DESC, "id")));
         if (moduleClassPage.isEmpty())
-            return PageMapper.toPageResponse(new PageImpl<>(
-                    List.of(), moduleClassPage.getPageable(), moduleClassPage.getTotalElements()));
+            return PageMapper.toPageResponse(
+                    new PageImpl<>(List.of(), moduleClassPage.getPageable(), moduleClassPage.getTotalElements()));
 
         var subjectsById = curriculumFacade
                 .findSubjectsByIds(moduleClassPage.stream()
