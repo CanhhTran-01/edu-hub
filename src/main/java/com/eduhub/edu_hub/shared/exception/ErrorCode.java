@@ -74,6 +74,8 @@ public enum ErrorCode {
             4123, "Không được gỡ môn còn được dùng trong phân công giảng dạy", HttpStatus.CONFLICT),
     SUBJECT_NOT_FOUND(4201, "Không tìm thấy học phần", HttpStatus.NOT_FOUND),
     CURRICULUM_NOT_FOUND(4202, "Không tìm thấy chương trình đào tạo", HttpStatus.NOT_FOUND),
+    CURRICULUM_DATA_INCOMPLETE(
+            4214, "Lộ trình chương trình đào tạo chưa đầy đủ hoặc không hợp lệ", HttpStatus.SERVICE_UNAVAILABLE),
     PREREQUISITE_CYCLE(4203, "Phát hiện chu trình tiên quyết", HttpStatus.BAD_REQUEST),
     SUBJECT_IN_USE(4204, "Học phần đang được sử dụng", HttpStatus.CONFLICT),
     DUPLICATE_SUBJECT_CODE(4205, "Mã học phần đã tồn tại", HttpStatus.CONFLICT),

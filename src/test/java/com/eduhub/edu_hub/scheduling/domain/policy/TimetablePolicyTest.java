@@ -11,6 +11,20 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class TimetablePolicyTest {
+    @Test
+    void clipsRecurringSchedulesToSelectedWeekAndRetainsLegacySunday() {
+        var sunday = new TimetableProblem.ExistingSession(
+                1L, 100L, 201L, 501L, 8, 2, 4, LocalDate.of(2020, 1, 1), LocalDate.of(2030, 1, 1));
+        assertThat(TimetablePolicy.occurrenceDatesBetween(
+                        sunday, LocalDate.of(2026, 11, 16), LocalDate.of(2026, 11, 22)))
+                .containsExactly(LocalDate.of(2026, 11, 22));
+        assertThat(TimetablePolicy.occurrenceDatesBetween(
+                        sunday, LocalDate.of(2026, 11, 16), LocalDate.of(2026, 11, 21)))
+                .isEmpty();
+        assertThat(TimetablePolicy.occurrenceDatesBetween(sunday, LocalDate.of(2031, 1, 1), LocalDate.of(2031, 1, 7)))
+                .isEmpty();
+    }
+
     @ParameterizedTest
     @CsvSource({"45,15", "46,16", "47,16", "48,16", "1,1", "2147483647,715827883"})
     void roundsSessionCountWithoutOverflow(int periods, int expected) {

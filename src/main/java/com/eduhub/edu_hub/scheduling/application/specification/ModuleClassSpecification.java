@@ -6,12 +6,20 @@ import com.eduhub.edu_hub.scheduling.domain.model.ModuleClass;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.Locale;
+import java.util.Set;
 import lombok.NoArgsConstructor;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringUtils;
 
 @NoArgsConstructor
 public final class ModuleClassSpecification {
+
+    public static Specification<ModuleClass> matchesStudentTimetable(Long semesterId, Set<Long> enrolledClassIds) {
+        return matchesRosterCriteria(semesterId, null, null)
+                .and((root, query, builder) -> enrolledClassIds.isEmpty()
+                        ? builder.disjunction()
+                        : root.get("id").in(enrolledClassIds));
+    }
 
     public static Specification<ModuleClass> matchesRosterCriteria(
             Long semesterId, Long permittedLecturerId, String keyword) {

@@ -1,5 +1,7 @@
 package com.eduhub.edu_hub.curriculum.application.facade;
 
+import com.eduhub.edu_hub.curriculum.api.dto.response.StudentCurriculumResponse;
+import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectPrerequisitesResponse;
 import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectResponse;
 import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.dto.*;
@@ -9,6 +11,12 @@ import java.util.Optional;
 import java.util.Set;
 
 public interface CurriculumFacade {
+    interface Academic {
+        Optional<StudentCurriculumResponse> findCurriculum(Long majorId, Long cohortId, TrainingType trainingType);
+
+        List<SubjectPrerequisitesResponse> findPrerequisitesBySubjectIds(Set<Long> subjectIds);
+    }
+
     interface Registration {
         List<SubjectResponse> requireRegistrationSubjects(Set<Long> subjectIds);
     }

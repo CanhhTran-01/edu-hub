@@ -1,5 +1,6 @@
 package com.eduhub.edu_hub.scheduling.api.exception;
 
+import com.eduhub.edu_hub.scheduling.api.controller.PersonalTimetableController;
 import com.eduhub.edu_hub.scheduling.api.controller.TimetableController;
 import com.eduhub.edu_hub.scheduling.application.exception.TimetableException;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
@@ -12,7 +13,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-@RestControllerAdvice(assignableTypes = TimetableController.class)
+@RestControllerAdvice(assignableTypes = {TimetableController.class, PersonalTimetableController.class})
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class TimetableExceptionHandler {
 

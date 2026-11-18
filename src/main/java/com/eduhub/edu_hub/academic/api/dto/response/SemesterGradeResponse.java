@@ -1,4 +1,4 @@
-package com.eduhub.edu_hub.academic.application.facade.dto;
+package com.eduhub.edu_hub.academic.api.dto.response;
 
 import com.eduhub.edu_hub.enrollment.api.dto.response.EnrollmentResponse;
 import java.math.BigDecimal;

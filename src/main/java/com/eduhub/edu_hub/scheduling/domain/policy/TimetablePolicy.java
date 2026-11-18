@@ -55,6 +55,24 @@ public final class TimetablePolicy {
         return dates;
     }
 
+    /** Chỉ mở rộng phần giao với khoảng cần xem, tránh sinh toàn bộ lịch lặp khi xem một tuần. */
+    public static List<LocalDate> occurrenceDatesBetween(
+            ExistingSession session, LocalDate fromDate, LocalDate toDate) {
+        LocalDate firstDate = session.startDate().isAfter(fromDate) ? session.startDate() : fromDate;
+        LocalDate lastDate = session.endDate().isBefore(toDate) ? session.endDate() : toDate;
+        if (firstDate.isAfter(lastDate)) return List.of();
+        return occurrenceDates(new ExistingSession(
+                session.scheduleId(),
+                session.moduleClassId(),
+                session.lecturerId(),
+                session.roomId(),
+                session.dayOfWeek(),
+                session.lessonOrderStart(),
+                session.lessonOrderEnd(),
+                firstDate,
+                lastDate));
+    }
+
     /** Đối chiếu ngày thực tế và tiết, dùng chung cho công bố và đăng ký; hỗ trợ cả lịch lặp cũ. */
     public static Optional<LocalDate> firstOverlapDate(ExistingSession first, ExistingSession second) {
         if (first.lessonOrderStart() > second.lessonOrderEnd()
