@@ -19,14 +19,13 @@ public class AiAccessService {
         return requireRole(jwt, RoleName.STUDENT);
     }
 
-    public UserInfoResponse requireAcademicAdmin(Jwt jwt) {
-        return requireRole(jwt, RoleName.ACADEMIC_ADMIN);
+    public void requireAcademicAdmin(Jwt jwt) {
+        requireRole(jwt, RoleName.ACADEMIC_ADMIN);
     }
 
     private UserInfoResponse requireRole(Jwt jwt, RoleName requiredRole) {
         UserInfoResponse user = identityFacade.requireCurrentUser(jwt);
-        if (!UserStatus.ACTIVE.name().equals(user.getStatus())
-                || !requiredRole.name().equals(user.getRole())) {
+        if (!UserStatus.ACTIVE.name().equals(user.getStatus()) || !requiredRole.name().equals(user.getRole())) {
             throw new BaseException(ErrorCode.UNAUTHORIZED);
         }
         return user;

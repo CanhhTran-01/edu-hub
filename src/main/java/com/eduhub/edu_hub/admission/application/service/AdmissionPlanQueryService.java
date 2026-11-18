@@ -18,7 +18,7 @@ import com.eduhub.edu_hub.admission.domain.repository.AdmissionApplicantReposito
 import com.eduhub.edu_hub.admission.domain.repository.AdmissionPlanClassRepository;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.application.facade.dto.*;
-import com.eduhub.edu_hub.scheduling.application.SchedulingFacade;
+import com.eduhub.edu_hub.scheduling.application.facade.SchedulingFacade;
 import com.eduhub.edu_hub.shared.exception.*;
 import com.eduhub.edu_hub.shared.text.TextsNormalizer;
 import java.math.*;

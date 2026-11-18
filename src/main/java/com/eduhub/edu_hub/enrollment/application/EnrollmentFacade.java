@@ -1,6 +1,8 @@
 package com.eduhub.edu_hub.enrollment.application;
 
 import com.eduhub.edu_hub.enrollment.api.dto.response.EnrollmentResponse;
+import com.eduhub.edu_hub.enrollment.api.dto.response.EnrollmentScopeResponse;
+import com.eduhub.edu_hub.enrollment.api.dto.response.ModuleClassStudentResponse;
 import com.eduhub.edu_hub.enrollment.application.facade.dto.LearningHistoryResponse;
 import com.eduhub.edu_hub.enrollment.application.facade.dto.ModuleClassUsageResponse;
 import java.util.List;
@@ -8,13 +10,23 @@ import java.util.Optional;
 import java.util.Set;
 
 public interface EnrollmentFacade {
+    interface ClassRoster {
+        /** REGISTERED/COMPLETED/FAILED chưa xóa, kèm danh tính hiện tại và điểm đã lưu; không gọi ngược Scheduling. */
+        List<ModuleClassStudentResponse> findStudentsByModuleClassId(Long moduleClassId);
+    }
+
     /** Contract đọc cho scheduling; chưa đăng ký bean cho tới khi có nguồn Enrollment thật. */
     interface Planning {
+        EnrollmentScopeResponse findScope();
         /** Toàn bộ lịch sử theo môn/kỳ, kể cả DROPPED/đã ẩn. COMPLETED nghĩa là đã đạt. */
         LearningHistoryResponse findLearningHistory(Set<Long> studentIds);
 
         /** Đếm mọi đăng ký theo ID lớp, kể cả DROPPED/soft delete. */
         ModuleClassUsageResponse summarizeModuleClass(Long moduleClassId);
+    }
+
+    interface RegistrationUsage {
+        long countActiveRegistrations(Long moduleClassId);
     }
 
     Optional<EnrollmentResponse> findById(Long enrollmentId);

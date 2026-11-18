@@ -12,6 +12,7 @@ public class SubjectResponse {
     private String subjectCode;
     private String subjectName;
     private int credits;
+    private Integer totalTeachingPeriods;
     private String description;
     private SubjectStatus status;
     private List<SubjectSimpleResponse> prerequisites;

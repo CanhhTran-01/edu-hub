@@ -52,6 +52,7 @@ public class CurriculumTeachingSubjectsFacadeImpl implements CurriculumFacade.Te
                 .subjectCode(subject.getSubjectCode())
                 .subjectName(subject.getSubjectName())
                 .credits(subject.getCredits())
+                .totalTeachingPeriods(subject.getTotalTeachingPeriods())
                 .build();
     }
 }

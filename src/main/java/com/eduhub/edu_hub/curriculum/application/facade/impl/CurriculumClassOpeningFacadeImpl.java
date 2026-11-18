@@ -69,6 +69,7 @@ public class CurriculumClassOpeningFacadeImpl implements CurriculumFacade.ClassO
                 .subjectCode(subject.getSubjectCode())
                 .subjectName(subject.getSubjectName())
                 .credits(subject.getCredits())
+                .totalTeachingPeriods(subject.getTotalTeachingPeriods())
                 .build();
     }
 }

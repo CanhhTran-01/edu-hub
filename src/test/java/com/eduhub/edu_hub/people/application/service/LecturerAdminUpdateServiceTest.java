@@ -45,13 +45,17 @@ class LecturerAdminUpdateServiceTest {
     private final IdentityFacade identityFacade = mock(IdentityFacade.class);
     private final CurriculumFacade.TeachingSubjects curriculumTeachingSubjects =
             mock(CurriculumFacade.TeachingSubjects.class);
+    private final com.eduhub.edu_hub.scheduling.application.facade.SchedulingFacade.TeachingAssignments
+            teachingAssignments =
+                    mock(com.eduhub.edu_hub.scheduling.application.facade.SchedulingFacade.TeachingAssignments.class);
     private final LecturerAdminUpdateService lecturerAdminUpdateService = new LecturerAdminUpdateService(
             lecturerRepository,
             teachingSubjectRepository,
             identityFacade,
             curriculumTeachingSubjects,
             new ProfileAccountEmailService(identityFacade),
-            new LecturerResponseMapper());
+            new LecturerResponseMapper(),
+            teachingAssignments);
     private final Jwt authenticatedJwt = Jwt.withTokenValue("test-token")
             .header("alg", "HS256")
             .subject("academic-admin")
@@ -395,6 +399,20 @@ class LecturerAdminUpdateServiceTest {
         request.setFullName("Trần Văn Bình");
         request.setEmail("new@example.com");
         return request;
+    }
+
+    @Test
+    void blocksRemovingSubjectStillRequiredByAssignedClasses() {
+        when(teachingAssignments.findRequiredTeachingSubjectIds(1L)).thenReturn(Set.of(10L));
+        var request = new UpdateLecturerProfileRequest();
+        request.setTeachingSubjectIds(List.of(30L));
+        assertThatThrownBy(() -> lecturerAdminUpdateService.updateLecturerProfile(authenticatedJwt, 1L, request))
+                .isInstanceOfSatisfying(
+                        LecturerProfileException.class, exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.LECTURER_TEACHING_ASSIGNMENT_IN_USE));
+        verify(lecturerRepository, never()).save(any());
+        verify(teachingSubjectRepository, never()).saveAll(any());
+        verify(identityFacade, never()).updateAccountEmail(any(), any());
     }
 
     private LecturerTeachingSubject teachingLink(Long teachingLinkId, Long subjectId, boolean isDeleted) {

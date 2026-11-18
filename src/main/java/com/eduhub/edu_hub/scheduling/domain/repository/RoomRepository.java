@@ -1,15 +1,18 @@
 package com.eduhub.edu_hub.scheduling.domain.repository;
 
+import com.eduhub.edu_hub.scheduling.domain.enums.RoomStatus;
 import com.eduhub.edu_hub.scheduling.domain.model.Room;
 import jakarta.persistence.LockModeType;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 
 public interface RoomRepository extends JpaRepository<Room, Long>, JpaSpecificationExecutor<Room> {
-    long countByDeletedFalseAndStatusAndCapacityGreaterThanEqual(
-            com.eduhub.edu_hub.scheduling.domain.enums.RoomStatus status, int capacity);
+    List<Room> findAllByDeletedFalseAndStatusOrderByIdAsc(RoomStatus status);
+
+    long countByDeletedFalseAndStatusAndCapacityGreaterThanEqual(RoomStatus status, int capacity);
 
     Optional<Room> findByIdAndDeletedFalse(Long id);
 

@@ -10,6 +10,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
@@ -26,13 +28,15 @@ public class DocumentIngestionService {
     public DocumentUploadResponse upload(Jwt jwt, MultipartFile file) {
         accessService.requireAcademicAdmin(jwt);
         validate(file);
-        String sourceTitle = file.getOriginalFilename().trim();
+        String sourceTitle = Objects.requireNonNull(file.getOriginalFilename()).trim();
         try {
             // MVP chỉ nhận TXT UTF-8; chunker giữ ranh giới Điều và tách tiếp Điều quá dài.
             String content = new String(file.getBytes(), StandardCharsets.UTF_8);
+
             if (content.isBlank()) throw new AiAssistantException(ErrorCode.INVALID_AI_DOCUMENT);
             List<KnowledgeDocumentPort.KnowledgeChunk> chunks = chunkingPort.chunk(content);
             if (chunks.isEmpty()) throw new AiAssistantException(ErrorCode.INVALID_AI_DOCUMENT);
+
             // Thay toàn bộ vector cùng source để không trộn nội dung của nhiều phiên bản file.
             documentPort.replace(sourceTitle, chunks);
             return new DocumentUploadResponse(sourceTitle, chunks.size());

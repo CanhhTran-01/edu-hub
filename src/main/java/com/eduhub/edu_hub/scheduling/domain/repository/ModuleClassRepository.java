@@ -9,6 +9,11 @@ import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
 public interface ModuleClassRepository extends JpaRepository<ModuleClass, Long>, JpaSpecificationExecutor<ModuleClass> {
+    @Query("select distinct moduleClass.semester.id from ModuleClass moduleClass "
+            + "where moduleClass.deleted = false and moduleClass.semester.deleted = false "
+            + "and moduleClass.status in :statuses order by moduleClass.semester.id")
+    List<Long> findSemesterIdsForLifecycle(@Param("statuses") java.util.Collection<ModuleClassStatus> statuses);
+
     @Override
     @EntityGraph(attributePaths = "semester")
     Page<ModuleClass> findAll(
@@ -28,4 +33,6 @@ public interface ModuleClassRepository extends JpaRepository<ModuleClass, Long>,
     List<ModuleClass> findAllBySemester_IdOrderByIdAsc(Long semesterId);
 
     boolean existsBySemester_IdAndStatusNot(Long semesterId, ModuleClassStatus status);
+
+    boolean existsBySemester_IdAndStatusInAndDeletedFalse(Long semesterId, Collection<ModuleClassStatus> statuses);
 }

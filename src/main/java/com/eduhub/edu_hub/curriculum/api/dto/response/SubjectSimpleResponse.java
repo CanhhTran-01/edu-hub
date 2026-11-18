@@ -10,4 +10,5 @@ public class SubjectSimpleResponse {
     private String subjectCode;
     private String subjectName;
     private int credits;
+    private Integer totalTeachingPeriods;
 }

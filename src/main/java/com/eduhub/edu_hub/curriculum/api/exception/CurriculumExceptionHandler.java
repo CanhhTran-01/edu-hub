@@ -19,6 +19,14 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice(basePackageClasses = SubjectController.class)
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class CurriculumExceptionHandler {
+    @ExceptionHandler(com.eduhub.edu_hub.curriculum.application.exception.SubjectException.class)
+    public ResponseEntity<ApiResponse<Void>> handleSubject(
+            com.eduhub.edu_hub.curriculum.application.exception.SubjectException exception,
+            HttpServletRequest request) {
+        var error = exception.getErrorCode();
+        return ResponseEntity.status(error.getHttpStatus()).body(ApiResponse.error(error, request.getRequestURI()));
+    }
+
     @ExceptionHandler(PrerequisiteCycleException.class)
     public ResponseEntity<ApiResponse<Void>> handlePrerequisiteCycle(
             PrerequisiteCycleException exception, HttpServletRequest request) {

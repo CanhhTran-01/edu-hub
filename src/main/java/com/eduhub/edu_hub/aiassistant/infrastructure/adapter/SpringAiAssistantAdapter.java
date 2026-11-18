@@ -38,7 +38,6 @@ public class SpringAiAssistantAdapter implements AiAssistantPort {
         return new Answer(content, documents.stream().map(this::citation).toList());
     }
 
-    @SuppressWarnings("unchecked")
     private List<Document> retrievedDocuments(ChatClientResponse response) {
         Object value = response.context().get(QuestionAnswerAdvisor.RETRIEVED_DOCUMENTS);
         return value instanceof List<?> list

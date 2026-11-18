@@ -16,4 +16,7 @@ public interface SemesterRepository extends JpaRepository<Semester, Long>, JpaSp
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Semester> findForUpdateByIdAndDeletedFalse(Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    Optional<Semester> findForRegistrationByIdAndDeletedFalse(Long id);
 }

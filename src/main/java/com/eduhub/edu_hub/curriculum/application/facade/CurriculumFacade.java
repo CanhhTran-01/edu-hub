@@ -1,5 +1,6 @@
 package com.eduhub.edu_hub.curriculum.application.facade;
 
+import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectResponse;
 import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.dto.*;
 import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
@@ -8,6 +9,9 @@ import java.util.Optional;
 import java.util.Set;
 
 public interface CurriculumFacade {
+    interface Registration {
+        List<SubjectResponse> requireRegistrationSubjects(Set<Long> subjectIds);
+    }
 
     interface TeachingSubjects {
         List<SubjectSimpleResponse> requireActiveTeachingSubjects(Set<Long> subjectIds);

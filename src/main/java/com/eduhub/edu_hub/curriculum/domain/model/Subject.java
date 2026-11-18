@@ -34,6 +34,11 @@ public class Subject extends BaseEntity {
     @Setter
     private int credits;
 
+    // Dữ liệu cũ chưa biết tổng tiết giữ null; bộ xếp lịch yêu cầu bổ sung trước khi chạy.
+    @Column(name = "total_teaching_periods")
+    @Setter
+    private Integer totalTeachingPeriods;
+
     @Column(columnDefinition = "text")
     @Setter
     private String description;

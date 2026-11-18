@@ -11,6 +11,6 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 public interface ClassScheduleRepository
         extends JpaRepository<ClassSchedule, Long>, JpaSpecificationExecutor<ClassSchedule> {
     @Override
-    @EntityGraph(attributePaths = {"moduleClass", "moduleClass.semester"})
+    @EntityGraph(attributePaths = {"moduleClass", "moduleClass.semester", "room"})
     List<ClassSchedule> findAll(Specification<ClassSchedule> specification, Sort sort);
 }
