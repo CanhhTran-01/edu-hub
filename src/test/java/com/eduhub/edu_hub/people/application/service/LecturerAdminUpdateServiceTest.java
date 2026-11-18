@@ -20,10 +20,12 @@ import com.eduhub.edu_hub.people.domain.model.Lecturer;
 import com.eduhub.edu_hub.people.domain.model.LecturerTeachingSubject;
 import com.eduhub.edu_hub.people.domain.repository.LecturerRepository;
 import com.eduhub.edu_hub.people.domain.repository.LecturerTeachingSubjectRepository;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.text.TextsNormalizer;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -39,6 +41,10 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 class LecturerAdminUpdateServiceTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
     private final LecturerRepository lecturerRepository = mock(LecturerRepository.class);
     private final LecturerTeachingSubjectRepository teachingSubjectRepository =
             mock(LecturerTeachingSubjectRepository.class);
@@ -55,7 +61,8 @@ class LecturerAdminUpdateServiceTest {
             curriculumTeachingSubjects,
             new ProfileAccountEmailService(identityFacade),
             new LecturerResponseMapper(),
-            teachingAssignments);
+            teachingAssignments,
+            CLOCK);
     private final Jwt authenticatedJwt = Jwt.withTokenValue("test-token")
             .header("alg", "HS256")
             .subject("academic-admin")
@@ -258,8 +265,8 @@ class LecturerAdminUpdateServiceTest {
             assertThatThrownBy(() -> lecturerAdminUpdateService.updateLecturerProfile(authenticatedJwt, 1L, request))
                     .isInstanceOf(LecturerProfileException.class);
         }
-        for (LocalDate dateOfBirth : List.of(
-                LocalDate.now(ZoneOffset.UTC), LocalDate.now(ZoneOffset.UTC).plusDays(1))) {
+        for (LocalDate dateOfBirth :
+                List.of(LocalDate.now(CLOCK), LocalDate.now(CLOCK).plusDays(1))) {
             UpdateLecturerProfileRequest request = new UpdateLecturerProfileRequest();
             request.setDateOfBirth(dateOfBirth);
             assertThatThrownBy(() -> lecturerAdminUpdateService.updateLecturerProfile(authenticatedJwt, 1L, request))

@@ -8,6 +8,7 @@ import com.eduhub.edu_hub.curriculum.api.dto.request.UpdateSubjectRequest;
 import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectResponse;
 import com.eduhub.edu_hub.curriculum.application.SubjectApplicationService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/subjects")
 @RequiredArgsConstructor
 public class SubjectController {
+    private final ApiResponseFactory apiResponseFactory;
     private final SubjectApplicationService subjectApplicationService;
 
     // TODO(CURRICULUM_VALIDATION): curriculum(n)--(n)subject, cần kiểm tra recommend_semester <= duration_semesters
@@ -36,7 +38,8 @@ public class SubjectController {
     public ApiResponse<PageResponse<SubjectResponse>> searchSubjects(
             @Valid @ModelAttribute SubjectSearchRequest request) {
         PageResponse<SubjectResponse> subjects = subjectApplicationService.searchSubjects(request);
-        return ApiResponse.<PageResponse<SubjectResponse>>builder()
+        return apiResponseFactory
+                .<PageResponse<SubjectResponse>>builder()
                 .success(true)
                 .message(subjects.getContent().isEmpty() ? "Không tìm thấy kết quả" : "Success")
                 .data(subjects)
@@ -45,7 +48,7 @@ public class SubjectController {
 
     @GetMapping("/{id}")
     public ApiResponse<SubjectResponse> getSubjectById(@PathVariable Long id) {
-        return ApiResponse.success(subjectApplicationService.getSubjectById(id));
+        return apiResponseFactory.success(subjectApplicationService.getSubjectById(id));
     }
 
     @PostMapping
@@ -53,7 +56,8 @@ public class SubjectController {
             @Valid @RequestBody CreateSubjectRequest request) {
         SubjectResponse subject = subjectApplicationService.createSubject(request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.<SubjectResponse>builder()
+                .body(apiResponseFactory
+                        .<SubjectResponse>builder()
                         .success(true)
                         .message("Thêm học phần thành công")
                         .data(subject)
@@ -64,7 +68,8 @@ public class SubjectController {
     public ApiResponse<SubjectResponse> updateSubject(
             @PathVariable Long id, @Valid @RequestBody UpdateSubjectRequest request) {
         SubjectResponse subject = subjectApplicationService.updateSubject(id, request);
-        return ApiResponse.<SubjectResponse>builder()
+        return apiResponseFactory
+                .<SubjectResponse>builder()
                 .success(true)
                 .message("Cập nhật học phần thành công")
                 .data(subject)
@@ -75,7 +80,8 @@ public class SubjectController {
     public ApiResponse<SubjectResponse> deactivateSubject(
             @PathVariable Long id, @Valid @RequestBody SubjectActionRequest request) {
         SubjectResponse subject = subjectApplicationService.deactivateSubject(id, request);
-        return ApiResponse.<SubjectResponse>builder()
+        return apiResponseFactory
+                .<SubjectResponse>builder()
                 .success(true)
                 .message("Ngừng sử dụng học phần thành công")
                 .data(subject)
@@ -85,14 +91,15 @@ public class SubjectController {
     @DeleteMapping("/{id}")
     public ApiResponse<Void> deleteSubject(@PathVariable Long id, @Valid @RequestBody SubjectActionRequest request) {
         subjectApplicationService.deleteSubject(id, request);
-        return ApiResponse.successWithMessage("Xóa học phần thành công");
+        return apiResponseFactory.successWithMessage("Xóa học phần thành công");
     }
 
     @PostMapping("/{id}/prerequisites")
     public ApiResponse<SubjectResponse> setPrerequisites(
             @PathVariable Long id, @Valid @RequestBody SetPrerequisiteRequest request) {
         SubjectResponse subject = subjectApplicationService.setPrerequisites(id, request);
-        return ApiResponse.<SubjectResponse>builder()
+        return apiResponseFactory
+                .<SubjectResponse>builder()
                 .success(true)
                 .message("Lưu môn tiên quyết thành công. Ràng buộc trùng (nếu có) được bỏ qua; "
                         + "thay đổi chỉ áp dụng từ thời điểm lưu, không hồi tố dữ liệu đã có.")

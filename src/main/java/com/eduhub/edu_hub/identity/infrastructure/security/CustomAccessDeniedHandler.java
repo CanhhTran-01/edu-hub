@@ -1,7 +1,7 @@
 package com.eduhub.edu_hub.identity.infrastructure.security;
 
 import com.eduhub.edu_hub.identity.domain.enums.AccessTokenPurpose;
-import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -19,6 +19,7 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @RequiredArgsConstructor
 public class CustomAccessDeniedHandler implements AccessDeniedHandler {
+    private final ApiResponseFactory apiResponseFactory;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -39,6 +40,7 @@ public class CustomAccessDeniedHandler implements AccessDeniedHandler {
                 ? ErrorCode.FIRST_LOGIN_REQUIRED
                 : ErrorCode.UNAUTHORIZED;
 
-        response.getWriter().write(objectMapper.writeValueAsString(ApiResponse.error(error, request.getRequestURI())));
+        response.getWriter()
+                .write(objectMapper.writeValueAsString(apiResponseFactory.error(error, request.getRequestURI())));
     }
 }

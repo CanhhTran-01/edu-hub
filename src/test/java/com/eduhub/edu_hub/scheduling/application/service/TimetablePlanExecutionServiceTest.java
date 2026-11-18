@@ -71,6 +71,24 @@ class TimetablePlanExecutionServiceTest {
         assertThat(plan.getHardPenalty()).isZero();
     }
 
+    @Test
+    void expiresPlansByVietnamTimeAndWritesAuditInUtc() {
+        var plan = TimetablePlan.builder()
+                .semesterId(7L)
+                .state(TimetablePlanState.RUNNING)
+                .build();
+        plan.setId(9L);
+        when(repository.findExpiredForUpdate(
+                        TimetablePlanExecutionService.ACTIVE_STATES, LocalDateTime.parse("2026-11-12T07:00:00")))
+                .thenReturn(List.of(plan));
+
+        service.expireInterruptedPlans();
+
+        assertThat(plan.getState()).isEqualTo(TimetablePlanState.INTERRUPTED);
+        assertThat(plan.getUpdatedAt()).isEqualTo(LocalDateTime.parse("2026-11-12T00:00:00"));
+        verify(repository).flush();
+    }
+
     private TimetablePlan plan(TimetablePlanState state) {
         var plan = TimetablePlan.builder()
                 .state(state)

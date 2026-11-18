@@ -17,10 +17,14 @@ import com.eduhub.edu_hub.scheduling.api.exception.RoomExceptionHandler;
 import com.eduhub.edu_hub.scheduling.application.exception.RoomException;
 import com.eduhub.edu_hub.scheduling.application.service.RoomApplicationService;
 import com.eduhub.edu_hub.scheduling.domain.enums.RoomStatus;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.PageResponse;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;
 import java.sql.SQLException;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +43,11 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 @ExtendWith(MockitoExtension.class)
 class RoomControllerTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
+    private final ApiResponseFactory apiResponseFactory = new ApiResponseFactory(CLOCK);
     private static final String BODY =
             """
             {"roomCode":"102-TA1","roomName":"Phòng 102","buildingCode":"TA1","roomNumber":"102","capacity":80}
@@ -51,8 +60,9 @@ class RoomControllerTest {
 
     @BeforeEach
     void setUp() {
-        mvc = MockMvcBuilders.standaloneSetup(new RoomController(service))
-                .setControllerAdvice(new GlobalExceptionHandler(), new RoomExceptionHandler())
+        mvc = MockMvcBuilders.standaloneSetup(new RoomController(apiResponseFactory, service))
+                .setControllerAdvice(
+                        new GlobalExceptionHandler(apiResponseFactory), new RoomExceptionHandler(apiResponseFactory))
                 .build();
     }
 

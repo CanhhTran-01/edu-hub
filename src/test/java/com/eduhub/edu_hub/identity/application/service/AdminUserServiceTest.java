@@ -20,9 +20,11 @@ import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
 import com.eduhub.edu_hub.people.api.dto.response.AccountProfileContactResponse;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,12 +43,16 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 
 class AdminUserServiceTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
     private final UserRepository userRepository = mock(UserRepository.class);
     private final RefreshTokenRepository refreshTokenRepository = mock(RefreshTokenRepository.class);
     private final RoleRepository roleRepository = mock(RoleRepository.class);
     private final TokenService tokenService = new TokenService(mock(JwtEncoder.class));
     private final CurrentUserAuthenticationService currentUserAuthenticationService =
-            new CurrentUserAuthenticationService(userRepository, refreshTokenRepository, tokenService);
+            new CurrentUserAuthenticationService(userRepository, refreshTokenRepository, tokenService, CLOCK);
     private final NotificationFacade.ImmediateEmail immediateEmailNotifications =
             mock(NotificationFacade.ImmediateEmail.class);
     private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
@@ -59,7 +65,8 @@ class AdminUserServiceTest {
             tokenService,
             immediateEmailNotifications,
             passwordEncoder,
-            accountProfiles);
+            accountProfiles,
+            CLOCK);
     private final Jwt authenticatedJwt = Jwt.withTokenValue("unit-token")
             .header("alg", "HS256")
             .subject("admin")
@@ -88,7 +95,7 @@ class AdminUserServiceTest {
         targetUser.setPasswordHash("original-hash");
         actorSession = new RefreshToken();
         actorSession.setUser(actorUser);
-        actorSession.setExpiresAt(LocalDateTime.now(ZoneOffset.UTC).plusHours(1));
+        actorSession.setExpiresAt(LocalDateTime.now(CLOCK).plusHours(1));
         when(userRepository.findByUsernameAndDeletedFalse("admin")).thenReturn(Optional.of(actorUser));
         when(userRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(targetUser));
         when(roleRepository.findByRoleNameForUpdate("SYSTEM_ADMIN")).thenReturn(Optional.of(systemAdminRole));
@@ -183,12 +190,12 @@ class AdminUserServiceTest {
     void invalidActorCannotChangeAccount(String invalidState) {
         switch (invalidState) {
             case "expiredSession" -> actorSession.setExpiresAt(
-                    LocalDateTime.now(ZoneOffset.UTC).minusSeconds(1));
+                    LocalDateTime.now(CLOCK).minusSeconds(1));
             case "revokedSession" -> when(refreshTokenRepository.findByIdAndRevokedFalse(3L))
                     .thenReturn(Optional.empty());
             case "wrongSessionOwner" -> actorSession.setUser(targetUser);
             case "temporaryLock" -> actorUser.setLockedUntil(
-                    LocalDateTime.now(ZoneOffset.UTC).plusMinutes(10));
+                    LocalDateTime.now(CLOCK).plusMinutes(10));
             case "disabledActor" -> actorUser.setStatus(UserStatus.DISABLED);
             case "lockedActor" -> actorUser.setStatus(UserStatus.LOCKED);
             case "deletedActor" -> when(userRepository.findByUsernameAndDeletedFalse("admin"))
@@ -243,7 +250,7 @@ class AdminUserServiceTest {
             names = {"ACTIVE", "LOCKED"})
     void unlockClearsTemporaryLockWithoutRestoringOldSessions(UserStatus targetStatus) {
         targetUser.setStatus(targetStatus);
-        targetUser.setLockedUntil(LocalDateTime.now(ZoneOffset.UTC).plusMinutes(10));
+        targetUser.setLockedUntil(LocalDateTime.now(CLOCK).plusMinutes(10));
         targetUser.setFailedLoginCount(5);
         adminUserService.unlockUserAccount(authenticatedJwt, 2L);
         assertThat(targetUser.getStatus()).isEqualTo(UserStatus.ACTIVE);
@@ -341,7 +348,7 @@ class AdminUserServiceTest {
         targetUser.setEmail("account@example.com");
         targetUser.setFirstLogin(true);
         targetUser.setFailedLoginCount(5);
-        targetUser.setLockedUntil(LocalDateTime.now(ZoneOffset.UTC).plusMinutes(10));
+        targetUser.setLockedUntil(LocalDateTime.now(CLOCK).plusMinutes(10));
         targetUser.setPasswordChangedAt(LocalDateTime.of(2026, 11, 1, 10, 0));
         targetUser.setCreatedAt(LocalDateTime.of(2026, 10, 1, 10, 0));
         targetUser.setUpdatedAt(LocalDateTime.of(2026, 11, 2, 10, 0));
@@ -402,7 +409,7 @@ class AdminUserServiceTest {
     void detailAllowsEveryTargetStatusWithoutChangingTheAccount(UserStatus targetStatus) {
         targetUser.setStatus(targetStatus);
         targetUser.setFailedLoginCount(5);
-        targetUser.setLockedUntil(LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1));
+        targetUser.setLockedUntil(LocalDateTime.now(CLOCK).minusMinutes(1));
         when(userRepository.findByIdAndDeletedFalse(2L)).thenReturn(Optional.of(targetUser));
 
         var detail = adminUserService.getUserAccountDetail(authenticatedJwt, 2L);

@@ -6,8 +6,8 @@ import com.eduhub.edu_hub.identity.domain.policy.PasswordPolicy;
 import com.eduhub.edu_hub.identity.infrastructure.security.CustomAccessDeniedHandler;
 import com.eduhub.edu_hub.identity.infrastructure.security.CustomAuthenticationEntryPoint;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Base64;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -153,36 +153,37 @@ public class SecurityConfig {
     }
 
     @Bean
-    JwtDecoder jwtDecoder(SecretKey jwtSigningKey) {
+    JwtDecoder jwtDecoder(SecretKey jwtSigningKey, Clock clock) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(jwtSigningKey)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
 
         // Giữ thời điểm hết hạn nghiêm ngặt như token cũ, không thêm khoảng dung sai mặc định.
-        decoder.setJwtValidator(
-                new DelegatingOAuth2TokenValidator<>(new JwtTimestampValidator(Duration.ZERO), token -> {
-                    if (token.getExpiresAt() == null
-                            || token.getSubject() == null
-                            || token.getSubject().isBlank()
-                            || !(token.getClaim("uid") instanceof Number userId)
-                            || userId.longValue() <= 0
-                            || !(token.getClaim("sid") instanceof Number sessionId)
-                            || sessionId.longValue() <= 0
-                            || !"JWT".equals(token.getHeaders().get("typ"))
-                            || (!AccessTokenPurpose.ACCESS.name().equals(token.getClaim(AccessTokenPurpose.CLAIM_NAME))
-                                    && !AccessTokenPurpose.PASSWORD_CHANGE
-                                            .name()
-                                            .equals(token.getClaim(AccessTokenPurpose.CLAIM_NAME)))) {
-                        return OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token"));
-                    }
+        JwtTimestampValidator timestampValidator = new JwtTimestampValidator(Duration.ZERO);
+        timestampValidator.setClock(clock);
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(timestampValidator, token -> {
+            if (token.getExpiresAt() == null
+                    || token.getSubject() == null
+                    || token.getSubject().isBlank()
+                    || !(token.getClaim("uid") instanceof Number userId)
+                    || userId.longValue() <= 0
+                    || !(token.getClaim("sid") instanceof Number sessionId)
+                    || sessionId.longValue() <= 0
+                    || !"JWT".equals(token.getHeaders().get("typ"))
+                    || (!AccessTokenPurpose.ACCESS.name().equals(token.getClaim(AccessTokenPurpose.CLAIM_NAME))
+                            && !AccessTokenPurpose.PASSWORD_CHANGE
+                                    .name()
+                                    .equals(token.getClaim(AccessTokenPurpose.CLAIM_NAME)))) {
+                return OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token"));
+            }
 
-                    if (!token.getExpiresAt().isAfter(Instant.now())) {
-                        return OAuth2TokenValidatorResult.failure(
-                                new OAuth2Error(CustomAuthenticationEntryPoint.ACCESS_TOKEN_EXPIRED));
-                    }
+            if (!token.getExpiresAt().isAfter(clock.instant())) {
+                return OAuth2TokenValidatorResult.failure(
+                        new OAuth2Error(CustomAuthenticationEntryPoint.ACCESS_TOKEN_EXPIRED));
+            }
 
-                    return OAuth2TokenValidatorResult.success();
-                }));
+            return OAuth2TokenValidatorResult.success();
+        }));
 
         return decoder;
     }

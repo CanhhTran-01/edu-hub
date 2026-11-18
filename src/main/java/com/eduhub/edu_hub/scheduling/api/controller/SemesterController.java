@@ -6,6 +6,7 @@ import com.eduhub.edu_hub.scheduling.api.dto.request.UpdateSemesterRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.response.SemesterResponse;
 import com.eduhub.edu_hub.scheduling.application.service.SemesterApplicationService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,13 +25,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/semesters")
 @RequiredArgsConstructor
 public class SemesterController {
+    private final ApiResponseFactory apiResponseFactory;
     private final SemesterApplicationService semesterApplicationService;
 
     @GetMapping
     public ApiResponse<PageResponse<SemesterResponse>> searchSemesters(
             @Valid @ModelAttribute SemesterSearchRequest request) {
         var semesters = semesterApplicationService.searchSemesters(request);
-        return ApiResponse.<PageResponse<SemesterResponse>>builder()
+        return apiResponseFactory
+                .<PageResponse<SemesterResponse>>builder()
                 .success(true)
                 .message(semesters.getContent().isEmpty() ? "Không tìm thấy kết quả" : "Success")
                 .data(semesters)
@@ -39,7 +42,7 @@ public class SemesterController {
 
     @GetMapping("/{id}")
     public ApiResponse<SemesterResponse> getSemesterById(@PathVariable Long id) {
-        return ApiResponse.success(semesterApplicationService.getSemesterById(id));
+        return apiResponseFactory.success(semesterApplicationService.getSemesterById(id));
     }
 
     @PostMapping
@@ -47,7 +50,8 @@ public class SemesterController {
             @Valid @RequestBody CreateSemesterRequest request) {
         var semester = semesterApplicationService.createSemester(request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.<SemesterResponse>builder()
+                .body(apiResponseFactory
+                        .<SemesterResponse>builder()
                         .success(true)
                         .message("Thêm kỳ học thành công")
                         .data(semester)
@@ -58,7 +62,8 @@ public class SemesterController {
     public ApiResponse<SemesterResponse> updateSemester(
             @PathVariable Long id, @Valid @RequestBody UpdateSemesterRequest request) {
         var semester = semesterApplicationService.updateSemester(id, request);
-        return ApiResponse.<SemesterResponse>builder()
+        return apiResponseFactory
+                .<SemesterResponse>builder()
                 .success(true)
                 .message("Cập nhật kỳ học thành công")
                 .data(semester)

@@ -27,9 +27,13 @@ import com.eduhub.edu_hub.people.application.service.LecturerAdminUpdateService;
 import com.eduhub.edu_hub.people.application.service.LecturerApplicationService;
 import com.eduhub.edu_hub.people.application.service.LecturerCreationService;
 import com.eduhub.edu_hub.people.domain.enums.LecturerStatus;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.PageResponse;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,6 +53,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class AdminLecturerControllerTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
+    private final ApiResponseFactory apiResponseFactory = new ApiResponseFactory(CLOCK);
     private final LecturerApplicationService lecturerApplicationService = mock(LecturerApplicationService.class);
     private final LecturerCreationService lecturerCreationService = mock(LecturerCreationService.class);
     private final LecturerAdminUpdateService lecturerAdminUpdateService = mock(LecturerAdminUpdateService.class);
@@ -57,9 +66,14 @@ class AdminLecturerControllerTest {
             .subject("academic-admin")
             .build();
     private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new AdminLecturerController(
-                    lecturerApplicationService, lecturerCreationService, lecturerAdminUpdateService))
+                    apiResponseFactory,
+                    lecturerApplicationService,
+                    lecturerCreationService,
+                    lecturerAdminUpdateService))
             .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
-            .setControllerAdvice(new LecturerProfileExceptionHandler(), new GlobalExceptionHandler())
+            .setControllerAdvice(
+                    new LecturerProfileExceptionHandler(apiResponseFactory),
+                    new GlobalExceptionHandler(apiResponseFactory))
             .build();
 
     @BeforeEach

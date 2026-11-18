@@ -95,7 +95,11 @@ class EnrollmentApplicationServiceTest {
         assertThat(response.warnings()).hasSize(1);
         assertThat(response.enrollment().getStatus()).isEqualTo("REGISTERED");
         assertThat(response.enrollment().getCredits()).isEqualTo(3);
-        assertThat(response.enrollment().getRegisteredAt()).isEqualTo(LocalDateTime.parse("2026-08-31T17:30:00"));
+        assertThat(response.enrollment().getRegisteredAt()).isEqualTo(LocalDateTime.parse("2026-09-01T00:30:00"));
+        var savedEnrollment = ArgumentCaptor.forClass(Enrollment.class);
+        verify(enrollmentRepository).saveAndFlush(savedEnrollment.capture());
+        assertThat(savedEnrollment.getValue().getCreatedAt()).isEqualTo(LocalDateTime.parse("2026-08-31T17:30:00"));
+        assertThat(savedEnrollment.getValue().getUpdatedAt()).isEqualTo(LocalDateTime.parse("2026-08-31T17:30:00"));
         var order = inOrder(schedulingFacade, peopleFacade, enrollmentRepository);
         order.verify(schedulingFacade).findSemesterIdByModuleClassId(100L);
         order.verify(schedulingFacade).lockSemester(7L);
@@ -201,7 +205,8 @@ class EnrollmentApplicationServiceTest {
                 .thenReturn(List.of(enrollment));
         var response = service.drop(principal, 90L);
         assertThat(response.enrollment().getStatus()).isEqualTo("DROPPED");
-        assertThat(response.enrollment().getDroppedAt()).isNotNull();
+        assertThat(response.enrollment().getDroppedAt()).isEqualTo(LocalDateTime.parse("2026-09-01T00:30:00"));
+        assertThat(enrollment.getUpdatedAt()).isEqualTo(LocalDateTime.parse("2026-08-31T17:30:00"));
         assertThat(response.registeredCredits()).isZero();
         verify(schedulingFacade).releaseSeat(100L);
         service.drop(principal, 90L);

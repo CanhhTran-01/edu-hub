@@ -4,6 +4,7 @@ import com.eduhub.edu_hub.people.api.dto.request.UpdateMyProfileRequest;
 import com.eduhub.edu_hub.people.api.dto.response.StudentResponse;
 import com.eduhub.edu_hub.people.application.service.StudentSelfService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
 public class StudentSelfController {
+    private final ApiResponseFactory apiResponseFactory;
     private final StudentSelfService studentSelfService;
 
     // TODO(AUTHORIZATION): Khi triển khai phân quyền, chỉ STUDENT được xem/sửa hồ sơ của chính mình tại /me.
@@ -21,12 +23,12 @@ public class StudentSelfController {
 
     @GetMapping("/students/me")
     public ApiResponse<StudentResponse> getMyProfile(@AuthenticationPrincipal Jwt authenticatedJwt) {
-        return ApiResponse.success(studentSelfService.getMyProfile(authenticatedJwt));
+        return apiResponseFactory.success(studentSelfService.getMyProfile(authenticatedJwt));
     }
 
     @PatchMapping("/students/me")
     public ApiResponse<StudentResponse> updateMyProfile(
             @AuthenticationPrincipal Jwt authenticatedJwt, @Valid @RequestBody UpdateMyProfileRequest request) {
-        return ApiResponse.success(studentSelfService.updateMyProfile(authenticatedJwt, request));
+        return apiResponseFactory.success(studentSelfService.updateMyProfile(authenticatedJwt, request));
     }
 }

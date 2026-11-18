@@ -2,6 +2,10 @@ package com.eduhub.edu_hub.shared.exception;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
+import java.time.Clock;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -9,7 +13,12 @@ import org.springframework.mock.http.MockHttpInputMessage;
 import org.springframework.mock.web.MockHttpServletRequest;
 
 class GlobalExceptionHandlerTest {
-    private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
+    private final ApiResponseFactory apiResponseFactory = new ApiResponseFactory(CLOCK);
+    private final GlobalExceptionHandler handler = new GlobalExceptionHandler(apiResponseFactory);
     private final MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/test");
 
     @Test

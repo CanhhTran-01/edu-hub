@@ -15,19 +15,25 @@ import com.eduhub.edu_hub.notification.domain.model.QueuedAdmissionNotification;
 import com.eduhub.edu_hub.notification.domain.repository.QueuedAdmissionNotificationRepository;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.application.facade.dto.AdmissionStudentInfo;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
 class QueuedAdmissionNotificationSenderTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
     private final QueuedAdmissionNotificationRepository notifications =
             mock(QueuedAdmissionNotificationRepository.class);
     private final IdentityFacade identity = mock(IdentityFacade.class);
     private final PeopleFacade.Admission people = mock(PeopleFacade.Admission.class);
     private final QueuedAdmissionNotificationSender sender =
-            new QueuedAdmissionNotificationSender(notifications, identity, people);
+            new QueuedAdmissionNotificationSender(notifications, identity, people, CLOCK);
 
     @Test
     void stopsAfterFourFailedDeliveriesAndLogsTerminalFailureOnlyOnce() {
@@ -91,7 +97,7 @@ class QueuedAdmissionNotificationSenderTest {
     @Test
     void respectsNextAttemptTimeAndSkippedNotifications() {
         var row = pending();
-        row.setNextAttemptAt(LocalDateTime.now(ZoneOffset.UTC).plusHours(1));
+        row.setNextAttemptAt(LocalDateTime.now(CLOCK).plusHours(1));
         sender.sendScheduledAttempt(1L);
         sender.sendInitialAttempt(1L);
         row.setState(NotificationStatus.SKIPPED);
@@ -142,15 +148,12 @@ class QueuedAdmissionNotificationSenderTest {
         appender.start();
         logger.addAppender(appender);
         try {
-            LocalDateTime beforeAttempt = LocalDateTime.now(ZoneOffset.UTC);
             sender.sendInitialAttempt(1L);
-            LocalDateTime afterAttempt = LocalDateTime.now(ZoneOffset.UTC);
 
             assertThat(notification.getState()).isEqualTo(NotificationStatus.FAILED);
             assertThat(notification.getFailureCount()).isEqualTo(1);
             assertThat(notification.getLastError()).isEqualTo("EMAIL_SEND_FAILED");
-            assertThat(notification.getNextAttemptAt())
-                    .isBetween(beforeAttempt.plusMinutes(1), afterAttempt.plusMinutes(1));
+            assertThat(notification.getNextAttemptAt()).isEqualTo(LocalDateTime.parse("2026-11-19T00:31:00"));
             verify(people).findStudentsByIds(java.util.Set.of(42L));
             verifyNoMoreInteractions(people);
             assertThat(appender.list).allSatisfy(event -> {

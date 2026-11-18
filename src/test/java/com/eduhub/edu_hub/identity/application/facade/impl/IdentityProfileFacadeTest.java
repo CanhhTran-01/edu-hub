@@ -12,10 +12,12 @@ import com.eduhub.edu_hub.identity.domain.model.*;
 import com.eduhub.edu_hub.identity.domain.repository.*;
 import com.eduhub.edu_hub.identity.infrastructure.config.PasswordSettings;
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -31,16 +33,21 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 
 class IdentityProfileFacadeTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
     UserRepository users = mock(UserRepository.class);
     RefreshTokenRepository sessions = mock(RefreshTokenRepository.class);
     TokenService tokens = new TokenService(mock(JwtEncoder.class));
     IdentityFacadeImpl facade = new IdentityFacadeImpl(
             users,
             mock(RoleRepository.class),
-            new CurrentUserAuthenticationService(users, sessions, tokens),
+            new CurrentUserAuthenticationService(users, sessions, tokens, CLOCK),
             mock(NotificationFacade.ImmediateEmail.class),
             mock(PasswordEncoder.class),
-            new PasswordSettings(8, "12345"));
+            new PasswordSettings(8, "12345"),
+            CLOCK);
     User user;
     RefreshToken session;
     Jwt authenticatedJwt = principal(7L);
@@ -56,7 +63,7 @@ class IdentityProfileFacadeTest {
         user.setStatus(UserStatus.ACTIVE);
         session = new RefreshToken();
         session.setUser(user);
-        session.setExpiresAt(LocalDateTime.now(ZoneOffset.UTC).plusHours(1));
+        session.setExpiresAt(LocalDateTime.now(CLOCK).plusHours(1));
         when(users.findByUsernameAndDeletedFalse("CT080101")).thenReturn(Optional.of(user));
         when(sessions.findByIdAndRevokedFalse(3L)).thenReturn(Optional.of(session));
     }
@@ -75,7 +82,7 @@ class IdentityProfileFacadeTest {
 
     @Test
     void rejectsExpiredSession() {
-        session.setExpiresAt(LocalDateTime.now(ZoneOffset.UTC).minusSeconds(1));
+        session.setExpiresAt(LocalDateTime.now(CLOCK).minusSeconds(1));
         assertThatThrownBy(() -> facade.requireCurrentUser(authenticatedJwt)).isInstanceOf(BaseException.class);
     }
 
@@ -98,7 +105,7 @@ class IdentityProfileFacadeTest {
 
     @Test
     void rejectsTemporarilyLockedAccount() {
-        user.setLockedUntil(LocalDateTime.now(ZoneOffset.UTC).plusMinutes(5));
+        user.setLockedUntil(LocalDateTime.now(CLOCK).plusMinutes(5));
         assertThatThrownBy(() -> facade.requireCurrentUser(authenticatedJwt))
                 .isInstanceOfSatisfying(
                         IdentityAuthenticationException.class,

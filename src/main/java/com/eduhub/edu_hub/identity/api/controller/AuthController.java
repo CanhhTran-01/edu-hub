@@ -6,6 +6,7 @@ import com.eduhub.edu_hub.identity.api.dto.request.LogoutRequest;
 import com.eduhub.edu_hub.identity.api.dto.response.LoginResponse;
 import com.eduhub.edu_hub.identity.application.service.AuthApplicationService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,24 +20,25 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
 public class AuthController {
+    private final ApiResponseFactory apiResponseFactory;
     private final AuthApplicationService authService;
 
     @PostMapping("/login")
     public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ApiResponse.success(authService.login(request));
+        return apiResponseFactory.success(authService.login(request));
     }
 
     @PostMapping("/logout")
     public ApiResponse<Void> logout(
             @AuthenticationPrincipal Jwt authenticatedJwt, @Valid @RequestBody LogoutRequest request) {
         authService.logout(authenticatedJwt, request.getRefreshToken());
-        return ApiResponse.successWithMessage("Đăng xuất thành công");
+        return apiResponseFactory.successWithMessage("Đăng xuất thành công");
     }
 
     @PostMapping("/change-password")
     public ApiResponse<Void> changePassword(
             @AuthenticationPrincipal Jwt authenticatedJwt, @Valid @RequestBody ChangePasswordRequest request) {
         authService.changePassword(authenticatedJwt, request);
-        return ApiResponse.successWithMessage("Đổi mật khẩu thành công. Vui lòng đăng nhập lại.");
+        return apiResponseFactory.successWithMessage("Đổi mật khẩu thành công. Vui lòng đăng nhập lại.");
     }
 }

@@ -18,6 +18,9 @@ import com.eduhub.edu_hub.notification.api.dto.request.SendAdmissionConfirmation
 import com.eduhub.edu_hub.notification.api.dto.response.EmailDeliveryResponse;
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
 import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,6 +29,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 class IdentityNotificationTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
     private final UserRepository users = mock(UserRepository.class);
     private final RoleRepository roles = mock(RoleRepository.class);
     private final NotificationFacade.ImmediateEmail immediateEmailNotifications =
@@ -36,7 +43,8 @@ class IdentityNotificationTest {
             mock(CurrentUserAuthenticationService.class),
             immediateEmailNotifications,
             new BCryptPasswordEncoder(4),
-            new PasswordSettings(8, "configured-temp"));
+            new PasswordSettings(8, "configured-temp"),
+            CLOCK);
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
     private User user;
 

@@ -22,8 +22,8 @@ import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.mapper.PageMapper;
+import java.time.Clock;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +49,7 @@ public class AdminUserService {
     private final NotificationFacade.ImmediateEmail immediateEmailNotifications;
     private final PasswordEncoder passwordEncoder;
     private final PeopleFacade.AccountProfile accountProfiles;
+    private final Clock clock;
 
     @Transactional(readOnly = true)
     public PageResponse<UserAccountSummaryResponse> searchUserAccounts(
@@ -84,7 +85,7 @@ public class AdminUserService {
 
         // Chỉ đọc loại hồ sơ phù hợp role theo User ID; thiếu hồ sơ không làm mất thông tin tài khoản.
         Optional<AccountProfileContactResponse> profileContact = findAccountProfileContact(targetUser);
-        LocalDateTime evaluatedAt = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime evaluatedAt = LocalDateTime.now(clock);
 
         return UserAccountDetailResponse.builder()
                 .id(targetUser.getId())
@@ -181,7 +182,7 @@ public class AdminUserService {
         if (!targetUser.isFirstLogin()) targetUser.setPreviousPasswordHash(targetUser.getPasswordHash());
         targetUser.setPasswordHash(passwordEncoder.encode(temporaryPassword));
         targetUser.setFirstLogin(true);
-        targetUser.setPasswordChangedAt(LocalDateTime.now(ZoneOffset.UTC));
+        targetUser.setPasswordChangedAt(LocalDateTime.now(clock));
         // Reset gỡ khóa tạm để dùng mật khẩu mới, nhưng giữ nguyên LOCKED nếu đã bị khóa thủ công.
         targetUser.setLockedUntil(null);
         targetUser.setFailedLoginCount(0);

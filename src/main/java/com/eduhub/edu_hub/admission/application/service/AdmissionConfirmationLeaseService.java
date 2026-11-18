@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 public class AdmissionConfirmationLeaseService {
     private final AdmissionPlanRepository planRepository;
     private final AdmissionSettings admissionSettings;
+    private final Clock clock;
 
     public AdmissionPlan requireActiveConfirmation(Long planId, String confirmationToken) {
         var plan = planRepository
@@ -33,7 +34,7 @@ public class AdmissionConfirmationLeaseService {
     }
 
     public void extendConfirmationLease(AdmissionPlan plan) {
-        plan.setProcessingUntil(LocalDateTime.now(ZoneOffset.UTC)
-                .plusMinutes(Math.max(1, admissionSettings.getConfirmationLeaseMinutes())));
+        plan.setProcessingUntil(
+                LocalDateTime.now(clock).plusMinutes(Math.max(1, admissionSettings.getConfirmationLeaseMinutes())));
     }
 }

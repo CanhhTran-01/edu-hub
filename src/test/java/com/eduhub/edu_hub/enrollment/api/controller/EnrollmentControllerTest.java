@@ -8,8 +8,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.eduhub.edu_hub.enrollment.api.exception.EnrollmentExceptionHandler;
 import com.eduhub.edu_hub.enrollment.application.exception.EnrollmentException;
 import com.eduhub.edu_hub.enrollment.application.service.EnrollmentApplicationService;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.*;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.*;
 import org.springframework.http.MediaType;
@@ -17,13 +21,20 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class EnrollmentControllerTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
+    private final ApiResponseFactory apiResponseFactory = new ApiResponseFactory(CLOCK);
     private final EnrollmentApplicationService service = mock(EnrollmentApplicationService.class);
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
-        mvc = MockMvcBuilders.standaloneSetup(new EnrollmentController(service))
-                .setControllerAdvice(new EnrollmentExceptionHandler(), new GlobalExceptionHandler())
+        mvc = MockMvcBuilders.standaloneSetup(new EnrollmentController(apiResponseFactory, service))
+                .setControllerAdvice(
+                        new EnrollmentExceptionHandler(apiResponseFactory),
+                        new GlobalExceptionHandler(apiResponseFactory))
                 .setCustomArgumentResolvers(new org.springframework.web.method.support.HandlerMethodArgumentResolver() {
                     @Override
                     public boolean supportsParameter(org.springframework.core.MethodParameter parameter) {

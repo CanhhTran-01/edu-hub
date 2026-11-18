@@ -64,6 +64,7 @@ public class TimetablePlanWorker {
                         .withProblemId(event.planId())
                         .withProblem(solution)
                         .withBestSolutionEventConsumer(best -> {
+                            // NOTE: Đo khoảng chờ bằng thời gian đơn điệu; Clock chỉ dành cho mốc ngày/giờ.
                             long now = System.nanoTime();
                             Long previous = lastPersistedNanos.get(event.planId());
                             if (previous == null || now - previous >= TimeUnit.SECONDS.toNanos(1)) {

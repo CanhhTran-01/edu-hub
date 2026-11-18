@@ -5,10 +5,12 @@ import com.eduhub.edu_hub.people.api.controller.StudentSelfController;
 import com.eduhub.edu_hub.people.application.exception.ProfileCreationException;
 import com.eduhub.edu_hub.people.application.exception.StudentProfileException;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -20,7 +22,10 @@ import tools.jackson.databind.exc.MismatchedInputException;
 
 @RestControllerAdvice(assignableTypes = {StudentSelfController.class, AdminStudentController.class})
 @Order(Ordered.HIGHEST_PRECEDENCE)
+@RequiredArgsConstructor
 public class StudentProfileExceptionHandler {
+    private final ApiResponseFactory apiResponseFactory;
+
     @ExceptionHandler(ProfileCreationException.class)
     public ResponseEntity<ApiResponse<Void>> handleProfileCreationException(
             ProfileCreationException exception, HttpServletRequest request) {
@@ -54,7 +59,7 @@ public class StudentProfileExceptionHandler {
         }
         // Không suy mọi lỗi toàn vẹn là CCCD trùng và không đưa SQL/dữ liệu nhạy cảm ra response.
         return ResponseEntity.internalServerError()
-                .body(ApiResponse.error(ErrorCode.UNEXPECTED_ERROR, request.getRequestURI()));
+                .body(apiResponseFactory.error(ErrorCode.UNEXPECTED_ERROR, request.getRequestURI()));
     }
 
     @ExceptionHandler(StudentProfileException.class)
@@ -62,7 +67,8 @@ public class StudentProfileExceptionHandler {
             StudentProfileException exception, HttpServletRequest request) {
         ErrorCode errorCode = exception.getErrorCode();
         return ResponseEntity.status(errorCode.getHttpStatus())
-                .body(ApiResponse.<Void>builder()
+                .body(apiResponseFactory
+                        .<Void>builder()
                         .success(false)
                         .code(errorCode.getCode())
                         .message(errorCode.getMessage())
@@ -100,7 +106,7 @@ public class StudentProfileExceptionHandler {
             cause = cause.getCause();
         }
         return ResponseEntity.badRequest()
-                .body(ApiResponse.validationError(
+                .body(apiResponseFactory.validationError(
                         List.of(new FieldErrorDetail(field, message)), request.getRequestURI()));
     }
 }

@@ -5,10 +5,12 @@ import com.eduhub.edu_hub.people.api.controller.AdminLecturerController;
 import com.eduhub.edu_hub.people.application.exception.LecturerProfileException;
 import com.eduhub.edu_hub.people.application.exception.ProfileCreationException;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -20,7 +22,10 @@ import tools.jackson.databind.exc.MismatchedInputException;
 
 @RestControllerAdvice(assignableTypes = AdminLecturerController.class)
 @Order(Ordered.HIGHEST_PRECEDENCE)
+@RequiredArgsConstructor
 public class LecturerProfileExceptionHandler {
+    private final ApiResponseFactory apiResponseFactory;
+
     @ExceptionHandler(ProfileCreationException.class)
     public ResponseEntity<ApiResponse<Void>> handleProfileCreationException(
             ProfileCreationException exception, HttpServletRequest request) {
@@ -38,7 +43,8 @@ public class LecturerProfileExceptionHandler {
     private ResponseEntity<ApiResponse<Void>> buildProfileErrorResponse(
             ErrorCode errorCode, String field, String fieldMessage, HttpServletRequest request) {
         return ResponseEntity.status(errorCode.getHttpStatus())
-                .body(ApiResponse.<Void>builder()
+                .body(apiResponseFactory
+                        .<Void>builder()
                         .success(false)
                         .code(errorCode.getCode())
                         .message(errorCode.getMessage())
@@ -69,7 +75,7 @@ public class LecturerProfileExceptionHandler {
             cause = cause.getCause();
         }
         return ResponseEntity.badRequest()
-                .body(ApiResponse.validationError(
+                .body(apiResponseFactory.validationError(
                         List.of(new FieldErrorDetail(field, message)), request.getRequestURI()));
     }
 

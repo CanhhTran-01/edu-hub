@@ -13,7 +13,11 @@ import com.eduhub.edu_hub.curriculum.api.dto.request.UpdateSubjectRequest;
 import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectResponse;
 import com.eduhub.edu_hub.curriculum.application.SubjectApplicationService;
 import com.eduhub.edu_hub.curriculum.domain.enums.SubjectStatus;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.PageResponse;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,6 +27,12 @@ import org.springframework.http.HttpStatus;
 
 @ExtendWith(MockitoExtension.class)
 class SubjectControllerTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
+    private final ApiResponseFactory apiResponseFactory = new ApiResponseFactory(CLOCK);
+
     @Mock
     private SubjectApplicationService service;
 
@@ -30,7 +40,7 @@ class SubjectControllerTest {
 
     @Test
     void createsSubjectWithoutAuthentication() {
-        var controller = new SubjectController(service);
+        var controller = new SubjectController(apiResponseFactory, service);
         var subject = SubjectResponse.builder().id(14L).build();
         when(service.createSubject(request)).thenReturn(subject);
 
@@ -45,7 +55,7 @@ class SubjectControllerTest {
 
     @Test
     void returnsNoResultsMessageWithEmptyPage() {
-        var controller = new SubjectController(service);
+        var controller = new SubjectController(apiResponseFactory, service);
         var search = new SubjectSearchRequest();
         var page = PageResponse.<SubjectResponse>builder()
                 .content(List.of())
@@ -66,7 +76,7 @@ class SubjectControllerTest {
 
     @Test
     void returnsSubjectDetail() {
-        var controller = new SubjectController(service);
+        var controller = new SubjectController(apiResponseFactory, service);
         var subject = SubjectResponse.builder().id(14L).build();
         when(service.getSubjectById(14L)).thenReturn(subject);
 
@@ -78,7 +88,7 @@ class SubjectControllerTest {
 
     @Test
     void updatesSubjectAndReturnsConfirmation() {
-        var controller = new SubjectController(service);
+        var controller = new SubjectController(apiResponseFactory, service);
         var update = new UpdateSubjectRequest();
         var subject = SubjectResponse.builder().id(14L).build();
         when(service.updateSubject(14L, update)).thenReturn(subject);
@@ -92,7 +102,7 @@ class SubjectControllerTest {
 
     @Test
     void deactivatesSubjectAndReturnsConfirmation() {
-        var controller = new SubjectController(service);
+        var controller = new SubjectController(apiResponseFactory, service);
         var action = new SubjectActionRequest();
         var subject =
                 SubjectResponse.builder().id(14L).status(SubjectStatus.INACTIVE).build();
@@ -107,7 +117,7 @@ class SubjectControllerTest {
 
     @Test
     void deletesSubjectAndReturnsConfirmation() {
-        var controller = new SubjectController(service);
+        var controller = new SubjectController(apiResponseFactory, service);
         var action = new SubjectActionRequest();
 
         var response = controller.deleteSubject(14L, action);
@@ -119,7 +129,7 @@ class SubjectControllerTest {
 
     @Test
     void savesPrerequisitesAndNotifiesAboutDuplicatesAndNonRetroactiveChanges() {
-        var controller = new SubjectController(service);
+        var controller = new SubjectController(apiResponseFactory, service);
         var request = new SetPrerequisiteRequest();
         request.setPrerequisiteSubjectIds(List.of(2L, 2L));
         var subject = SubjectResponse.builder().id(1L).build();

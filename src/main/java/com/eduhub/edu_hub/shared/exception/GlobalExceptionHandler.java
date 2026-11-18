@@ -1,10 +1,12 @@
 package com.eduhub.edu_hub.shared.exception;
 
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -21,7 +23,9 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 @RestControllerAdvice
 @Order(Ordered.LOWEST_PRECEDENCE)
 @Slf4j
+@RequiredArgsConstructor
 public class GlobalExceptionHandler {
+    private final ApiResponseFactory apiResponseFactory;
 
     @ExceptionHandler({
         org.springframework.web.servlet.NoHandlerFoundException.class,
@@ -29,7 +33,7 @@ public class GlobalExceptionHandler {
     })
     public ResponseEntity<ApiResponse<Void>> handleEndpointNotFound(Exception exception, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ApiResponse.error(ErrorCode.ENDPOINT_NOT_FOUND, request.getRequestURI()));
+                .body(apiResponseFactory.error(ErrorCode.ENDPOINT_NOT_FOUND, request.getRequestURI()));
     }
 
     @ExceptionHandler({
@@ -38,7 +42,7 @@ public class GlobalExceptionHandler {
     })
     public ResponseEntity<ApiResponse<Void>> handleInvalidUpload(Exception exception, HttpServletRequest request) {
         return ResponseEntity.badRequest()
-                .body(ApiResponse.error(ErrorCode.ADMISSION_IMPORT_INVALID, request.getRequestURI()));
+                .body(apiResponseFactory.error(ErrorCode.ADMISSION_IMPORT_INVALID, request.getRequestURI()));
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
@@ -46,7 +50,7 @@ public class GlobalExceptionHandler {
             HttpRequestMethodNotSupportedException exception, HttpServletRequest request) {
         return ResponseEntity.status(ErrorCode.METHOD_NOT_ALLOWED.getHttpStatus())
                 .headers(exception.getHeaders())
-                .body(ApiResponse.error(ErrorCode.METHOD_NOT_ALLOWED, request.getRequestURI()));
+                .body(apiResponseFactory.error(ErrorCode.METHOD_NOT_ALLOWED, request.getRequestURI()));
     }
 
     // Thiếu tham số cho URL
@@ -57,7 +61,7 @@ public class GlobalExceptionHandler {
         log.warn("Missing parameter at [{}]: {}", request.getRequestURI(), exception.getMessage());
 
         return ResponseEntity.status(ErrorCode.MISSING_PARAMETER.getHttpStatus())
-                .body(ApiResponse.error(ErrorCode.MISSING_PARAMETER, request.getRequestURI()));
+                .body(apiResponseFactory.error(ErrorCode.MISSING_PARAMETER, request.getRequestURI()));
     }
 
     // Validation exception
@@ -72,7 +76,7 @@ public class GlobalExceptionHandler {
         log.warn("Validation failed at [{}]: {}", request.getRequestURI(), errors);
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.validationError(errors, request.getRequestURI()));
+                .body(apiResponseFactory.validationError(errors, request.getRequestURI()));
     }
 
     // Business exception
@@ -87,7 +91,7 @@ public class GlobalExceptionHandler {
                 request.getRequestURI());
 
         return ResponseEntity.status(exception.getErrorCode().getHttpStatus())
-                .body(ApiResponse.error(exception.getErrorCode(), request.getRequestURI()));
+                .body(apiResponseFactory.error(exception.getErrorCode(), request.getRequestURI()));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
@@ -95,7 +99,7 @@ public class GlobalExceptionHandler {
             HttpMessageNotReadableException exception, HttpServletRequest request) {
         log.warn("Invalid request body at [{}]", request.getRequestURI());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.error(ErrorCode.VALIDATION_ERROR, request.getRequestURI()));
+                .body(apiResponseFactory.error(ErrorCode.VALIDATION_ERROR, request.getRequestURI()));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
@@ -106,14 +110,14 @@ public class GlobalExceptionHandler {
                         new FieldErrorDetail(violation.getPropertyPath().toString(), violation.getMessage()))
                 .toList();
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.validationError(errors, request.getRequestURI()));
+                .body(apiResponseFactory.validationError(errors, request.getRequestURI()));
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(
             MethodArgumentTypeMismatchException exception, HttpServletRequest request) {
         return ResponseEntity.badRequest()
-                .body(ApiResponse.validationError(
+                .body(apiResponseFactory.validationError(
                         List.of(new FieldErrorDetail(exception.getName(), "Giá trị tham số không hợp lệ")),
                         request.getRequestURI()));
     }
@@ -125,6 +129,6 @@ public class GlobalExceptionHandler {
         log.error("Unexpected Exception at [{}]: ", request.getRequestURI(), exception);
 
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error(ErrorCode.UNEXPECTED_ERROR, request.getRequestURI()));
+                .body(apiResponseFactory.error(ErrorCode.UNEXPECTED_ERROR, request.getRequestURI()));
     }
 }

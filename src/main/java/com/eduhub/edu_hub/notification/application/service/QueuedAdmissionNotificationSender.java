@@ -11,8 +11,8 @@ import com.eduhub.edu_hub.notification.domain.model.QueuedAdmissionNotification;
 import com.eduhub.edu_hub.notification.domain.policy.NotificationRetryPolicy;
 import com.eduhub.edu_hub.notification.domain.repository.QueuedAdmissionNotificationRepository;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
+import java.time.Clock;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,6 +28,7 @@ public class QueuedAdmissionNotificationSender {
     private final QueuedAdmissionNotificationRepository notificationRepository;
     private final IdentityFacade identityFacade;
     private final PeopleFacade.Admission peopleAdmissionFacade;
+    private final Clock clock;
 
     // IdentityFacade vẫn xác thực tài khoản/mật khẩu ở mỗi lần gửi.
 
@@ -39,7 +40,7 @@ public class QueuedAdmissionNotificationSender {
 
         QueuedAdmissionNotification notification =
                 notificationRepository.findByIdForUpdate(notificationId).orElse(null);
-        LocalDateTime attemptTime = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime attemptTime = LocalDateTime.now(clock);
 
         if (!NotificationRetryPolicy.allowsInitialAttempt(notification, attemptTime)) return;
 
@@ -51,7 +52,7 @@ public class QueuedAdmissionNotificationSender {
 
         QueuedAdmissionNotification notification =
                 notificationRepository.findByIdForUpdate(notificationId).orElse(null);
-        LocalDateTime attemptTime = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime attemptTime = LocalDateTime.now(clock);
 
         if (!NotificationRetryPolicy.allowsScheduledAttempt(notification, attemptTime)) return;
 

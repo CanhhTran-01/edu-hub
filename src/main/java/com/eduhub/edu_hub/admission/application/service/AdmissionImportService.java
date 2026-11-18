@@ -24,6 +24,7 @@ import com.eduhub.edu_hub.people.application.facade.dto.AdmissionStudentInfo;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.text.TextsNormalizer;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.function.Function;
@@ -49,6 +50,7 @@ public class AdmissionImportService {
     private final AdmissionApplicantMergePolicy applicantMergePolicy;
     private final AdmissionApplicantImportMapper applicantMapper;
     private final AdmissionPlanQueryService planQueryService;
+    private final Clock clock;
 
     @Transactional
     public AdmissionPlanResponse importApplicants(Long planId, ImportAdmissionApplicantsRequest request) {
@@ -84,13 +86,15 @@ public class AdmissionImportService {
                 .anyMatch(applicant -> applicant.getState() == AdmissionApplicantStatus.ENROLLED);
 
         // validate các AdmissionApplicant đã parse từ file mới
+        // Chốt cùng ngày Việt Nam cho toàn bộ file để không đổi kết quả giữa các dòng khi qua nửa đêm.
+        LocalDate validationDate = LocalDate.now(clock);
         for (AdmissionApplicant applicant : importedApplicants) {
 
             applicant.setPlan(plan); // applican này thuộc về plant hiện tại
 
             if (applicant.getState() == AdmissionApplicantStatus.INVALID) continue;
 
-            List<String> validationErrors = applicantValidationPolicy.validateApplicant(applicant, LocalDate.now());
+            List<String> validationErrors = applicantValidationPolicy.validateApplicant(applicant, validationDate);
             if (!validationErrors.isEmpty())
                 setApplicantStatus(applicant, AdmissionApplicantStatus.INVALID, String.join("; ", validationErrors));
         }

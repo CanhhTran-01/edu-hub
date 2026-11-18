@@ -15,8 +15,8 @@ import com.eduhub.edu_hub.people.domain.repository.LecturerTeachingSubjectReposi
 import com.eduhub.edu_hub.scheduling.application.facade.SchedulingFacade;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.text.TextsNormalizer;
+import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -39,6 +39,7 @@ public class LecturerAdminUpdateService {
     private final ProfileAccountEmailService profileAccountEmailService;
     private final LecturerResponseMapper lecturerResponseMapper;
     private final SchedulingFacade.TeachingAssignments teachingAssignments;
+    private final Clock clock;
 
     @Transactional
     public LecturerResponse updateLecturerProfile(
@@ -58,7 +59,7 @@ public class LecturerAdminUpdateService {
         Set<Long> teachingSubjectIds =
                 LecturerProfileUpdatePolicy.normalizeTeachingSubjectIds(request.getTeachingSubjectIds());
 
-        LecturerProfileUpdatePolicy.validateDateOfBirth(request.getDateOfBirth(), LocalDate.now(ZoneOffset.UTC));
+        LecturerProfileUpdatePolicy.validateDateOfBirth(request.getDateOfBirth(), LocalDate.now(clock));
 
         // Mọi cập nhật danh sách môn phải khóa cùng hồ sơ gốc; thứ tự khóa: Lecturer -> môn theo ID -> User.
         // Không join khóa Faculty ở đây vì cập nhật thông tin cá nhân không thay đổi khoa hoặc MSGV.

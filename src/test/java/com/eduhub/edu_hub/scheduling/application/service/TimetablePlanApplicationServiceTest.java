@@ -108,6 +108,12 @@ class TimetablePlanApplicationServiceTest {
         var response = service.createPlan(principal, 7L, new CreateTimetablePlanRequest());
         assertThat(response.state()).isEqualTo(TimetablePlanState.QUEUED);
         assertThat(response.canApply()).isFalse();
+        var savedPlan = ArgumentCaptor.forClass(TimetablePlan.class);
+        verify(planRepository).saveAndFlush(savedPlan.capture());
+        assertThat(savedPlan.getValue().getExpiresAt())
+                .isEqualTo(
+                        LocalDateTime.parse("2026-11-12T07:00:00").plusSeconds(settings.getSpentLimitSeconds() + 120));
+        assertThat(savedPlan.getValue().getCreatedAt()).isEqualTo(LocalDateTime.parse("2026-11-12T00:00:00"));
         var ordering = inOrder(planRepository, eventPublisher);
         ordering.verify(planRepository).existsByStateInAndDeletedFalse(any());
         ordering.verify(planRepository).saveAndFlush(any());
@@ -163,6 +169,8 @@ class TimetablePlanApplicationServiceTest {
         assertThat(response.state()).isEqualTo(TimetablePlanState.APPLIED);
         assertThat(moduleClass.getStatus()).isEqualTo(ModuleClassStatus.SCHEDULED);
         assertThat(moduleClass.getLecturer().getId()).isEqualTo(201L);
+        assertThat(plan.getAppliedAt()).isEqualTo(LocalDateTime.parse("2026-11-12T07:00:00"));
+        assertThat(plan.getUpdatedAt()).isEqualTo(LocalDateTime.parse("2026-11-12T00:00:00"));
         var schedules = ArgumentCaptor.forClass(List.class);
         verify(scheduleRepository).saveAllAndFlush(schedules.capture());
         assertThat((List<ClassSchedule>) schedules.getValue()).hasSize(2).allSatisfy(schedule -> {

@@ -37,6 +37,7 @@ public class AdmissionConfirmationService {
     private final AdmissionApplicantEnrollmentService enrollmentService;
     private final AdmissionConfirmationLeaseService confirmationLease;
     private final TransactionTemplate transactionTemplate;
+    private final Clock clock;
 
     public AdmissionConfirmationResponse confirmEnrollment(Long planId, ConfirmAdmissionEnrollmentRequest request) {
         ConfirmationBatch confirmationBatch = executeInTransaction(() -> prepareConfirmationBatch(planId, request));
@@ -84,7 +85,7 @@ public class AdmissionConfirmationService {
             throw new AdmissionEnrollmentException(ErrorCode.ADMISSION_STALE_PLAN);
         boolean confirmationLeaseExpired = plan.getState() == AdmissionPlanStatus.CONFIRMING
                 && plan.getProcessingUntil() != null
-                && !plan.getProcessingUntil().isAfter(LocalDateTime.now(ZoneOffset.UTC));
+                && !plan.getProcessingUntil().isAfter(LocalDateTime.now(clock));
         if (plan.getState() != AdmissionPlanStatus.PREVIEWED
                 && plan.getState() != AdmissionPlanStatus.PARTIALLY_CONFIRMED
                 && !confirmationLeaseExpired) throw new AdmissionEnrollmentException(ErrorCode.ADMISSION_INVALID_STATE);

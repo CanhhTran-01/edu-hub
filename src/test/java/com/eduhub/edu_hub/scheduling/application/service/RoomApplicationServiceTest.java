@@ -21,7 +21,7 @@ import com.eduhub.edu_hub.scheduling.domain.model.Room;
 import com.eduhub.edu_hub.scheduling.domain.model.Semester;
 import com.eduhub.edu_hub.scheduling.domain.repository.ClassScheduleRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.RoomRepository;
-import com.eduhub.edu_hub.shared.config.TimeConfiguration;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.time.Clock;
@@ -45,7 +45,7 @@ import org.springframework.data.jpa.domain.Specification;
 class RoomApplicationServiceTest {
     private static final Clock CLOCK = Clock.fixed(
             Instant.parse("2026-08-31T17:30:00Z"),
-            new TimeConfiguration().applicationClock().getZone());
+            new TimeConfig().applicationClock().getZone());
 
     @Mock
     private RoomRepository repository;

@@ -9,6 +9,7 @@ import com.eduhub.edu_hub.people.application.service.LecturerAdminUpdateService;
 import com.eduhub.edu_hub.people.application.service.LecturerApplicationService;
 import com.eduhub.edu_hub.people.application.service.LecturerCreationService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/lecturers")
 @RequiredArgsConstructor
 public class AdminLecturerController {
+    private final ApiResponseFactory apiResponseFactory;
     private final LecturerApplicationService lecturerApplicationService;
     private final LecturerCreationService lecturerCreationService;
     private final LecturerAdminUpdateService lecturerAdminUpdateService;
@@ -27,7 +29,8 @@ public class AdminLecturerController {
     @GetMapping
     public ApiResponse<PageResponse<LecturerResponse>> search(LecturerSearchRequest request) {
         PageResponse<LecturerResponse> lecturers = lecturerApplicationService.search(request);
-        return ApiResponse.<PageResponse<LecturerResponse>>builder()
+        return apiResponseFactory
+                .<PageResponse<LecturerResponse>>builder()
                 .success(true)
                 .message(lecturers.getContent().isEmpty() ? "Không tìm thấy kết quả" : null)
                 .data(lecturers)
@@ -36,13 +39,13 @@ public class AdminLecturerController {
 
     @GetMapping("/{id}")
     public ApiResponse<LecturerResponse> findById(@PathVariable Long id) {
-        return ApiResponse.success(lecturerApplicationService.findById(id));
+        return apiResponseFactory.success(lecturerApplicationService.findById(id));
     }
 
     @PostMapping
     public ApiResponse<CreateLecturerResponse> create(
             @Valid @RequestBody CreateLecturerRequest request, @AuthenticationPrincipal Jwt authenticatedJwt) {
-        return ApiResponse.success(lecturerCreationService.createLecturer(authenticatedJwt, request));
+        return apiResponseFactory.success(lecturerCreationService.createLecturer(authenticatedJwt, request));
     }
 
     @PutMapping("/{id}")
@@ -50,6 +53,7 @@ public class AdminLecturerController {
             @PathVariable Long id,
             @Valid @RequestBody UpdateLecturerProfileRequest request,
             @AuthenticationPrincipal Jwt authenticatedJwt) {
-        return ApiResponse.success(lecturerAdminUpdateService.updateLecturerProfile(authenticatedJwt, id, request));
+        return apiResponseFactory.success(
+                lecturerAdminUpdateService.updateLecturerProfile(authenticatedJwt, id, request));
     }
 }

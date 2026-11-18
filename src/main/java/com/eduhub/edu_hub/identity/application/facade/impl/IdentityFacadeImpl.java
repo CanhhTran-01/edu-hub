@@ -23,6 +23,7 @@ import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
 import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.text.TextsNormalizer;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -49,6 +50,7 @@ public class IdentityFacadeImpl implements IdentityFacade {
     private final NotificationFacade.ImmediateEmail immediateEmailNotifications;
     private final PasswordEncoder encoder;
     private final PasswordSettings passwordSettings;
+    private final Clock clock;
 
     @Override
     @Transactional
@@ -98,8 +100,7 @@ public class IdentityFacadeImpl implements IdentityFacade {
 
         if (user.isDeleted()
                 || user.getStatus() != UserStatus.ACTIVE
-                || (user.getLockedUntil() != null
-                        && user.getLockedUntil().isAfter(LocalDateTime.now(java.time.ZoneOffset.UTC)))) {
+                || (user.getLockedUntil() != null && user.getLockedUntil().isAfter(LocalDateTime.now(clock)))) {
             return new AccountNotificationResponse(userId, false, "ACCOUNT_NOT_AVAILABLE");
         }
 
@@ -178,8 +179,7 @@ public class IdentityFacadeImpl implements IdentityFacade {
             throw new IdentityAccountException(ErrorCode.USER_NOT_FOUND);
         }
         boolean locked = account.getStatus() != UserStatus.ACTIVE
-                || (account.getLockedUntil() != null
-                        && account.getLockedUntil().isAfter(LocalDateTime.now(java.time.ZoneOffset.UTC)));
+                || (account.getLockedUntil() != null && account.getLockedUntil().isAfter(LocalDateTime.now(clock)));
         return new StudentAccountResponse(
                 account.getId(),
                 account.getUsername(),

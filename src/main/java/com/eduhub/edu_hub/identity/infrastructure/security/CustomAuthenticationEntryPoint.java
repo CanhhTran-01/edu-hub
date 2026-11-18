@@ -1,6 +1,6 @@
 package com.eduhub.edu_hub.identity.infrastructure.security;
 
-import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -17,6 +17,7 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @RequiredArgsConstructor
 public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint {
+    private final ApiResponseFactory apiResponseFactory;
 
     public static final String ACCESS_TOKEN_EXPIRED = "access_token_expired";
     private final ObjectMapper objectMapper;
@@ -44,6 +45,6 @@ public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint 
         response.setCharacterEncoding("UTF-8");
         response.setHeader("WWW-Authenticate", "Bearer");
         response.getWriter()
-                .write(objectMapper.writeValueAsString(ApiResponse.error(errorCode, request.getRequestURI())));
+                .write(objectMapper.writeValueAsString(apiResponseFactory.error(errorCode, request.getRequestURI())));
     }
 }

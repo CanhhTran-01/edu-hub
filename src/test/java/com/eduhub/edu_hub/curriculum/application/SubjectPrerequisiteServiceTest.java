@@ -16,8 +16,11 @@ import com.eduhub.edu_hub.curriculum.domain.model.Subject;
 import com.eduhub.edu_hub.curriculum.domain.model.SubjectPrerequisite;
 import com.eduhub.edu_hub.curriculum.domain.repository.SubjectPrerequisiteRepository;
 import com.eduhub.edu_hub.curriculum.domain.repository.SubjectRepository;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,10 +28,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class SubjectPrerequisiteServiceTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
+
+    @Spy
+    private Clock clock = CLOCK;
+
     @Mock
     private SubjectRepository subjectRepository;
 

@@ -10,9 +10,13 @@ import com.eduhub.edu_hub.identity.api.controller.AuthController;
 import com.eduhub.edu_hub.identity.application.exception.IdentityAuthenticationException;
 import com.eduhub.edu_hub.identity.application.exception.PasswordValidationException;
 import com.eduhub.edu_hub.identity.application.service.AuthApplicationService;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,15 +30,22 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class IdentityExceptionHandlerTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
+    private final ApiResponseFactory apiResponseFactory = new ApiResponseFactory(CLOCK);
     private final AuthApplicationService authService = mock(AuthApplicationService.class);
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
         SecurityContextHolder.clearContext();
-        mvc = MockMvcBuilders.standaloneSetup(new AuthController(authService))
+        mvc = MockMvcBuilders.standaloneSetup(new AuthController(apiResponseFactory, authService))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
-                .setControllerAdvice(new IdentityExceptionHandler(), new GlobalExceptionHandler())
+                .setControllerAdvice(
+                        new IdentityExceptionHandler(apiResponseFactory),
+                        new GlobalExceptionHandler(apiResponseFactory))
                 .build();
     }
 

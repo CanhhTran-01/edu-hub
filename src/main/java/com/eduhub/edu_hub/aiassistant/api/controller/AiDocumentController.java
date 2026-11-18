@@ -3,6 +3,7 @@ package com.eduhub.edu_hub.aiassistant.api.controller;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.DocumentUploadResponse;
 import com.eduhub.edu_hub.aiassistant.application.service.DocumentIngestionService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -17,11 +18,12 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/v1/ai/documents")
 @RequiredArgsConstructor
 public class AiDocumentController {
+    private final ApiResponseFactory apiResponseFactory;
     private final DocumentIngestionService ingestionService;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<DocumentUploadResponse> upload(
             @AuthenticationPrincipal Jwt authenticatedJwt, @RequestPart("file") MultipartFile file) {
-        return ApiResponse.success(ingestionService.upload(authenticatedJwt, file));
+        return apiResponseFactory.success(ingestionService.upload(authenticatedJwt, file));
     }
 }

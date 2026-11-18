@@ -4,8 +4,8 @@ import static com.eduhub.edu_hub.notification.domain.policy.NotificationRetryPol
 
 import com.eduhub.edu_hub.notification.domain.enums.NotificationStatus;
 import com.eduhub.edu_hub.notification.domain.repository.QueuedAdmissionNotificationRepository;
+import java.time.Clock;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -19,12 +19,13 @@ public class AdmissionNotificationDispatchService {
 
     private final QueuedAdmissionNotificationRepository notificationRepository;
     private final QueuedAdmissionNotificationSender notificationSender;
+    private final Clock clock;
 
     public void sendDueNotifications() {
         // Không mở transaction bao quanh cả lô; sender vẫn đi qua Spring proxy với REQUIRES_NEW.
         for (Long notificationId : notificationRepository.findDueNotificationIds(
                 List.of(NotificationStatus.PENDING, NotificationStatus.FAILED),
-                LocalDateTime.now(ZoneOffset.UTC),
+                LocalDateTime.now(clock),
                 MAX_DELIVERY_ATTEMPTS,
                 PageRequest.of(0, DISPATCH_BATCH_SIZE))) {
 

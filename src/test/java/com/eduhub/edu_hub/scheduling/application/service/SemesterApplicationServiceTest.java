@@ -18,7 +18,7 @@ import com.eduhub.edu_hub.scheduling.domain.enums.SemesterStatus;
 import com.eduhub.edu_hub.scheduling.domain.model.Semester;
 import com.eduhub.edu_hub.scheduling.domain.repository.ModuleClassRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.SemesterRepository;
-import com.eduhub.edu_hub.shared.config.TimeConfiguration;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.time.Clock;
@@ -47,7 +47,7 @@ class SemesterApplicationServiceTest {
     // UTC vẫn là 31/08, nhưng ngày nghiệp vụ ở Việt Nam đã là 01/09.
     private static final Clock CLOCK = Clock.fixed(
             Instant.parse("2026-08-31T17:30:00Z"),
-            new TimeConfiguration().applicationClock().getZone());
+            new TimeConfig().applicationClock().getZone());
 
     @Mock
     private SemesterRepository repository;

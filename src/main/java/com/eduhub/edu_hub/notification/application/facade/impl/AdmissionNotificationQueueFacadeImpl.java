@@ -8,8 +8,8 @@ import com.eduhub.edu_hub.notification.domain.enums.AdmissionNotificationKind;
 import com.eduhub.edu_hub.notification.domain.enums.NotificationStatus;
 import com.eduhub.edu_hub.notification.domain.model.QueuedAdmissionNotification;
 import com.eduhub.edu_hub.notification.domain.repository.QueuedAdmissionNotificationRepository;
+import java.time.Clock;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -26,6 +26,7 @@ public class AdmissionNotificationQueueFacadeImpl implements NotificationFacade.
     private static final int QUERY_BATCH_SIZE = 500;
     private final QueuedAdmissionNotificationRepository notificationRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final Clock clock;
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
@@ -43,7 +44,7 @@ public class AdmissionNotificationQueueFacadeImpl implements NotificationFacade.
                 .admissionId(request.admissionId())
                 .studentId(request.studentId())
                 .recipient(request.recipient())
-                .nextAttemptAt(LocalDateTime.now(ZoneOffset.UTC))
+                .nextAttemptAt(LocalDateTime.now(clock))
                 .kind(
                         request.reEnrollment()
                                 ? AdmissionNotificationKind.RE_ENROLLMENT

@@ -7,6 +7,7 @@ import com.eduhub.edu_hub.aiassistant.api.dto.response.ChatSessionSummaryRespons
 import com.eduhub.edu_hub.aiassistant.application.service.AiChatService;
 import com.eduhub.edu_hub.aiassistant.application.service.ChatHistoryService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -28,13 +29,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @Validated
 public class AiChatController {
+    private final ApiResponseFactory apiResponseFactory;
     private final AiChatService chatService;
     private final ChatHistoryService historyService;
 
     @PostMapping("/chat")
     public ApiResponse<ChatResponse> chat(
             @AuthenticationPrincipal Jwt authenticatedJwt, @Valid @RequestBody ChatRequest request) {
-        return ApiResponse.success(chatService.chat(authenticatedJwt, request));
+        return apiResponseFactory.success(chatService.chat(authenticatedJwt, request));
     }
 
     @GetMapping("/sessions")
@@ -42,12 +44,12 @@ public class AiChatController {
             @AuthenticationPrincipal Jwt authenticatedJwt,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-        return ApiResponse.success(historyService.sessions(authenticatedJwt, page, size));
+        return apiResponseFactory.success(historyService.sessions(authenticatedJwt, page, size));
     }
 
     @GetMapping("/sessions/{sessionId}")
     public ApiResponse<ChatSessionDetailResponse> session(
             @AuthenticationPrincipal Jwt authenticatedJwt, @PathVariable String sessionId) {
-        return ApiResponse.success(historyService.session(authenticatedJwt, sessionId));
+        return apiResponseFactory.success(historyService.session(authenticatedJwt, sessionId));
     }
 }

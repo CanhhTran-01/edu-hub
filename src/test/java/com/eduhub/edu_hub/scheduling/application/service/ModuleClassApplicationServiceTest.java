@@ -24,7 +24,7 @@ import com.eduhub.edu_hub.scheduling.domain.model.Semester;
 import com.eduhub.edu_hub.scheduling.domain.policy.OpeningDemandPolicy;
 import com.eduhub.edu_hub.scheduling.domain.repository.ModuleClassRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.SemesterRepository;
-import com.eduhub.edu_hub.shared.config.TimeConfiguration;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
@@ -50,7 +50,7 @@ import org.springframework.data.jpa.domain.Specification;
 class ModuleClassApplicationServiceTest {
     private static final Clock CLOCK = Clock.fixed(
             Instant.parse("2026-11-02T10:00:00Z"),
-            new TimeConfiguration().applicationClock().getZone());
+            new TimeConfig().applicationClock().getZone());
 
     @Mock
     private SemesterRepository semesters;

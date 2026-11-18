@@ -11,6 +11,9 @@ import com.eduhub.edu_hub.notification.domain.enums.AdmissionNotificationKind;
 import com.eduhub.edu_hub.notification.domain.enums.NotificationStatus;
 import com.eduhub.edu_hub.notification.domain.model.QueuedAdmissionNotification;
 import com.eduhub.edu_hub.notification.domain.repository.QueuedAdmissionNotificationRepository;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.LongStream;
@@ -20,11 +23,15 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
 
 class AdmissionNotificationQueueFacadeImplTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
     private final QueuedAdmissionNotificationRepository notifications =
             mock(QueuedAdmissionNotificationRepository.class);
     private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     private final AdmissionNotificationQueueFacadeImpl facade =
-            new AdmissionNotificationQueueFacadeImpl(notifications, events);
+            new AdmissionNotificationQueueFacadeImpl(notifications, events, CLOCK);
 
     @BeforeEach
     void assignId() {
@@ -50,6 +57,8 @@ class AdmissionNotificationQueueFacadeImplTest {
         assertThat(captor.getValue().getKind()).isEqualTo(AdmissionNotificationKind.INITIAL_ACCOUNT);
         assertThat(captor.getValue().getState()).isEqualTo(NotificationStatus.PENDING);
         assertThat(captor.getValue().getFailureCount()).isZero();
+        assertThat(captor.getValue().getNextAttemptAt())
+                .isEqualTo(java.time.LocalDateTime.parse("2026-11-19T00:30:00"));
         verify(events).publishEvent(new AdmissionNotificationQueued(12L));
     }
 

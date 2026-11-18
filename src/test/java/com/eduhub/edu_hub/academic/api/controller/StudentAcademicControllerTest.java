@@ -10,8 +10,12 @@ import com.eduhub.edu_hub.academic.api.exception.StudentAcademicExceptionHandler
 import com.eduhub.edu_hub.academic.application.exception.StudentAcademicException;
 import com.eduhub.edu_hub.academic.application.service.StudentAcademicQueryService;
 import com.eduhub.edu_hub.scheduling.api.dto.response.SemesterResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.*;
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.*;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -22,6 +26,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class StudentAcademicControllerTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
+    private final ApiResponseFactory apiResponseFactory = new ApiResponseFactory(CLOCK);
     StudentAcademicQueryService service = mock(StudentAcademicQueryService.class);
     Jwt principal = Jwt.withTokenValue("token")
             .header("alg", "HS256")
@@ -33,9 +42,11 @@ class StudentAcademicControllerTest {
     @BeforeEach
     void setup() {
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(principal));
-        mvc = MockMvcBuilders.standaloneSetup(new StudentAcademicController(service))
+        mvc = MockMvcBuilders.standaloneSetup(new StudentAcademicController(apiResponseFactory, service))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
-                .setControllerAdvice(new StudentAcademicExceptionHandler(), new GlobalExceptionHandler())
+                .setControllerAdvice(
+                        new StudentAcademicExceptionHandler(apiResponseFactory),
+                        new GlobalExceptionHandler(apiResponseFactory))
                 .build();
     }
 

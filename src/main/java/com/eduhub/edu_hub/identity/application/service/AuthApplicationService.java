@@ -16,9 +16,9 @@ import com.eduhub.edu_hub.identity.infrastructure.config.AuthenticationSettings;
 import com.eduhub.edu_hub.identity.infrastructure.security.CustomUserDetail;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -45,6 +45,7 @@ public class AuthApplicationService {
     private final AuthenticationManager authenticationManager;
     private final AuthenticationSettings authenticationSettings;
     private final PeopleFacade.LoginProfile loginProfiles;
+    private final Clock clock;
 
     private record LoginAttempt(LoginResponse response, ErrorCode error) {}
 
@@ -60,7 +61,7 @@ public class AuthApplicationService {
 
             // UserDetailsService đã khóa User trong cùng transaction, username không tồn tại không có bộ đếm để ghi.
             userRepository.findByUsernameForUpdate(request.getUsername()).ifPresent(user -> {
-                LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+                LocalDateTime now = LocalDateTime.now(clock);
                 clearExpiredTemporaryLock(user, now);
                 recordFailedAttempt(user, now);
             });
@@ -78,7 +79,8 @@ public class AuthApplicationService {
                 .findById(Objects.requireNonNull(principal).getUserId())
                 .orElseThrow(() -> new IdentityAuthenticationException(ErrorCode.UNEXPECTED_ERROR));
 
-        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        Instant issuedAt = clock.instant();
+        LocalDateTime now = LocalDateTime.ofInstant(issuedAt, clock.getZone());
         user.setFailedLoginCount(0);
         user.setLockedUntil(null);
         userRepository.save(user);
@@ -95,7 +97,7 @@ public class AuthApplicationService {
                     case ACADEMIC_ADMIN, SYSTEM_ADMIN -> null;
                 };
 
-        Instant issuedAt = now.toInstant(ZoneOffset.UTC);
+        // JWT giữ Instant tuyệt đối; không gắn UTC vào một LocalDateTime đang mang giờ Việt Nam.
         String refreshToken = tokenService.newRefreshToken();
 
         RefreshToken session = new RefreshToken();
@@ -150,7 +152,7 @@ public class AuthApplicationService {
                     .findByTokenHash(tokenService.hash(refreshToken))
                     .orElseThrow(() -> new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED));
 
-            if (!LocalDateTime.now(ZoneOffset.UTC).isBefore(token.getExpiresAt())) {
+            if (!LocalDateTime.now(clock).isBefore(token.getExpiresAt())) {
                 throw new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED);
             }
             if (!token.getId().equals(claims.sessionId())
@@ -178,7 +180,7 @@ public class AuthApplicationService {
                     .findByIdForUpdate(claims.userId())
                     .orElseThrow(() -> new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED));
 
-            LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+            LocalDateTime now = LocalDateTime.now(clock);
 
             boolean hasValidSession = refreshTokenRepository
                     .findByIdAndRevokedFalse(claims.sessionId())

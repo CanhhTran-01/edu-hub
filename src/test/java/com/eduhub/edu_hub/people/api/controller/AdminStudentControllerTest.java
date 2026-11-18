@@ -24,8 +24,12 @@ import com.eduhub.edu_hub.people.api.exception.StudentProfileExceptionHandler;
 import com.eduhub.edu_hub.people.application.service.StudentAdminUpdateService;
 import com.eduhub.edu_hub.people.application.service.StudentApplicationService;
 import com.eduhub.edu_hub.people.application.service.StudentCreationService;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.PageResponse;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,6 +49,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class AdminStudentControllerTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
+    private final ApiResponseFactory apiResponseFactory = new ApiResponseFactory(CLOCK);
     private final StudentApplicationService service = mock(StudentApplicationService.class);
     private final StudentCreationService studentCreationService = mock(StudentCreationService.class);
     private final StudentAdminUpdateService profileUpdateService = mock(StudentAdminUpdateService.class);
@@ -60,10 +69,12 @@ class AdminStudentControllerTest {
     void setup() {
         SecurityContextHolder.clearContext();
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(authenticatedJwt));
-        mvc = MockMvcBuilders.standaloneSetup(
-                        new AdminStudentController(service, profileUpdateService, studentCreationService))
+        mvc = MockMvcBuilders.standaloneSetup(new AdminStudentController(
+                        apiResponseFactory, service, profileUpdateService, studentCreationService))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
-                .setControllerAdvice(new StudentProfileExceptionHandler(), new GlobalExceptionHandler())
+                .setControllerAdvice(
+                        new StudentProfileExceptionHandler(apiResponseFactory),
+                        new GlobalExceptionHandler(apiResponseFactory))
                 .build();
     }
 

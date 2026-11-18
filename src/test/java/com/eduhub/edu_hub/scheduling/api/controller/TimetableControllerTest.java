@@ -12,8 +12,12 @@ import com.eduhub.edu_hub.scheduling.api.exception.TimetableExceptionHandler;
 import com.eduhub.edu_hub.scheduling.application.exception.TimetableException;
 import com.eduhub.edu_hub.scheduling.application.service.TimetablePlanApplicationService;
 import com.eduhub.edu_hub.scheduling.domain.enums.TimetablePlanState;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.*;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +34,11 @@ import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.*;
 
 class TimetableControllerTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
+    private final ApiResponseFactory apiResponseFactory = new ApiResponseFactory(CLOCK);
     private final TimetablePlanApplicationService service = mock(TimetablePlanApplicationService.class);
     private final Jwt principal =
             Jwt.withTokenValue("token").header("alg", "HS256").subject("admin").build();
@@ -37,8 +46,10 @@ class TimetableControllerTest {
 
     @BeforeEach
     void setUp() {
-        mvc = MockMvcBuilders.standaloneSetup(new TimetableController(service))
-                .setControllerAdvice(new GlobalExceptionHandler(), new TimetableExceptionHandler())
+        mvc = MockMvcBuilders.standaloneSetup(new TimetableController(apiResponseFactory, service))
+                .setControllerAdvice(
+                        new GlobalExceptionHandler(apiResponseFactory),
+                        new TimetableExceptionHandler(apiResponseFactory))
                 .setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
                     @Override
                     public boolean supportsParameter(MethodParameter parameter) {

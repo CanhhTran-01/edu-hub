@@ -20,9 +20,13 @@ import com.eduhub.edu_hub.admission.application.service.AdmissionConfirmationSer
 import com.eduhub.edu_hub.admission.application.service.AdmissionImportService;
 import com.eduhub.edu_hub.admission.application.service.AdmissionNotificationQueryService;
 import com.eduhub.edu_hub.admission.application.service.AdmissionPlanningService;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,6 +38,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class StudentAdmissionControllerTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
+    private final ApiResponseFactory apiResponseFactory = new ApiResponseFactory(CLOCK);
     private final AdmissionPlanningService planning = mock(AdmissionPlanningService.class);
     private final AdmissionImportService admissionImportService = mock(AdmissionImportService.class);
     private final AdmissionClassPreparationService classPreparationService =
@@ -44,13 +53,16 @@ class StudentAdmissionControllerTest {
     void setup() {
         when(planning.getDefaultCapacityConfiguration()).thenReturn(new AdmissionCapacityResponse(40, 50, 15));
         mvc = MockMvcBuilders.standaloneSetup(new StudentAdmissionController(
+                        apiResponseFactory,
                         planning,
                         admissionImportService,
                         classPreparationService,
                         mock(AdmissionAllocationService.class),
                         mock(AdmissionConfirmationService.class),
                         mock(AdmissionNotificationQueryService.class)))
-                .setControllerAdvice(new AdmissionExceptionHandler(), new GlobalExceptionHandler())
+                .setControllerAdvice(
+                        new AdmissionExceptionHandler(apiResponseFactory),
+                        new GlobalExceptionHandler(apiResponseFactory))
                 .build();
     }
 

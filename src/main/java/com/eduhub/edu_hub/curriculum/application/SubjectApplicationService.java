@@ -20,6 +20,7 @@ import com.eduhub.edu_hub.scheduling.application.facade.SchedulingFacade;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.mapper.PageMapper;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -47,6 +48,7 @@ public class SubjectApplicationService {
     private final SubjectRepository subjectRepository;
     private final SubjectPrerequisiteRepository subjectPrerequisiteRepository;
     private final SchedulingFacade.TeachingAssignments teachingAssignments;
+    private final Clock clock;
 
     @Transactional
     public SubjectResponse createSubject(CreateSubjectRequest request) {
@@ -62,8 +64,8 @@ public class SubjectApplicationService {
             throw new SubjectException(ErrorCode.DUPLICATE_SUBJECT_NAME);
         }
 
-        // TODO: cần thống nhất về lại 1 múi giờ
-        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        // NOTE: Lấy thời điểm từ Clock chung và giữ metadata audit của học phần theo UTC.
+        LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
 
         // update field
         Subject subject = Subject.builder()
@@ -129,7 +131,7 @@ public class SubjectApplicationService {
         if (request.getTotalTeachingPeriods() != null)
             subject.setTotalTeachingPeriods(request.getTotalTeachingPeriods());
         subject.setDescription(request.getDescription());
-        subject.setUpdatedAt(LocalDateTime.now(ZoneOffset.UTC));
+        subject.setUpdatedAt(LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
 
         // lưu kết quả
         Subject saved = subjectRepository.save(subject);
@@ -146,7 +148,7 @@ public class SubjectApplicationService {
 
         // deactivate
         subject.setStatus(SubjectStatus.INACTIVE);
-        subject.setUpdatedAt(LocalDateTime.now(ZoneOffset.UTC));
+        subject.setUpdatedAt(LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
 
         Subject saved = subjectRepository.save(subject);
         log.info("Ngừng sử dụng học phần: id={}, code={}, reason={}", id, saved.getSubjectCode(), request.getReason());
@@ -164,7 +166,7 @@ public class SubjectApplicationService {
 
         // delete học phần - chỉnh cờ isDeleted
         subject.setDeleted(true);
-        subject.setUpdatedAt(LocalDateTime.now(ZoneOffset.UTC));
+        subject.setUpdatedAt(LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
 
         subjectRepository.save(subject);
         log.info("Xóa mềm học phần: id={}, code={}, reason={}", id, subject.getSubjectCode(), request.getReason());
@@ -218,7 +220,7 @@ public class SubjectApplicationService {
         checkPrerequisiteCycle(subjectsById, links, id, requestedIds);
 
         // Sửa Entity sau khi toàn bộ danh sách và đồ thị đã hợp lệ.
-        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
 
         Set<Long> keptIds = new HashSet<>(); // các môn tiên quyết đã có liên kết hợp lệ sau khi xử lý
         List<String> added = new ArrayList<>(); // các môn các liên kết mới thêm, phục vụ log

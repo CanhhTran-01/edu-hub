@@ -6,8 +6,10 @@ import com.eduhub.edu_hub.admission.application.exception.AdmissionImportScopeEx
 import com.eduhub.edu_hub.admission.application.exception.AdmissionPlanException;
 import com.eduhub.edu_hub.admission.application.exception.AdmissionSpreadsheetException;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.ResponseEntity;
@@ -16,7 +18,10 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice(assignableTypes = StudentAdmissionController.class)
 @Order(Ordered.HIGHEST_PRECEDENCE)
+@RequiredArgsConstructor
 public class AdmissionExceptionHandler {
+    private final ApiResponseFactory apiResponseFactory;
+
     @ExceptionHandler({
         AdmissionPlanException.class,
         AdmissionEnrollmentException.class,
@@ -26,7 +31,7 @@ public class AdmissionExceptionHandler {
             BaseException exception, HttpServletRequest request) {
         var errorCode = exception.getErrorCode();
         return ResponseEntity.status(errorCode.getHttpStatus())
-                .body(ApiResponse.error(errorCode, request.getRequestURI()));
+                .body(apiResponseFactory.error(errorCode, request.getRequestURI()));
     }
 
     @ExceptionHandler(AdmissionImportScopeException.class)
@@ -38,7 +43,8 @@ public class AdmissionExceptionHandler {
 
         var errorCode = exception.getErrorCode();
         return ResponseEntity.status(errorCode.getHttpStatus())
-                .body(ApiResponse.<Void>builder()
+                .body(apiResponseFactory
+                        .<Void>builder()
                         .success(false)
                         .code(errorCode.getCode())
                         .message(errorCode.getMessage())

@@ -4,10 +4,12 @@ import com.eduhub.edu_hub.enrollment.api.controller.EnrollmentController;
 import com.eduhub.edu_hub.enrollment.api.controller.ProcessScoreController;
 import com.eduhub.edu_hub.enrollment.application.exception.EnrollmentException;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -19,7 +21,10 @@ import tools.jackson.databind.exc.MismatchedInputException;
 @RestControllerAdvice(assignableTypes = {EnrollmentController.class, ProcessScoreController.class})
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @lombok.extern.slf4j.Slf4j
+@RequiredArgsConstructor
 public class EnrollmentExceptionHandler {
+    private final ApiResponseFactory apiResponseFactory;
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Void>> handleInvalidBody(
             HttpMessageNotReadableException exception, HttpServletRequest request) {
@@ -35,12 +40,13 @@ public class EnrollmentExceptionHandler {
                         .collect(java.util.stream.Collectors.joining());
                 if (field.startsWith(".")) field = field.substring(1);
                 return ResponseEntity.badRequest()
-                        .body(ApiResponse.validationError(
+                        .body(apiResponseFactory.validationError(
                                 List.of(new FieldErrorDetail(field, "Giá trị trường không đúng định dạng")),
                                 request.getRequestURI()));
             }
         }
-        return ResponseEntity.badRequest().body(ApiResponse.error(ErrorCode.VALIDATION_ERROR, request.getRequestURI()));
+        return ResponseEntity.badRequest()
+                .body(apiResponseFactory.error(ErrorCode.VALIDATION_ERROR, request.getRequestURI()));
     }
 
     @ExceptionHandler({
@@ -49,7 +55,8 @@ public class EnrollmentExceptionHandler {
     })
     public ResponseEntity<ApiResponse<Void>> handleInvalidUpload(Exception exception, HttpServletRequest request) {
         return ResponseEntity.badRequest()
-                .body(ApiResponse.<Void>builder()
+                .body(apiResponseFactory
+                        .<Void>builder()
                         .success(false)
                         .code(ErrorCode.PROCESS_SCORE_IMPORT_INVALID.getCode())
                         .message(ErrorCode.PROCESS_SCORE_IMPORT_INVALID.getMessage())
@@ -63,7 +70,8 @@ public class EnrollmentExceptionHandler {
             EnrollmentException exception, HttpServletRequest request) {
         var error = exception.getErrorCode();
         return ResponseEntity.status(error.getHttpStatus())
-                .body(ApiResponse.<Void>builder()
+                .body(apiResponseFactory
+                        .<Void>builder()
                         .success(false)
                         .code(error.getCode())
                         .message(error.getMessage())
@@ -85,6 +93,7 @@ public class EnrollmentExceptionHandler {
         }
         if (error == ErrorCode.UNEXPECTED_ERROR)
             log.error("Không lưu được lượt học: path={}", request.getRequestURI(), exception);
-        return ResponseEntity.status(error.getHttpStatus()).body(ApiResponse.error(error, request.getRequestURI()));
+        return ResponseEntity.status(error.getHttpStatus())
+                .body(apiResponseFactory.error(error, request.getRequestURI()));
     }
 }

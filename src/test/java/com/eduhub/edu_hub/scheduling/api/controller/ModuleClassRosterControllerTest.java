@@ -16,10 +16,14 @@ import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassRosterExce
 import com.eduhub.edu_hub.scheduling.application.service.ModuleClassExportService;
 import com.eduhub.edu_hub.scheduling.application.service.ModuleClassRosterService;
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassExportColumn;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
 import com.eduhub.edu_hub.shared.common.PageResponse;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +40,11 @@ import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.*;
 
 class ModuleClassRosterControllerTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
+    private final ApiResponseFactory apiResponseFactory = new ApiResponseFactory(CLOCK);
     private final ModuleClassRosterService rosterService = mock(ModuleClassRosterService.class);
     private final ModuleClassExportService exportService = mock(ModuleClassExportService.class);
     private final Jwt principal =
@@ -44,8 +53,11 @@ class ModuleClassRosterControllerTest {
 
     @BeforeEach
     void setUp() {
-        mvc = MockMvcBuilders.standaloneSetup(new ModuleClassRosterController(rosterService, exportService))
-                .setControllerAdvice(new GlobalExceptionHandler(), new ModuleClassRosterExceptionHandler())
+        mvc = MockMvcBuilders.standaloneSetup(
+                        new ModuleClassRosterController(apiResponseFactory, rosterService, exportService))
+                .setControllerAdvice(
+                        new GlobalExceptionHandler(apiResponseFactory),
+                        new ModuleClassRosterExceptionHandler(apiResponseFactory))
                 .setCustomArgumentResolvers(new HandlerMethodArgumentResolver() {
                     @Override
                     public boolean supportsParameter(MethodParameter parameter) {

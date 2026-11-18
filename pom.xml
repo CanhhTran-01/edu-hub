@@ -208,13 +208,13 @@
 				</executions>
 			</plugin>
 
-			<!-- 4. Đồng bộ timezone UTC khi chạy unit test -->
-			<!-- Môi trường local/dev thật: TimeZone.setDefault(TimeZone.getTimeZone("UTC")) trong main()-->
+			<!-- 4. Đồng bộ múi giờ Việt Nam khi chạy unit test; metadata audit vẫn dùng provider UTC. -->
+			<!-- Môi trường chạy thật dùng TimeConfig.APPLICATION_ZONE trong main(). -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
-					<argLine>-Duser.timezone=UTC</argLine>
+					<argLine>-Duser.timezone=Asia/Ho_Chi_Minh</argLine>
 				</configuration>
 			</plugin>
 		</plugins>

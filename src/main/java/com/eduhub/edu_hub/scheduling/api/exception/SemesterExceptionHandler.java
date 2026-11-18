@@ -3,8 +3,10 @@ package com.eduhub.edu_hub.scheduling.api.exception;
 import com.eduhub.edu_hub.scheduling.api.controller.SemesterController;
 import com.eduhub.edu_hub.scheduling.application.exception.SemesterConflictException;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.core.Ordered;
@@ -17,13 +19,17 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice(assignableTypes = SemesterController.class)
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @Slf4j
+@RequiredArgsConstructor
 public class SemesterExceptionHandler {
+    private final ApiResponseFactory apiResponseFactory;
+
     @ExceptionHandler(SemesterConflictException.class)
     public ResponseEntity<ApiResponse<Void>> handleConflict(
             SemesterConflictException exception, HttpServletRequest request) {
         ErrorCode error = exception.getErrorCode();
         return ResponseEntity.status(error.getHttpStatus())
-                .body(ApiResponse.<Void>builder()
+                .body(apiResponseFactory
+                        .<Void>builder()
                         .success(false)
                         .code(error.getCode())
                         .message(error.getMessage())
@@ -57,6 +63,7 @@ public class SemesterExceptionHandler {
         } else {
             log.warn("Semester constraint rejected: constraint={}, path={}", constraint, request.getRequestURI());
         }
-        return ResponseEntity.status(error.getHttpStatus()).body(ApiResponse.error(error, request.getRequestURI()));
+        return ResponseEntity.status(error.getHttpStatus())
+                .body(apiResponseFactory.error(error, request.getRequestURI()));
     }
 }

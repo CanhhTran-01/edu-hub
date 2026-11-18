@@ -6,8 +6,8 @@ import com.eduhub.edu_hub.identity.domain.model.User;
 import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import java.time.Clock;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
@@ -21,6 +21,7 @@ public class CurrentUserAuthenticationService {
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final TokenService tokenService;
+    private final Clock clock;
 
     public User requireCurrentUser(Jwt authenticatedJwt) {
         // NOTE: Spring đã xác thực JWT; các truy vấn dưới đây là kiểm User/phiên, không giải mã lại token.
@@ -30,7 +31,7 @@ public class CurrentUserAuthenticationService {
                 .findByUsernameAndDeletedFalse(claims.username())
                 .orElseThrow(() -> new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED));
 
-        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime now = LocalDateTime.now(clock);
 
         boolean hasValidSession = refreshTokenRepository
                 .findByIdAndRevokedFalse(claims.sessionId())

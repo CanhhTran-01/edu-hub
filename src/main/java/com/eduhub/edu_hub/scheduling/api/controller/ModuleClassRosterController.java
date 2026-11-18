@@ -7,6 +7,7 @@ import com.eduhub.edu_hub.scheduling.api.dto.response.ModuleClassSimpleResponse;
 import com.eduhub.edu_hub.scheduling.application.service.ModuleClassExportService;
 import com.eduhub.edu_hub.scheduling.application.service.ModuleClassRosterService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
 public class ModuleClassRosterController {
+    private final ApiResponseFactory apiResponseFactory;
     private final ModuleClassRosterService rosterService;
     private final ModuleClassExportService exportService;
 
@@ -30,13 +32,13 @@ public class ModuleClassRosterController {
             @AuthenticationPrincipal Jwt principal,
             @PathVariable Long semesterId,
             @Valid @ModelAttribute ModuleClassRosterSearchRequest request) {
-        return ApiResponse.success(rosterService.searchClasses(principal, semesterId, request));
+        return apiResponseFactory.success(rosterService.searchClasses(principal, semesterId, request));
     }
 
     @GetMapping("/module-classes/{moduleClassId}/roster")
     public ApiResponse<ModuleClassRosterResponse> findRoster(
             @AuthenticationPrincipal Jwt principal, @PathVariable Long moduleClassId) {
-        return ApiResponse.success(rosterService.findRoster(principal, moduleClassId));
+        return apiResponseFactory.success(rosterService.findRoster(principal, moduleClassId));
     }
 
     @PostMapping("/module-classes/{moduleClassId}/students/export")

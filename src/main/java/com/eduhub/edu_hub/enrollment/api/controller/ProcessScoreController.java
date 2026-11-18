@@ -5,6 +5,7 @@ import com.eduhub.edu_hub.enrollment.api.dto.request.UpdateProcessScoresRequest;
 import com.eduhub.edu_hub.enrollment.api.dto.response.ProcessScoreRosterResponse;
 import com.eduhub.edu_hub.enrollment.application.service.ProcessScoreService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
@@ -19,12 +20,13 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/v1/module-classes/{moduleClassId}/process-scores")
 @RequiredArgsConstructor
 public class ProcessScoreController {
+    private final ApiResponseFactory apiResponseFactory;
     private final ProcessScoreService processScoreService;
 
     @GetMapping
     public ApiResponse<ProcessScoreRosterResponse> findScores(
             @AuthenticationPrincipal Jwt principal, @PathVariable Long moduleClassId) {
-        return ApiResponse.success(processScoreService.findScores(principal, moduleClassId));
+        return apiResponseFactory.success(processScoreService.findScores(principal, moduleClassId));
     }
 
     @PatchMapping
@@ -32,7 +34,7 @@ public class ProcessScoreController {
             @AuthenticationPrincipal Jwt principal,
             @PathVariable Long moduleClassId,
             @RequestBody UpdateProcessScoresRequest request) {
-        return ApiResponse.success(processScoreService.updateScores(principal, moduleClassId, request));
+        return apiResponseFactory.success(processScoreService.updateScores(principal, moduleClassId, request));
     }
 
     @GetMapping("/template")
@@ -53,7 +55,7 @@ public class ProcessScoreController {
             @AuthenticationPrincipal Jwt principal,
             @PathVariable Long moduleClassId,
             @RequestPart("file") MultipartFile file) {
-        return ApiResponse.success(
+        return apiResponseFactory.success(
                 processScoreService.importScores(principal, moduleClassId, new ImportProcessScoresRequest(file)));
     }
 }

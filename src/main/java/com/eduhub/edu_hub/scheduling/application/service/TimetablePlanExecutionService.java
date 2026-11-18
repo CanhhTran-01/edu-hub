@@ -34,12 +34,12 @@ public class TimetablePlanExecutionService {
         var plan = planRepository.findForUpdateById(planId).orElseThrow();
         if (plan.getState() == TimetablePlanState.STOP_REQUESTED) {
             plan.setState(TimetablePlanState.STOPPED);
-            plan.setUpdatedAt(now());
+            plan.setUpdatedAt(currentAuditTimestamp());
             return null;
         }
         if (plan.getState() != TimetablePlanState.QUEUED) return null;
         plan.setState(TimetablePlanState.RUNNING);
-        plan.setUpdatedAt(now());
+        plan.setUpdatedAt(currentAuditTimestamp());
         return codec.read(plan.getProblemJson(), TimetableProblem.class);
     }
 
@@ -65,7 +65,7 @@ public class TimetablePlanExecutionService {
                             : Long.valueOf(0).equals(plan.getHardPenalty())
                                     ? TimetablePlanState.FEASIBLE
                                     : TimetablePlanState.NO_FEASIBLE_SOLUTION);
-        plan.setUpdatedAt(now());
+        plan.setUpdatedAt(currentAuditTimestamp());
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -77,13 +77,13 @@ public class TimetablePlanExecutionService {
                     plan.setState(TimetablePlanState.FAILED);
                     plan.setDiagnosticsJson(
                             codec.write(List.of("Tác vụ xếp lịch bị lỗi; lịch chính thức được giữ nguyên")));
-                    plan.setUpdatedAt(now());
+                    plan.setUpdatedAt(currentAuditTimestamp());
                 });
     }
 
     @Transactional
     public void expireInterruptedPlans() {
-        var expiredAt = now();
+        var expiredAt = LocalDateTime.now(clock);
         var expiredPlans = planRepository.findExpiredForUpdate(ACTIVE_STATES, expiredAt);
 
         if (expiredPlans.isEmpty()) {
@@ -99,13 +99,13 @@ public class TimetablePlanExecutionService {
                     plan.getExpiresAt());
             plan.setState(TimetablePlanState.INTERRUPTED);
             plan.setDiagnosticsJson(codec.write(List.of("Tác vụ không hoàn tất trước hạn; hãy tạo phương án mới")));
-            plan.setUpdatedAt(expiredAt);
+            plan.setUpdatedAt(currentAuditTimestamp());
         }
         planRepository.flush();
         log.info("Đã đánh dấu {} phương án thời khóa biểu là INTERRUPTED", expiredPlans.size());
     }
 
-    private LocalDateTime now() {
+    private LocalDateTime currentAuditTimestamp() {
         return LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
     }
 }

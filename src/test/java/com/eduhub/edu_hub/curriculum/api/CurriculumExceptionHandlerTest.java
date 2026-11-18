@@ -20,9 +20,13 @@ import com.eduhub.edu_hub.curriculum.api.exception.CurriculumExceptionHandler;
 import com.eduhub.edu_hub.curriculum.application.SubjectApplicationService;
 import com.eduhub.edu_hub.curriculum.application.exception.PrerequisiteCycleException;
 import com.eduhub.edu_hub.curriculum.application.exception.SubjectHasDependentsException;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -30,9 +34,15 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class CurriculumExceptionHandlerTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
+    private final ApiResponseFactory apiResponseFactory = new ApiResponseFactory(CLOCK);
     private final SubjectApplicationService service = mock(SubjectApplicationService.class);
-    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new SubjectController(service))
-            .setControllerAdvice(new GlobalExceptionHandler(), new CurriculumExceptionHandler())
+    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new SubjectController(apiResponseFactory, service))
+            .setControllerAdvice(
+                    new GlobalExceptionHandler(apiResponseFactory), new CurriculumExceptionHandler(apiResponseFactory))
             .build();
 
     @Test

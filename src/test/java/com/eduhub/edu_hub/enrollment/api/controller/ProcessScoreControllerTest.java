@@ -10,9 +10,13 @@ import com.eduhub.edu_hub.enrollment.api.dto.request.UpdateProcessScoresRequest;
 import com.eduhub.edu_hub.enrollment.api.exception.EnrollmentExceptionHandler;
 import com.eduhub.edu_hub.enrollment.application.exception.EnrollmentException;
 import com.eduhub.edu_hub.enrollment.application.service.ProcessScoreService;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -28,6 +32,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class ProcessScoreControllerTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
+    private final ApiResponseFactory apiResponseFactory = new ApiResponseFactory(CLOCK);
     private final ProcessScoreService service = mock(ProcessScoreService.class);
     private final Jwt principal = Jwt.withTokenValue("token")
             .header("alg", "HS256")
@@ -39,9 +48,11 @@ class ProcessScoreControllerTest {
     @BeforeEach
     void setup() {
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(principal));
-        mvc = MockMvcBuilders.standaloneSetup(new ProcessScoreController(service))
+        mvc = MockMvcBuilders.standaloneSetup(new ProcessScoreController(apiResponseFactory, service))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
-                .setControllerAdvice(new EnrollmentExceptionHandler(), new GlobalExceptionHandler())
+                .setControllerAdvice(
+                        new EnrollmentExceptionHandler(apiResponseFactory),
+                        new GlobalExceptionHandler(apiResponseFactory))
                 .build();
     }
 

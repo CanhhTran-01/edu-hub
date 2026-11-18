@@ -9,6 +9,8 @@ import com.eduhub.edu_hub.scheduling.api.dto.response.*;
 import com.eduhub.edu_hub.scheduling.api.dto.response.WeeklyTimetableResponse.WeeklySessionResponse;
 import com.eduhub.edu_hub.scheduling.api.exception.TimetableExceptionHandler;
 import com.eduhub.edu_hub.scheduling.application.service.PersonalTimetableQueryService;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;
 import java.time.*;
 import java.util.List;
@@ -21,6 +23,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class PersonalTimetableControllerTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
+    private final ApiResponseFactory apiResponseFactory = new ApiResponseFactory(CLOCK);
     PersonalTimetableQueryService service = mock(PersonalTimetableQueryService.class);
     Jwt principal = Jwt.withTokenValue("token")
             .header("alg", "HS256")
@@ -32,9 +39,11 @@ class PersonalTimetableControllerTest {
     @BeforeEach
     void setup() {
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(principal));
-        mvc = MockMvcBuilders.standaloneSetup(new PersonalTimetableController(service))
+        mvc = MockMvcBuilders.standaloneSetup(new PersonalTimetableController(apiResponseFactory, service))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
-                .setControllerAdvice(new TimetableExceptionHandler(), new GlobalExceptionHandler())
+                .setControllerAdvice(
+                        new TimetableExceptionHandler(apiResponseFactory),
+                        new GlobalExceptionHandler(apiResponseFactory))
                 .build();
     }
 

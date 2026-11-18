@@ -12,6 +12,7 @@ import com.eduhub.edu_hub.scheduling.api.dto.response.OpeningSubjectResponse;
 import com.eduhub.edu_hub.scheduling.application.service.ModuleClassApplicationService;
 import com.eduhub.edu_hub.scheduling.application.service.ModuleClassPublicationService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
 public class ModuleClassController {
+    private final ApiResponseFactory apiResponseFactory;
     private final ModuleClassApplicationService moduleClassApplicationService;
     private final ModuleClassPublicationService publicationService;
 
@@ -34,7 +36,7 @@ public class ModuleClassController {
             @AuthenticationPrincipal Jwt principal,
             @PathVariable Long semesterId,
             @Valid @RequestBody ModuleClassPublicationRequest request) {
-        return ApiResponse.success(publicationService.publish(principal, semesterId, request));
+        return apiResponseFactory.success(publicationService.publish(principal, semesterId, request));
     }
 
     @PostMapping("/semesters/{semesterId}/module-classes/withdraw-publication")
@@ -42,14 +44,15 @@ public class ModuleClassController {
             @AuthenticationPrincipal Jwt principal,
             @PathVariable Long semesterId,
             @Valid @RequestBody ModuleClassPublicationRequest request) {
-        return ApiResponse.success(publicationService.withdraw(principal, semesterId, request));
+        return apiResponseFactory.success(publicationService.withdraw(principal, semesterId, request));
     }
 
     // 1. Lọc lấy các môn học cần mở lớp học phần tại kì hiện tại
     @GetMapping("/semesters/{semesterId}/opening-subjects")
     public ApiResponse<List<OpeningSubjectResponse>> findSubjectsToOpen(@PathVariable Long semesterId) {
         var subjects = moduleClassApplicationService.findSubjectsToOpen(semesterId);
-        return ApiResponse.<List<OpeningSubjectResponse>>builder()
+        return apiResponseFactory
+                .<List<OpeningSubjectResponse>>builder()
                 .success(true)
                 .message(
                         subjects.isEmpty()
@@ -65,7 +68,8 @@ public class ModuleClassController {
             @PathVariable Long semesterId, @Valid @RequestBody CreateModuleClassesRequest request) {
         var classes = moduleClassApplicationService.createModuleClasses(semesterId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.<List<ModuleClassResponse>>builder()
+                .body(apiResponseFactory
+                        .<List<ModuleClassResponse>>builder()
                         .success(true)
                         .message("Mở lớp học phần thành công")
                         .data(classes)
@@ -76,20 +80,21 @@ public class ModuleClassController {
     @GetMapping("/module-classes")
     public ApiResponse<PageResponse<ModuleClassSimpleResponse>> search(
             @Valid @ModelAttribute ModuleClassSearchRequest request) {
-        return ApiResponse.success(moduleClassApplicationService.searchModuleClasses(request));
+        return apiResponseFactory.success(moduleClassApplicationService.searchModuleClasses(request));
     }
 
     // 4. Xem chi tiết lớp học phần khi bấm vào list đó
     @GetMapping("/module-classes/{id}")
     public ApiResponse<ModuleClassResponse> findById(@PathVariable Long id) {
-        return ApiResponse.success(moduleClassApplicationService.findModuleClassById(id));
+        return apiResponseFactory.success(moduleClassApplicationService.findModuleClassById(id));
     }
 
     // 5. Cập nhật sức chứa kèm lý do
     @PatchMapping("/module-classes/{id}")
     public ApiResponse<ModuleClassResponse> update(
             @PathVariable Long id, @Valid @RequestBody UpdateModuleClassRequest request) {
-        return ApiResponse.<ModuleClassResponse>builder()
+        return apiResponseFactory
+                .<ModuleClassResponse>builder()
                 .success(true)
                 .message("Cập nhật lớp học phần thành công")
                 .data(moduleClassApplicationService.updateModuleClassCapacity(id, request))
@@ -100,7 +105,8 @@ public class ModuleClassController {
     @PostMapping("/module-classes/{id}/cancel")
     public ApiResponse<ModuleClassResponse> cancel(
             @PathVariable Long id, @Valid @RequestBody CancelModuleClassRequest request) {
-        return ApiResponse.<ModuleClassResponse>builder()
+        return apiResponseFactory
+                .<ModuleClassResponse>builder()
                 .success(true)
                 .message("Hủy lớp học phần thành công")
                 .data(moduleClassApplicationService.cancelModuleClass(id, request))

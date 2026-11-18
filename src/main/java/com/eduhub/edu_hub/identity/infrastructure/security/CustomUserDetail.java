@@ -3,8 +3,8 @@ package com.eduhub.edu_hub.identity.infrastructure.security;
 import com.eduhub.edu_hub.identity.domain.enums.RoleName;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.model.User;
+import java.time.Clock;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.Collection;
 import java.util.List;
 import lombok.Getter;
@@ -24,8 +24,9 @@ public final class CustomUserDetail implements UserDetails, CredentialsContainer
     private final boolean firstLogin;
     private final boolean deleted;
     private final LocalDateTime lockedUntil;
+    private final Clock clock;
 
-    public CustomUserDetail(User user) {
+    public CustomUserDetail(User user, Clock clock) {
         userId = user.getId();
         username = user.getUsername();
         password = user.getPasswordHash();
@@ -34,6 +35,7 @@ public final class CustomUserDetail implements UserDetails, CredentialsContainer
         firstLogin = user.isFirstLogin();
         deleted = user.isDeleted();
         lockedUntil = user.getLockedUntil();
+        this.clock = clock;
     }
 
     @Override
@@ -44,7 +46,7 @@ public final class CustomUserDetail implements UserDetails, CredentialsContainer
     @Override
     public boolean isAccountNonLocked() {
         return status != UserStatus.LOCKED
-                && (lockedUntil == null || !LocalDateTime.now(ZoneOffset.UTC).isBefore(lockedUntil));
+                && (lockedUntil == null || !LocalDateTime.now(clock).isBefore(lockedUntil));
     }
 
     @Override

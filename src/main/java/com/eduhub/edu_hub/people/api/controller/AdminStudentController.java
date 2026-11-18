@@ -9,6 +9,7 @@ import com.eduhub.edu_hub.people.application.service.StudentAdminUpdateService;
 import com.eduhub.edu_hub.people.application.service.StudentApplicationService;
 import com.eduhub.edu_hub.people.application.service.StudentCreationService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/students")
 @RequiredArgsConstructor
 public class AdminStudentController {
+    private final ApiResponseFactory apiResponseFactory;
     private final StudentApplicationService studentApplicationService;
     private final StudentAdminUpdateService studentAdminUpdateService;
     private final StudentCreationService studentCreationService;
@@ -33,7 +35,8 @@ public class AdminStudentController {
     @GetMapping
     public ApiResponse<PageResponse<StudentResponse>> search(StudentSearchRequest request) {
         PageResponse<StudentResponse> students = studentApplicationService.search(request);
-        return ApiResponse.<PageResponse<StudentResponse>>builder()
+        return apiResponseFactory
+                .<PageResponse<StudentResponse>>builder()
                 .success(true)
                 .message(students.getContent().isEmpty() ? "Không tìm thấy kết quả" : null)
                 .data(students)
@@ -42,13 +45,13 @@ public class AdminStudentController {
 
     @GetMapping("/{id}")
     public ApiResponse<StudentResponse> findById(@PathVariable Long id) {
-        return ApiResponse.success(studentApplicationService.findById(id));
+        return apiResponseFactory.success(studentApplicationService.findById(id));
     }
 
     @PostMapping
     public ApiResponse<CreateStudentResponse> create(
             @Valid @RequestBody CreateStudentRequest request, @AuthenticationPrincipal Jwt authenticatedJwt) {
-        return ApiResponse.success(studentCreationService.createStudent(authenticatedJwt, request));
+        return apiResponseFactory.success(studentCreationService.createStudent(authenticatedJwt, request));
     }
 
     @PutMapping("/{id}")
@@ -60,6 +63,7 @@ public class AdminStudentController {
         // TODO(AUTHORIZATION): Giới hạn cho ACADEMIC_ADMIN, không cấp quyền cập nhật cho SYSTEM_ADMIN.
         //  Hiện chưa bật: STUDENT có thể gọi API này để sửa các trường ngoài whitelist của PATCH /students/me.
 
-        return ApiResponse.success(studentAdminUpdateService.updateStudentProfile(authenticatedJwt, id, request));
+        return apiResponseFactory.success(
+                studentAdminUpdateService.updateStudentProfile(authenticatedJwt, id, request));
     }
 }

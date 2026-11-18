@@ -162,7 +162,7 @@ public class EnrollmentApplicationService {
         var semesterMatcher = SEMESTER_CODE.matcher(semester.getSemesterCode());
         if (!semesterMatcher.matches()) throw new EnrollmentException(ErrorCode.ENROLLMENT_DATA_INCOMPLETE);
 
-        var registeredAt = now();
+        var registeredAt = LocalDateTime.now(clock);
         var enrollment = Enrollment.builder()
                 .studentId(student.studentId())
                 .moduleClassId(moduleClass.getId())
@@ -177,8 +177,9 @@ public class EnrollmentApplicationService {
                 .registeredAt(registeredAt)
                 .status(EnrollmentStatus.REGISTERED)
                 .build();
-        enrollment.setCreatedAt(registeredAt);
-        enrollment.setUpdatedAt(registeredAt);
+        // Mốc đăng ký là giờ Việt Nam; metadata audit được lưu độc lập theo UTC.
+        enrollment.setCreatedAt(currentAuditTimestamp());
+        enrollment.setUpdatedAt(enrollment.getCreatedAt());
 
         // Hai thao tác tham gia cùng transaction; lỗi unique/commit hoàn tác cả lượt đăng ký lẫn chỗ đã giữ.
         schedulingFacade.reserveSeat(moduleClass.getId());
@@ -229,7 +230,7 @@ public class EnrollmentApplicationService {
         var moduleClass = schedulingFacade.lockModuleClass(enrollment.getModuleClassId());
         requireOpenClass(moduleClass, semesterId);
 
-        enrollment.drop(now());
+        enrollment.drop(LocalDateTime.now(clock), currentAuditTimestamp());
         schedulingFacade.releaseSeat(moduleClass.getId());
 
         enrollmentRepository.flush();
@@ -350,7 +351,7 @@ public class EnrollmentApplicationService {
         return LocalDate.now(clock);
     }
 
-    private LocalDateTime now() {
+    private LocalDateTime currentAuditTimestamp() {
         return LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
     }
 }

@@ -21,11 +21,15 @@ import com.eduhub.edu_hub.scheduling.application.exception.SemesterConflictExcep
 import com.eduhub.edu_hub.scheduling.application.exception.SemesterException;
 import com.eduhub.edu_hub.scheduling.application.service.SemesterApplicationService;
 import com.eduhub.edu_hub.scheduling.domain.enums.SemesterStatus;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
 import com.eduhub.edu_hub.shared.common.PageResponse;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;
 import java.sql.SQLException;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,6 +46,11 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 @ExtendWith(MockitoExtension.class)
 class SemesterControllerTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
+    private final ApiResponseFactory apiResponseFactory = new ApiResponseFactory(CLOCK);
     private static final String VALID_BODY =
             """
             {
@@ -60,8 +69,10 @@ class SemesterControllerTest {
 
     @BeforeEach
     void setUp() {
-        mvc = MockMvcBuilders.standaloneSetup(new SemesterController(service))
-                .setControllerAdvice(new GlobalExceptionHandler(), new SemesterExceptionHandler())
+        mvc = MockMvcBuilders.standaloneSetup(new SemesterController(apiResponseFactory, service))
+                .setControllerAdvice(
+                        new GlobalExceptionHandler(apiResponseFactory),
+                        new SemesterExceptionHandler(apiResponseFactory))
                 .build();
     }
 

@@ -13,8 +13,12 @@ import com.eduhub.edu_hub.people.application.exception.StudentProfileException;
 import com.eduhub.edu_hub.people.application.service.StudentAdminUpdateService;
 import com.eduhub.edu_hub.people.application.service.StudentApplicationService;
 import com.eduhub.edu_hub.people.application.service.StudentSelfService;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;
+import java.time.Clock;
+import java.time.Instant;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +34,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class StudentSelfControllerTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
+    private final ApiResponseFactory apiResponseFactory = new ApiResponseFactory(CLOCK);
     StudentSelfService service = mock(StudentSelfService.class);
     StudentApplicationService studentApplicationService = mock(StudentApplicationService.class);
     StudentAdminUpdateService studentAdminUpdateService = mock(StudentAdminUpdateService.class);
@@ -46,14 +55,17 @@ class StudentSelfControllerTest {
         SecurityContextHolder.clearContext();
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(authenticatedJwt));
         mvc = MockMvcBuilders.standaloneSetup(
-                        new StudentSelfController(service),
+                        new StudentSelfController(apiResponseFactory, service),
                         new AdminStudentController(
+                                apiResponseFactory,
                                 studentApplicationService,
                                 studentAdminUpdateService,
                                 org.mockito.Mockito.mock(
                                         com.eduhub.edu_hub.people.application.service.StudentCreationService.class)))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
-                .setControllerAdvice(new StudentProfileExceptionHandler(), new GlobalExceptionHandler())
+                .setControllerAdvice(
+                        new StudentProfileExceptionHandler(apiResponseFactory),
+                        new GlobalExceptionHandler(apiResponseFactory))
                 .build();
     }
 

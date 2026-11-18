@@ -22,8 +22,11 @@ import com.eduhub.edu_hub.curriculum.domain.model.Subject;
 import com.eduhub.edu_hub.curriculum.domain.model.SubjectPrerequisite;
 import com.eduhub.edu_hub.curriculum.domain.repository.SubjectPrerequisiteRepository;
 import com.eduhub.edu_hub.curriculum.domain.repository.SubjectRepository;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -33,6 +36,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -42,6 +46,14 @@ import org.springframework.data.jpa.domain.Specification;
 
 @ExtendWith(MockitoExtension.class)
 class SubjectApplicationServiceTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
+
+    @Spy
+    private Clock clock = CLOCK;
+
     @Mock
     private SubjectRepository subjectRepository;
 

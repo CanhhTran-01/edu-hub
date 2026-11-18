@@ -15,10 +15,12 @@ import com.eduhub.edu_hub.notification.api.dto.response.EmailDeliveryResponse;
 import com.eduhub.edu_hub.notification.application.facade.NotificationFacade;
 import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,11 +31,15 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 class AdminUserNotificationTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
     private final UserRepository users = mock(UserRepository.class);
     private final RefreshTokenRepository sessions = mock(RefreshTokenRepository.class);
     private final TokenService tokens = mock(TokenService.class);
     private final CurrentUserAuthenticationService currentUserAuthenticationService =
-            new CurrentUserAuthenticationService(users, sessions, tokens);
+            new CurrentUserAuthenticationService(users, sessions, tokens, CLOCK);
     private final Jwt authenticatedJwt = Jwt.withTokenValue("unit-token")
             .header("alg", "HS256")
             .subject("admin")
@@ -50,7 +56,8 @@ class AdminUserNotificationTest {
             tokens,
             immediateEmailNotifications,
             new BCryptPasswordEncoder(4),
-            mock(PeopleFacade.AccountProfile.class));
+            mock(PeopleFacade.AccountProfile.class),
+            CLOCK);
     private User target;
 
     @BeforeEach
@@ -60,7 +67,7 @@ class AdminUserNotificationTest {
         actor.setStatus(UserStatus.ACTIVE);
         var session = new RefreshToken();
         session.setUser(actor);
-        session.setExpiresAt(LocalDateTime.now(ZoneOffset.UTC).plusHours(1));
+        session.setExpiresAt(LocalDateTime.now(CLOCK).plusHours(1));
         target = new User();
         target.setId(2L);
         target.setStatus(UserStatus.ACTIVE);
@@ -115,7 +122,7 @@ class AdminUserNotificationTest {
     @ValueSource(strings = {"ACTIVE", "LOCKED"})
     void resetClearsTemporaryLockAndRevokesAllSessionsWhilePreservingManualStatus(String status) {
         target.setStatus(UserStatus.valueOf(status));
-        target.setLockedUntil(LocalDateTime.now(ZoneOffset.UTC).plusMinutes(10));
+        target.setLockedUntil(LocalDateTime.now(CLOCK).plusMinutes(10));
         target.setFailedLoginCount(5);
         var firstSession = new RefreshToken();
         var secondSession = new RefreshToken();
@@ -156,7 +163,7 @@ class AdminUserNotificationTest {
                 .thenReturn(new TokenService.TokenClaims(2L, 3L, "admin"));
         var currentSession = new RefreshToken();
         currentSession.setUser(target);
-        currentSession.setExpiresAt(LocalDateTime.now(ZoneOffset.UTC).plusHours(1));
+        currentSession.setExpiresAt(LocalDateTime.now(CLOCK).plusHours(1));
         when(sessions.findByIdAndRevokedFalse(3L)).thenReturn(Optional.of(currentSession));
         when(sessions.findByUser_IdAndRevokedFalse(2L)).thenReturn(List.of(currentSession));
         when(immediateEmailNotifications.sendAccountEmail(any()))

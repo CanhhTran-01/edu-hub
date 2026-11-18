@@ -15,8 +15,8 @@ import com.eduhub.edu_hub.people.domain.policy.StudentProfileUpdatePolicy;
 import com.eduhub.edu_hub.people.domain.policy.StudentTargetGpaPolicy;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -35,6 +35,7 @@ public class StudentAdminUpdateService {
     private final IdentityFacade identityFacade;
     private final CurriculumFacade.ReferenceData curriculumReferenceData;
     private final StudentResponseMapper studentResponseMapper;
+    private final Clock clock;
 
     @Transactional
     public StudentResponse updateStudentProfile(
@@ -54,7 +55,7 @@ public class StudentAdminUpdateService {
         String phone = StudentProfileUpdatePolicy.normalizePhone(request.getPhone());
         String citizenId = StudentProfileUpdatePolicy.normalizeCitizenId(request.getCitizenId());
         String updateReason = StudentProfileUpdatePolicy.normalizeUpdateReason(request.getStatusReason());
-        StudentProfileUpdatePolicy.validateDateOfBirth(request.getDateOfBirth(), LocalDate.now(ZoneOffset.UTC));
+        StudentProfileUpdatePolicy.validateDateOfBirth(request.getDateOfBirth(), LocalDate.now(clock));
         StudentTargetGpaPolicy.validateTargetGpa(request.getTargetGpa());
 
         // Cùng thứ tự với PATCH /me: khóa Student trước User và giữ khóa tới hết transaction.

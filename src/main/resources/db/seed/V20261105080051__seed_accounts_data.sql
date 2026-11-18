@@ -1,5 +1,5 @@
 -- Tài khoản test chỉ dùng cho môi trường phát triển
--- Mật khẩu chung: Postman@123 (lưu dạng BCrypt), tạm thời không bắt buộc đổi mật khẩu lần đầu.
+-- Mật khẩu chung: postman@123 (lưu dạng BCrypt), tạm thời không bắt buộc đổi mật khẩu lần đầu.
 -- Không ghi đè tài khoản trùng username, chỉ tạo tài khoản đăng nhập, chưa tạo hồ sơ People.
 INSERT INTO users (
     username, email, password_hash, role_id, status, is_first_login,

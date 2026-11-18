@@ -18,6 +18,7 @@ import com.eduhub.edu_hub.admission.application.service.AdmissionNotificationQue
 import com.eduhub.edu_hub.admission.application.service.AdmissionPlanningService;
 import com.eduhub.edu_hub.notification.api.dto.response.AdmissionNotificationResponse;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
 public class StudentAdmissionController {
+    private final ApiResponseFactory apiResponseFactory;
     private final AdmissionPlanningService planningService;
     private final AdmissionImportService importService;
     private final AdmissionClassPreparationService classPreparationService;
@@ -44,7 +46,7 @@ public class StudentAdmissionController {
     // 1. Lấy sĩ số tối thiểu, tối đa và dự phòng mặc định để điền màn nhập học.
     @GetMapping("/student-admissions/configuration")
     public ApiResponse<AdmissionCapacityResponse> getDefaultCapacityConfiguration() {
-        return ApiResponse.success(planningService.getDefaultCapacityConfiguration());
+        return apiResponseFactory.success(planningService.getDefaultCapacityConfiguration());
     }
 
     // 2. Chọn ngành và khóa, sau đó tải mẫu XLSX để nhập danh sách đúng phạm vi.
@@ -66,14 +68,14 @@ public class StudentAdmissionController {
             @RequestParam(required = false) Integer maxCapacity,
             @RequestParam(required = false) Integer reserveCapacity,
             @RequestParam MultipartFile file) {
-        return ApiResponse.success(planningService.createPlanFromFile(new CreateAdmissionPlanFromFileRequest(
+        return apiResponseFactory.success(planningService.createPlanFromFile(new CreateAdmissionPlanFromFileRequest(
                 majorId, cohortId, minCapacity, maxCapacity, reserveCapacity, file)));
     }
 
     // 4. Xem lại phương án, lỗi từng hồ sơ và các kịch bản trong trường scenarios.
     @GetMapping("/student-admissions/plans/{id}")
     public ApiResponse<AdmissionPlanResponse> getPlan(@PathVariable("id") Long planId) {
-        return ApiResponse.success(planningService.getPlan(planId));
+        return apiResponseFactory.success(planningService.getPlan(planId));
     }
 
     // 5. Xem lớp hành chính hiện có và cờ availableForAdmission để chọn lớp dùng lại; đây không phải kịch bản.
@@ -81,21 +83,21 @@ public class StudentAdmissionController {
     @GetMapping("/administrative-classes")
     public ApiResponse<List<AdministrativeClassResponse>> listAdministrativeClasses(
             @RequestParam Long majorId, @RequestParam Long cohortId) {
-        return ApiResponse.success(classPreparationService.listAdministrativeClasses(majorId, cohortId));
+        return apiResponseFactory.success(classPreparationService.listAdministrativeClasses(majorId, cohortId));
     }
 
     // 6. Chọn kịch bản và chuẩn bị lớp: tự dùng lại lớp trống, chọn lớp cụ thể hoặc tạo mới theo request.
     @PostMapping("/administrative-classes/from-admission-plan")
     public ApiResponse<AdmissionPlanResponse> prepareClasses(
             @Valid @RequestBody PrepareAdmissionClassesRequest request) {
-        return ApiResponse.success(classPreparationService.prepareClasses(request));
+        return apiResponseFactory.success(classPreparationService.prepareClasses(request));
     }
 
     // 7. Khi cần sửa/bổ sung file, import lại trên cùng phương án với revision mới nhất; giữ hồ sơ đã ENROLLED.
     @PostMapping(value = "/student-admissions/plans/{id}/applicants", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<AdmissionPlanResponse> importApplicants(
             @PathVariable("id") Long planId, @RequestParam long expectedRevision, @RequestParam MultipartFile file) {
-        return ApiResponse.success(
+        return apiResponseFactory.success(
                 importService.importApplicants(planId, new ImportAdmissionApplicantsRequest(expectedRevision, file)));
     }
 
@@ -103,27 +105,27 @@ public class StudentAdmissionController {
     @PostMapping("/student-admissions/plans/{id}/allocation/preview")
     public ApiResponse<AdmissionPlanResponse> previewAllocation(
             @PathVariable("id") Long planId, @Valid @RequestBody PreviewAdmissionAllocationRequest request) {
-        return ApiResponse.success(allocationService.previewAllocation(planId, request));
+        return apiResponseFactory.success(allocationService.previewAllocation(planId, request));
     }
 
     // 9. Nếu cần, điều chỉnh phân bổ thủ công cho các hồ sơ chưa xác nhận nhập học.
     @PatchMapping("/student-admissions/plans/{id}/allocation")
     public ApiResponse<AdmissionPlanResponse> adjustAssignments(
             @PathVariable("id") Long planId, @Valid @RequestBody AdjustAdmissionAssignmentsRequest request) {
-        return ApiResponse.success(allocationService.adjustAssignments(planId, request));
+        return apiResponseFactory.success(allocationService.adjustAssignments(planId, request));
     }
 
     // 10. Chốt nhập học: tạo/dùng lại sinh viên, tài khoản và thông báo theo từng hồ sơ; có thể thành công một phần.
     @PostMapping("/student-admissions/plans/{id}/confirm")
     public ApiResponse<AdmissionConfirmationResponse> confirmEnrollment(
             @PathVariable("id") Long planId, @Valid @RequestBody ConfirmAdmissionEnrollmentRequest request) {
-        return ApiResponse.success(confirmationService.confirmEnrollment(planId, request));
+        return apiResponseFactory.success(confirmationService.confirmEnrollment(planId, request));
     }
 
     // 11. Xem trạng thái gửi thông báo sau xác nhận; gửi mail lỗi không hoàn tác hồ sơ đã nhập học thành công.
     @GetMapping("/student-admissions/plans/{id}/notifications")
     public ApiResponse<List<AdmissionNotificationResponse>> listPlanNotifications(@PathVariable("id") Long planId) {
         planningService.getPlan(planId);
-        return ApiResponse.success(notificationQueryService.listPlanNotifications(planId));
+        return apiResponseFactory.success(notificationQueryService.listPlanNotifications(planId));
     }
 }

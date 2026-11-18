@@ -21,7 +21,7 @@ import com.eduhub.edu_hub.scheduling.domain.model.Semester;
 import com.eduhub.edu_hub.scheduling.domain.policy.OpeningDemandPolicy;
 import com.eduhub.edu_hub.scheduling.domain.repository.ModuleClassRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.SemesterRepository;
-import com.eduhub.edu_hub.shared.config.TimeConfiguration;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import jakarta.persistence.EntityManager;
@@ -39,7 +39,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class ModuleClassManagementServiceTest {
     private static final Clock CLOCK = Clock.fixed(
             Instant.parse("2026-11-02T18:00:00Z"),
-            new TimeConfiguration().applicationClock().getZone());
+            new TimeConfig().applicationClock().getZone());
 
     @Mock
     private SemesterRepository semesters;

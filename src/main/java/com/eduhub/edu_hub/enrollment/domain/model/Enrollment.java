@@ -77,10 +77,11 @@ public class Enrollment extends BaseEntity {
     @Column(name = "course_score_grade_4")
     private BigDecimal courseScore4;
 
-    public void drop(LocalDateTime droppedAt) {
+    /** Mốc hủy theo giờ Việt Nam, còn updatedAt của audit vẫn theo UTC. */
+    public void drop(LocalDateTime droppedAt, LocalDateTime updatedAt) {
         this.status = EnrollmentStatus.DROPPED;
         this.droppedAt = droppedAt;
-        setUpdatedAt(droppedAt);
+        setUpdatedAt(updatedAt);
     }
 
     /** Chỉ thay đổi điểm quá trình và ghi chú; trạng thái lượt học và điểm thi/tổng kết giữ nguyên. */

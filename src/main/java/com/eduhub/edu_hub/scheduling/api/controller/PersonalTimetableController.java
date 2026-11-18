@@ -4,6 +4,7 @@ import com.eduhub.edu_hub.scheduling.api.dto.request.WeeklyTimetableRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.response.WeeklyTimetableResponse;
 import com.eduhub.edu_hub.scheduling.application.service.PersonalTimetableQueryService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.*;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 @RequestMapping("/api/v1")
 public class PersonalTimetableController {
+    private final ApiResponseFactory apiResponseFactory;
     private final PersonalTimetableQueryService personalTimetableQueryService;
 
     @GetMapping("/students/me/semesters/{semesterId}/timetable")
@@ -45,6 +47,6 @@ public class PersonalTimetableController {
     // nên cấm mọi lớp cache (trình duyệt, proxy, CDN). Đặt tường minh để không phụ thuộc
     // vào header mặc định của Spring Security.
     private ResponseEntity<ApiResponse<WeeklyTimetableResponse>> respond(WeeklyTimetableResponse timetable) {
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.success(timetable));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(apiResponseFactory.success(timetable));
     }
 }

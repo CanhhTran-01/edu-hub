@@ -51,7 +51,7 @@ public class TimetablePlanApplicationService {
     private final EntityManager entityManager;
     private final Clock clock;
 
-    private LocalDateTime now() {
+    private LocalDateTime currentAuditTimestamp() {
         return LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
     }
 
@@ -85,9 +85,10 @@ public class TimetablePlanApplicationService {
                 .inputFingerprint(codec.fingerprint(problem))
                 .problemJson(codec.write(problem))
                 .diagnosticsJson("[]")
-                .expiresAt(now().plusSeconds(settings.getSpentLimitSeconds() + WORKER_GRACE_PERIOD_SECONDS))
+                .expiresAt(LocalDateTime.now(clock)
+                        .plusSeconds(settings.getSpentLimitSeconds() + WORKER_GRACE_PERIOD_SECONDS))
                 .build();
-        plan.setCreatedAt(now());
+        plan.setCreatedAt(currentAuditTimestamp());
         plan.setUpdatedAt(plan.getCreatedAt());
         planRepository.saveAndFlush(plan);
         // Tác vụ chỉ được gửi cho solver sau commit; rollback tạo phương án không được khởi chạy worker.
@@ -107,7 +108,7 @@ public class TimetablePlanApplicationService {
         var plan = lockPlan(planId);
         if (plan.getState().isActive()) {
             plan.setState(TimetablePlanState.STOP_REQUESTED);
-            plan.setUpdatedAt(now());
+            plan.setUpdatedAt(currentAuditTimestamp());
             planRepository.flush();
             eventPublisher.publishEvent(new PlanStopRequested(planId));
         }
@@ -184,14 +185,14 @@ public class TimetablePlanApplicationService {
                 ClassScheduleSpecification.notDeletedAndModuleClassIdIn(classesById.keySet()), Sort.by("id"));
         schedules.forEach(schedule -> {
             schedule.setDeleted(true);
-            schedule.setUpdatedAt(now());
+            schedule.setUpdatedAt(currentAuditTimestamp());
         });
         scheduleRepository.saveAll(schedules);
         List<ClassSchedule> newSchedules = new ArrayList<>();
         for (var session : allocation.sessions()) {
             var moduleClass = classesById.get(session.moduleClassId());
             moduleClass.applyTeachingAssignment(entityManager.getReference(Lecturer.class, session.lecturerId()));
-            moduleClass.setUpdatedAt(now());
+            moduleClass.setUpdatedAt(currentAuditTimestamp());
             var schedule = ClassSchedule.builder()
                     .moduleClass(moduleClass)
                     .room(roomsById.get(session.roomId()))
@@ -201,15 +202,15 @@ public class TimetablePlanApplicationService {
                     .startDate(session.date())
                     .endDate(session.date())
                     .build();
-            schedule.setCreatedAt(now());
+            schedule.setCreatedAt(currentAuditTimestamp());
             schedule.setUpdatedAt(schedule.getCreatedAt());
             newSchedules.add(schedule);
         }
         moduleClassRepository.saveAll(classes);
         scheduleRepository.saveAllAndFlush(newSchedules);
         plan.setState(TimetablePlanState.APPLIED);
-        plan.setAppliedAt(now());
-        plan.setUpdatedAt(plan.getAppliedAt());
+        plan.setAppliedAt(LocalDateTime.now(clock));
+        plan.setUpdatedAt(currentAuditTimestamp());
         planRepository.flush();
         // TODO(AUDIT_LOG): Ghi actor, phương án và thay đổi giảng viên/lịch sau commit khi có hạ tầng audit.
         return response(plan);

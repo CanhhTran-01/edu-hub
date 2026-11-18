@@ -4,6 +4,7 @@ import com.eduhub.edu_hub.scheduling.api.dto.request.*;
 import com.eduhub.edu_hub.scheduling.api.dto.response.*;
 import com.eduhub.edu_hub.scheduling.application.service.TimetablePlanApplicationService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
 public class TimetableController {
+    private final ApiResponseFactory apiResponseFactory;
     private final TimetablePlanApplicationService timetablePlanService;
 
     // BƯỚC 1: Tạo plan nháp và bắt đầu chạy solver ở nền.
@@ -26,7 +28,7 @@ public class TimetableController {
             @PathVariable Long semesterId,
             @Valid @RequestBody CreateTimetablePlanRequest request) {
         return ResponseEntity.accepted()
-                .body(ApiResponse.success(timetablePlanService.createPlan(principal, semesterId, request)));
+                .body(apiResponseFactory.success(timetablePlanService.createPlan(principal, semesterId, request)));
     }
 
     // BƯỚC 2: Xem trạng thái và kết quả hiện tại của plan.
@@ -35,7 +37,7 @@ public class TimetableController {
     @GetMapping("/timetable-plans/{planId}")
     public ApiResponse<TimetablePlanResponse> findPlan(
             @AuthenticationPrincipal Jwt principal, @PathVariable Long planId) {
-        return ApiResponse.success(timetablePlanService.findPlan(principal, planId));
+        return apiResponseFactory.success(timetablePlanService.findPlan(principal, planId));
     }
 
     // BƯỚC 2b (tùy chọn): Yêu cầu dừng solver sớm.
@@ -43,7 +45,7 @@ public class TimetableController {
     @PostMapping("/timetable-plans/{planId}/stop")
     public ApiResponse<TimetablePlanResponse> stopPlan(
             @AuthenticationPrincipal Jwt principal, @PathVariable Long planId) {
-        return ApiResponse.success(timetablePlanService.stopPlan(principal, planId));
+        return apiResponseFactory.success(timetablePlanService.stopPlan(principal, planId));
     }
 
     // BƯỚC 3: Áp dụng plan nháp thành lịch chính thức.
@@ -54,13 +56,13 @@ public class TimetableController {
             @AuthenticationPrincipal Jwt principal,
             @PathVariable Long planId,
             @Valid @RequestBody ApplyTimetablePlanRequest request) {
-        return ApiResponse.success(timetablePlanService.applyPlan(principal, planId, request));
+        return apiResponseFactory.success(timetablePlanService.applyPlan(principal, planId, request));
     }
 
     // BƯỚC 4: Xem lịch chính thức của học kỳ (khác với plan nháp ở trên).
     @GetMapping("/semesters/{semesterId}/timetable")
     public ApiResponse<TimetableResponse> findTimetable(
             @AuthenticationPrincipal Jwt principal, @PathVariable Long semesterId) {
-        return ApiResponse.success(timetablePlanService.findTimetable(principal, semesterId));
+        return apiResponseFactory.success(timetablePlanService.findTimetable(principal, semesterId));
     }
 }

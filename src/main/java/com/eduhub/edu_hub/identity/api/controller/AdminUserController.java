@@ -6,6 +6,7 @@ import com.eduhub.edu_hub.identity.api.dto.response.UserAccountDetailResponse;
 import com.eduhub.edu_hub.identity.api.dto.response.UserAccountSummaryResponse;
 import com.eduhub.edu_hub.identity.application.service.AdminUserService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/admin/users")
 @RequiredArgsConstructor
 public class AdminUserController {
+    private final ApiResponseFactory apiResponseFactory;
     private final AdminUserService adminUserService;
 
     // TODO(AUTHORIZATION): Khi triển khai phân quyền, chỉ SYSTEM_ADMIN có permission quản trị tài khoản
@@ -34,13 +36,13 @@ public class AdminUserController {
     @GetMapping
     public ApiResponse<PageResponse<UserAccountSummaryResponse>> searchUserAccounts(
             @AuthenticationPrincipal Jwt authenticatedJwt, @Valid SearchUserAccountsRequest request) {
-        return ApiResponse.success(adminUserService.searchUserAccounts(authenticatedJwt, request));
+        return apiResponseFactory.success(adminUserService.searchUserAccounts(authenticatedJwt, request));
     }
 
     @GetMapping("/{userId}")
     public ApiResponse<UserAccountDetailResponse> getUserAccountDetail(
             @AuthenticationPrincipal Jwt authenticatedJwt, @PathVariable Long userId) {
-        return ApiResponse.success(adminUserService.getUserAccountDetail(authenticatedJwt, userId));
+        return apiResponseFactory.success(adminUserService.getUserAccountDetail(authenticatedJwt, userId));
     }
 
     @PostMapping("/{userId}/lock")
@@ -49,20 +51,20 @@ public class AdminUserController {
             @PathVariable Long userId,
             @Valid @RequestBody LockUserRequest request) {
         adminUserService.lockUserAccount(authenticatedJwt, userId, request);
-        return ApiResponse.successWithMessage("Đã khóa tài khoản");
+        return apiResponseFactory.successWithMessage("Đã khóa tài khoản");
     }
 
     @PostMapping("/{userId}/unlock")
     public ApiResponse<Void> unlockUserAccount(
             @AuthenticationPrincipal Jwt authenticatedJwt, @PathVariable Long userId) {
         adminUserService.unlockUserAccount(authenticatedJwt, userId);
-        return ApiResponse.successWithMessage("Đã mở khóa tài khoản");
+        return apiResponseFactory.successWithMessage("Đã mở khóa tài khoản");
     }
 
     @PostMapping("/{userId}/reset-password")
     public ApiResponse<Void> resetUserPassword(
             @AuthenticationPrincipal Jwt authenticatedJwt, @PathVariable Long userId) {
         adminUserService.resetUserPassword(authenticatedJwt, userId);
-        return ApiResponse.successWithMessage("Đã đặt lại mật khẩu và gửi email");
+        return apiResponseFactory.successWithMessage("Đã đặt lại mật khẩu và gửi email");
     }
 }

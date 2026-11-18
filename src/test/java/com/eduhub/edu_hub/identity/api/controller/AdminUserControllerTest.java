@@ -17,9 +17,13 @@ import com.eduhub.edu_hub.identity.application.exception.IdentityAuthenticationE
 import com.eduhub.edu_hub.identity.application.service.AdminUserService;
 import com.eduhub.edu_hub.identity.domain.enums.RoleName;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.PageResponse;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.exception.GlobalExceptionHandler;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -37,6 +41,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class AdminUserControllerTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
+    private final ApiResponseFactory apiResponseFactory = new ApiResponseFactory(CLOCK);
     private final AdminUserService adminUserService = mock(AdminUserService.class);
     private final Jwt authenticatedJwt = Jwt.withTokenValue("unit-token")
             .header("alg", "HS256")
@@ -50,9 +59,11 @@ class AdminUserControllerTest {
     void setUp() {
         SecurityContextHolder.clearContext();
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(authenticatedJwt));
-        mvc = MockMvcBuilders.standaloneSetup(new AdminUserController(adminUserService))
+        mvc = MockMvcBuilders.standaloneSetup(new AdminUserController(apiResponseFactory, adminUserService))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
-                .setControllerAdvice(new IdentityExceptionHandler(), new GlobalExceptionHandler())
+                .setControllerAdvice(
+                        new IdentityExceptionHandler(apiResponseFactory),
+                        new GlobalExceptionHandler(apiResponseFactory))
                 .build();
     }
 

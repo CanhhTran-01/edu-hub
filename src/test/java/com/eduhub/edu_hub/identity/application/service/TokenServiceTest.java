@@ -82,7 +82,7 @@ class TokenServiceTest {
                         .header("alg", "HS256")
                         .subject("student")
                         .build());
-        Instant issuedAt = Instant.now();
+        Instant issuedAt = Instant.parse("2026-11-18T17:30:00Z");
         assertThat(service.generateAccessToken(account, 9L, issuedAt, issuedAt.plusSeconds(900)))
                 .isEqualTo("signed-token");
         var parameters = ArgumentCaptor.forClass(JwtEncoderParameters.class);

@@ -11,32 +11,43 @@ import com.eduhub.edu_hub.identity.application.exception.IdentityAuthenticationE
 import com.eduhub.edu_hub.identity.application.exception.PasswordValidationException;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
 import com.eduhub.edu_hub.identity.domain.model.RefreshToken;
+import com.eduhub.edu_hub.identity.domain.model.Role;
 import com.eduhub.edu_hub.identity.domain.model.User;
 import com.eduhub.edu_hub.identity.domain.policy.PasswordPolicy;
 import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
 import com.eduhub.edu_hub.identity.infrastructure.config.AuthenticationSettings;
+import com.eduhub.edu_hub.identity.infrastructure.security.CustomUserDetail;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
+import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
 class AuthApplicationServiceTest {
+
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-11-18T17:30:00Z"),
+            new TimeConfig().applicationClock().getZone());
     private final UserRepository users = mock(UserRepository.class);
     private final RefreshTokenRepository refreshTokens = mock(RefreshTokenRepository.class);
     private final JwtEncoder jwtEncoder = mock(JwtEncoder.class);
@@ -53,7 +64,8 @@ class AuthApplicationServiceTest {
             passwordEncoder,
             authenticationManager,
             new AuthenticationSettings(5, Duration.ofMinutes(15), Duration.ofMinutes(15), Duration.ofDays(7)),
-            mock(PeopleFacade.LoginProfile.class));
+            mock(PeopleFacade.LoginProfile.class),
+            CLOCK);
     private final Jwt authenticatedJwt = Jwt.withTokenValue("unit-token")
             .header("alg", "HS256")
             .subject("account")
@@ -64,6 +76,45 @@ class AuthApplicationServiceTest {
     @BeforeEach
     void transactions() {
         when(transactionManager.getTransaction(any())).thenAnswer(invocation -> new SimpleTransactionStatus());
+    }
+
+    @Test
+    void loginStoresVietnamSessionExpiryAndKeepsJwtInstantUnshifted() {
+        Role role = new Role();
+        role.setRoleName("SYSTEM_ADMIN");
+        User account = new User();
+        account.setId(7L);
+        account.setUsername("account");
+        account.setRole(role);
+        account.setStatus(UserStatus.ACTIVE);
+        when(authenticationManager.authenticate(any()))
+                .thenReturn(UsernamePasswordAuthenticationToken.authenticated(
+                        new CustomUserDetail(account, CLOCK), null, List.of()));
+        when(users.findById(7L)).thenReturn(Optional.of(account));
+        when(refreshTokens.saveAndFlush(any())).thenAnswer(invocation -> {
+            RefreshToken session = invocation.getArgument(0);
+            session.setId(9L);
+            return session;
+        });
+        when(jwtEncoder.encode(any()))
+                .thenReturn(Jwt.withTokenValue("encoded-jwt")
+                        .header("alg", "HS256")
+                        .subject("account")
+                        .build());
+        LoginRequest request = new LoginRequest();
+        request.setUsername("account");
+        request.setPassword("unit-password");
+
+        service.login(request);
+
+        var savedSession = ArgumentCaptor.forClass(RefreshToken.class);
+        verify(refreshTokens).saveAndFlush(savedSession.capture());
+        assertThat(savedSession.getValue().getExpiresAt()).isEqualTo(LocalDateTime.parse("2026-11-26T00:30:00"));
+        var tokenParameters = ArgumentCaptor.forClass(JwtEncoderParameters.class);
+        verify(jwtEncoder).encode(tokenParameters.capture());
+        assertThat(tokenParameters.getValue().getClaims().getIssuedAt()).isEqualTo(CLOCK.instant());
+        assertThat(tokenParameters.getValue().getClaims().getExpiresAt())
+                .isEqualTo(CLOCK.instant().plus(Duration.ofMinutes(15)));
     }
 
     @ParameterizedTest
@@ -97,7 +148,7 @@ class AuthApplicationServiceTest {
     @Test
     void logoutRetainsExistingRefreshExpiryCheck() {
         RefreshToken session = session(7L, 9L);
-        session.setExpiresAt(LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1));
+        session.setExpiresAt(LocalDateTime.now(CLOCK).minusMinutes(1));
         when(refreshTokens.findByTokenHash(anyString())).thenReturn(Optional.of(session));
         assertThatThrownBy(() -> service.logout(authenticatedJwt, "refresh-token"))
                 .isInstanceOf(IdentityAuthenticationException.class);
@@ -249,8 +300,7 @@ class AuthApplicationServiceTest {
                         IdentityAuthenticationException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_CREDENTIALS));
         assertThat(account.getFailedLoginCount()).isEqualTo(5);
-        assertThat(account.getLockedUntil())
-                .isAfter(LocalDateTime.now(ZoneOffset.UTC).plusMinutes(14));
+        assertThat(account.getLockedUntil()).isEqualTo(LocalDateTime.parse("2026-11-19T00:45:00"));
         verify(transactionManager).commit(any());
         verify(transactionManager, never()).rollback(any());
 
@@ -284,7 +334,7 @@ class AuthApplicationServiceTest {
     void expiredTemporaryLockClearsCounterBeforeRecordingTheNextWrongPassword() {
         User account = allowPasswordChange();
         account.setFailedLoginCount(5);
-        account.setLockedUntil(LocalDateTime.now(ZoneOffset.UTC).minusSeconds(1));
+        account.setLockedUntil(LocalDateTime.now(CLOCK).minusSeconds(1));
         assertThatThrownBy(() -> service.changePassword(authenticatedJwt, passwordChange("wrong", "NextPass2!")))
                 .isInstanceOf(IdentityAuthenticationException.class);
         assertThat(account.getFailedLoginCount()).isEqualTo(1);
@@ -297,7 +347,7 @@ class AuthApplicationServiceTest {
         allowPasswordChange();
         RefreshToken session = session(invalidSession.equals("differentUser") ? 8L : 7L, 9L);
         if (invalidSession.equals("expired"))
-            session.setExpiresAt(LocalDateTime.now(ZoneOffset.UTC).minusSeconds(1));
+            session.setExpiresAt(LocalDateTime.now(CLOCK).minusSeconds(1));
         when(refreshTokens.findByIdAndRevokedFalse(9L))
                 .thenReturn(invalidSession.equals("revoked") ? Optional.empty() : Optional.of(session));
         assertThatThrownBy(
@@ -347,7 +397,7 @@ class AuthApplicationServiceTest {
         RefreshToken session = new RefreshToken();
         session.setId(sessionId);
         session.setUser(account);
-        session.setExpiresAt(LocalDateTime.now(ZoneOffset.UTC).plusDays(1));
+        session.setExpiresAt(LocalDateTime.now(CLOCK).plusDays(1));
         return session;
     }
 }

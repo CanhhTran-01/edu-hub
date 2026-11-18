@@ -6,10 +6,12 @@ import com.eduhub.edu_hub.curriculum.application.exception.PrerequisiteCycleExce
 import com.eduhub.edu_hub.curriculum.application.exception.StudentCurriculumException;
 import com.eduhub.edu_hub.curriculum.application.exception.SubjectHasDependentsException;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
+import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -19,12 +21,16 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice(basePackageClasses = SubjectController.class)
 @Order(Ordered.HIGHEST_PRECEDENCE)
+@RequiredArgsConstructor
 public class CurriculumExceptionHandler {
+    private final ApiResponseFactory apiResponseFactory;
+
     @ExceptionHandler(StudentCurriculumException.class)
     public ResponseEntity<ApiResponse<Void>> handleStudentCurriculum(
             StudentCurriculumException exception, HttpServletRequest request) {
         var error = exception.getErrorCode();
-        return ResponseEntity.status(error.getHttpStatus()).body(ApiResponse.error(error, request.getRequestURI()));
+        return ResponseEntity.status(error.getHttpStatus())
+                .body(apiResponseFactory.error(error, request.getRequestURI()));
     }
 
     @ExceptionHandler(com.eduhub.edu_hub.curriculum.application.exception.SubjectException.class)
@@ -32,7 +38,8 @@ public class CurriculumExceptionHandler {
             com.eduhub.edu_hub.curriculum.application.exception.SubjectException exception,
             HttpServletRequest request) {
         var error = exception.getErrorCode();
-        return ResponseEntity.status(error.getHttpStatus()).body(ApiResponse.error(error, request.getRequestURI()));
+        return ResponseEntity.status(error.getHttpStatus())
+                .body(apiResponseFactory.error(error, request.getRequestURI()));
     }
 
     @ExceptionHandler(PrerequisiteCycleException.class)
@@ -43,7 +50,8 @@ public class CurriculumExceptionHandler {
                 .collect(Collectors.joining(" → "));
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.<Void>builder()
+                .body(apiResponseFactory
+                        .<Void>builder()
                         .success(false)
                         .code(ErrorCode.PREREQUISITE_CYCLE.getCode())
                         .message("Phát hiện chu trình tiên quyết: " + cycle)
@@ -59,7 +67,8 @@ public class CurriculumExceptionHandler {
                         new FieldErrorDetail("requiredBy", subject.getSubjectCode() + " - " + subject.getSubjectName()))
                 .toList();
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiResponse.<Void>builder()
+                .body(apiResponseFactory
+                        .<Void>builder()
                         .success(false)
                         .code(ErrorCode.SUBJECT_IN_USE.getCode())
                         .message("Học phần là tiên quyết của học phần đang sử dụng. Hãy gỡ ràng buộc tại UC-21 trước.")
