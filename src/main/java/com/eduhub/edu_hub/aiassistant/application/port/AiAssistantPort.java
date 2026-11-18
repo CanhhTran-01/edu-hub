@@ -1,11 +1,16 @@
 package com.eduhub.edu_hub.aiassistant.application.port;
 
+import com.eduhub.edu_hub.aiassistant.domain.enums.AiIntent;
 import java.util.List;
 
 public interface AiAssistantPort {
-    Answer answer(String message, String conversationId);
+    QuestionAnalysis analyzeQuestion(String message, List<ConversationMessage> history);
 
-    record Answer(String content, List<Citation> citations) {}
+    Answer answer(String question, List<ConversationMessage> history, List<KnowledgeChunkPort.RetrievedChunk> chunks);
 
-    record Citation(String sourceTitle, String sectionTitle, Integer pageNumber, String snippet) {}
+    record QuestionAnalysis(AiIntent intent, String standaloneQuestion) {}
+
+    record Answer(String content, List<Long> citationIds) {}
+
+    record ConversationMessage(String role, String content) {}
 }

@@ -1,7 +1,6 @@
-package com.eduhub.edu_hub.shared.enums;
+package com.eduhub.edu_hub.aiassistant.domain.enums;
 
 public enum AiIntent {
     KNOWLEDGE,
-    GRADUATION,
     OUT_OF_SCOPE
 }

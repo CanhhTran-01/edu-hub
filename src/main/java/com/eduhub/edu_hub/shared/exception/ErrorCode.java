@@ -176,9 +176,15 @@ public enum ErrorCode {
     // AI
     KNOWLEDGE_SOURCE_NOT_FOUND(4601, "Không tìm thấy nguồn tri thức", HttpStatus.NOT_FOUND),
     CHAT_SESSION_NOT_FOUND(4602, "Không tìm thấy phiên hội thoại", HttpStatus.NOT_FOUND),
-    INVALID_AI_DOCUMENT(4603, "Tài liệu phải là file TXT hợp lệ và không được để trống", HttpStatus.BAD_REQUEST),
+    INVALID_AI_DOCUMENT(
+            4603, "Tài liệu phải là PDF, DOCX hoặc TXT hợp lệ và có văn bản trích xuất được", HttpStatus.BAD_REQUEST),
     AI_DOCUMENT_TOO_LARGE(4604, "Tài liệu vượt quá dung lượng cho phép", HttpStatus.BAD_REQUEST),
     AI_SERVICE_UNAVAILABLE(4605, "Dịch vụ trợ lý AI hiện không khả dụng", HttpStatus.SERVICE_UNAVAILABLE),
+    AI_RATE_LIMIT_EXCEEDED(4606, "Bạn đã hỏi quá nhanh, vui lòng chờ trước khi gửi tiếp", HttpStatus.TOO_MANY_REQUESTS),
+    KNOWLEDGE_SOURCE_DUPLICATE(4607, "Tệp đã được nạp vào một nguồn tri thức", HttpStatus.CONFLICT),
+    KNOWLEDGE_SOURCE_STATE_INVALID(
+            4608, "Nguồn tri thức chưa sẵn sàng hoặc không phù hợp với thao tác", HttpStatus.CONFLICT),
+    CHAT_SESSION_CHANGED(4609, "Hội thoại đã có tin nhắn mới, vui lòng gửi lại câu hỏi", HttpStatus.CONFLICT),
 
     // Security
     UNAUTHENTICATED(4000, "Vui lòng đăng nhập", HttpStatus.UNAUTHORIZED),

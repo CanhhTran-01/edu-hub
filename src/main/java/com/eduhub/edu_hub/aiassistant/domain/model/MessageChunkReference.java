@@ -11,15 +11,19 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "ai_chat_citations")
+@Table(name = "message_chunk_references")
 @Getter
 @NoArgsConstructor
-public class ChatCitation extends BaseEntity {
+public class MessageChunkReference extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "message_id", nullable = false)
     private ChatMessage message;
 
-    @Column(name = "source_title", nullable = false)
+    // NOTE: Snapshot cũ được giữ vì lịch sử trước migration chưa lưu ID chunk; không suy ghép theo tên/nội dung.
+    private Long chunkId;
+    private Double relevanceScore;
+
+    @Column(name = "source_title")
     private String sourceTitle;
 
     @Column(name = "section_title")
@@ -28,15 +32,12 @@ public class ChatCitation extends BaseEntity {
     @Column(name = "page_number")
     private Integer pageNumber;
 
-    @Column(nullable = false, columnDefinition = "TEXT")
+    @Column(columnDefinition = "TEXT")
     private String snippet;
 
-    public ChatCitation(
-            ChatMessage message, String sourceTitle, String sectionTitle, Integer pageNumber, String snippet) {
+    public MessageChunkReference(ChatMessage message, Long chunkId, Double relevanceScore) {
         this.message = message;
-        this.sourceTitle = sourceTitle;
-        this.sectionTitle = sectionTitle;
-        this.pageNumber = pageNumber;
-        this.snippet = snippet;
+        this.chunkId = chunkId;
+        this.relevanceScore = relevanceScore;
     }
 }

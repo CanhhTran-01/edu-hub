@@ -4,4 +4,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public record ChatSessionDetailResponse(
-        String sessionId, LocalDateTime createdAt, List<ChatHistoryMessageResponse> messages) {}
+        String sessionId,
+        String title,
+        String topicType,
+        LocalDateTime startedAt,
+        List<ChatHistoryMessageResponse> messages) {}
