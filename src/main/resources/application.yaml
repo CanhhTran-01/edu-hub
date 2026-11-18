@@ -1,14 +1,14 @@
 server:
   port: 8080
 jwt:
-  secret: ${JWT_SECRET}
+  secret: ${JWT_SECRET:}
   access-token-lifetime: ${JWT_ACCESS_TOKEN_LIFETIME:15m}
   refresh-token-lifetime: ${JWT_REFRESH_TOKEN_LIFETIME:7d}
 
 identity:
   password:
     minimum-length: ${PASSWORD_MINIMUM_LENGTH:8}
-    initial-password: ${INITIAL_ACCOUNT_PASSWORD}
+    initial-password: ${INITIAL_ACCOUNT_PASSWORD:}
   authentication:
     max-failed-logins: ${AUTH_MAX_FAILED_LOGINS:5}
     temporary-lock-duration: ${AUTH_TEMPORARY_LOCK_DURATION:15m}
@@ -16,9 +16,9 @@ identity:
 app:
   init:
     system-admin:
-      username: ${APP_INIT_SYSTEM_ADMIN_USERNAME}
-      password: ${APP_INIT_SYSTEM_ADMIN_PASSWORD}
-      email: ${APP_INIT_SYSTEM_ADMIN_EMAIL:}
+      username: ${APP_INIT_SYSTEM_ADMIN_USERNAME:}
+      password: ${APP_INIT_SYSTEM_ADMIN_PASSWORD:}
+      email: ${APP_INIT_SYSTEM_ADMIN_EMAIL:systemadmin123@eduhub.edu.vn}
 
 spring:
   application:
@@ -27,9 +27,9 @@ spring:
     import: "optional:file:.env[.properties]"
 
   datasource:
-    url: ${DBMS_CONNECTION}
-    username: ${DBMS_USERNAME}
-    password: ${DBMS_PASSWORD}
+    url: ${DBMS_CONNECTION:}
+    username: ${DBMS_USERNAME:}
+    password: ${DBMS_PASSWORD:}
     driver-class-name: org.postgresql.Driver
   jpa:
     open-in-view: false
@@ -62,18 +62,18 @@ spring:
       max-request-size: 21MB
 
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev}  # mặc định dev, prod override bằng env var
+    active: ${SPRING_PROFILES_ACTIVE:dev}  # mặc định dev
 
   ai:
     model:
       chat: google-genai
     google:
       genai:
-        api-key: ${GOOGLE_API_KEY}
+        api-key: ${GOOGLE_API_KEY:}
         chat:
           model: ${GEMINI_CHAT_MODEL:gemini-3.5-flash-lite}
         embedding:
-          api-key: ${GOOGLE_API_KEY}
+          api-key: ${GOOGLE_API_KEY:}
           text:
             model: gemini-embedding-001
             dimensions: 768

@@ -1,6 +1,5 @@
 package com.eduhub.edu_hub.admission.api.exception;
 
-import com.eduhub.edu_hub.admission.api.controller.AdministrativeClassController;
 import com.eduhub.edu_hub.admission.api.controller.StudentAdmissionController;
 import com.eduhub.edu_hub.admission.application.exception.AdmissionEnrollmentException;
 import com.eduhub.edu_hub.admission.application.exception.AdmissionImportScopeException;
@@ -15,7 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(assignableTypes = {StudentAdmissionController.class, AdministrativeClassController.class})
+@RestControllerAdvice(assignableTypes = StudentAdmissionController.class)
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class AdmissionExceptionHandler {
     @ExceptionHandler({

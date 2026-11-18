@@ -1,7 +1,6 @@
 package com.eduhub.edu_hub.admission.application.service;
 
 import com.eduhub.edu_hub.admission.api.dto.request.CreateAdmissionPlanFromFileRequest;
-import com.eduhub.edu_hub.admission.api.dto.request.CreateAdmissionPlanRequest;
 import com.eduhub.edu_hub.admission.api.dto.request.ImportAdmissionApplicantsRequest;
 import com.eduhub.edu_hub.admission.api.dto.response.AdmissionCapacityResponse;
 import com.eduhub.edu_hub.admission.api.dto.response.AdmissionPlanResponse;
@@ -53,38 +52,38 @@ public class AdmissionPlanningService {
 
     @Transactional
     public AdmissionPlanResponse createPlanFromFile(CreateAdmissionPlanFromFileRequest request) {
-        AdmissionPlanResponse createdPlan = createPlan(new CreateAdmissionPlanRequest(
-                request.majorId(),
-                request.cohortId(),
-                0,
-                request.minCapacity(),
-                request.maxCapacity(),
-                request.reserveCapacity()));
-        return importService.importApplicants(
-                createdPlan.id(), new ImportAdmissionApplicantsRequest(createdPlan.revision(), request.file()));
-    }
-
-    @Transactional
-    public AdmissionPlanResponse createPlan(CreateAdmissionPlanRequest request) {
+        // 1. Chốt cấu hình sĩ số của phương án trước khi đọc và phân loại hồ sơ trong file.
         int minCapacity = request.minCapacity() == null ? admissionSettings.getMinCapacity() : request.minCapacity();
         int maxCapacity = request.maxCapacity() == null ? admissionSettings.getMaxCapacity() : request.maxCapacity();
         int reserveCapacity =
                 request.reserveCapacity() == null ? admissionSettings.getReserveCapacity() : request.reserveCapacity();
         capacityPolicy.validateCapacityLimits(minCapacity, maxCapacity, reserveCapacity);
+
+        // 2. Ngành/khóa người dùng chọn là phạm vi chính thức; file chỉ cung cấp thông tin để đối chiếu.
         majorCatalogFacade.requireMajor(request.majorId());
         peopleAdmissionFacade.requireCohort(request.cohortId());
+
+        // 3. Lưu phương án để lấy ID gắn hồ sơ; tổng số sẽ được import cập nhật từ các hồ sơ thực tế.
         AdmissionPlan plan = AdmissionPlan.builder()
                 .majorId(request.majorId())
                 .cohortId(request.cohortId())
-                .totalStudents(request.totalStudents())
+                .totalStudents(0)
                 .minCapacity(minCapacity)
                 .maxCapacity(maxCapacity)
                 .reserveCapacity(reserveCapacity)
                 .build();
         planRepository.saveAndFlush(plan);
+
+        // 4. Import tham gia cùng transaction: lỗi file hoặc đối chiếu phạm vi phải rollback cả phương án mới.
+        // Chỉ dựng response/kịch bản sau import, không trả phương án rỗng như một bước nghiệp vụ riêng.
+        AdmissionPlanResponse importedPlan = importService.importApplicants(
+                plan.getId(), new ImportAdmissionApplicantsRequest(plan.getRevision(), request.file()));
         // TODO(AUDIT_LOG): Ghi người lập phương án, ngành/khóa và cấu hình sĩ số sau khi commit.
-        log.info("Created admission plan: planId={}, totalStudents={}", plan.getId(), plan.getTotalStudents());
-        return planQueryService.buildPlanResponse(plan);
+        log.info(
+                "Created admission plan from file: planId={}, totalStudents={}",
+                importedPlan.id(),
+                importedPlan.totalStudents());
+        return importedPlan;
     }
 
     public AdmissionPlanResponse getPlan(Long planId) {
