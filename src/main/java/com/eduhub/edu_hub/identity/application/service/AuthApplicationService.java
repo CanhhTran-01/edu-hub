@@ -1,5 +1,7 @@
 package com.eduhub.edu_hub.identity.application.service;
 
+import static com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey.*;
+
 import com.eduhub.edu_hub.identity.api.dto.request.ChangePasswordRequest;
 import com.eduhub.edu_hub.identity.api.dto.request.LoginRequest;
 import com.eduhub.edu_hub.identity.api.dto.response.LoginResponse;
@@ -12,10 +14,11 @@ import com.eduhub.edu_hub.identity.domain.model.User;
 import com.eduhub.edu_hub.identity.domain.policy.PasswordPolicy;
 import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
-import com.eduhub.edu_hub.identity.infrastructure.config.AuthenticationSettings;
 import com.eduhub.edu_hub.identity.infrastructure.security.CustomUserDetail;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import com.eduhub.edu_hub.shared.systemconfig.api.dto.response.SystemConfigSnapshotResponse;
+import com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -43,13 +46,15 @@ public class AuthApplicationService {
     private final PlatformTransactionManager transactionManager;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
-    private final AuthenticationSettings authenticationSettings;
+    private final SystemConfigService systemConfigService;
     private final PeopleFacade.LoginProfile loginProfiles;
     private final Clock clock;
 
     private record LoginAttempt(LoginResponse response, ErrorCode error) {}
 
     private LoginAttempt authenticate(LoginRequest request) {
+
+        var authenticationConfiguration = systemConfigService.getSnapshot();
 
         CustomUserDetail principal;
         try {
@@ -63,7 +68,7 @@ public class AuthApplicationService {
             userRepository.findByUsernameForUpdate(request.getUsername()).ifPresent(user -> {
                 LocalDateTime now = LocalDateTime.now(clock);
                 clearExpiredTemporaryLock(user, now);
-                recordFailedAttempt(user, now);
+                recordFailedAttempt(user, now, authenticationConfiguration);
             });
             return new LoginAttempt(null, ErrorCode.INVALID_CREDENTIALS);
 
@@ -103,7 +108,7 @@ public class AuthApplicationService {
         RefreshToken session = new RefreshToken();
         session.setUser(user);
         session.setTokenHash(tokenService.hash(refreshToken));
-        session.setExpiresAt(now.plus(authenticationSettings.refreshTokenLifetime()));
+        session.setExpiresAt(now.plus(authenticationConfiguration.getDuration(REFRESH_TOKEN_LIFETIME)));
         session = refreshTokenRepository.saveAndFlush(session);
 
         // TODO(REFRESH_TOKEN): Khi bổ sung API refresh, phải đọc lại first-Login trong DB để giữ JWT hạn chế;
@@ -121,9 +126,14 @@ public class AuthApplicationService {
 
         LoginResponse response = LoginResponse.builder()
                 .accessToken(tokenService.generateAccessToken(
-                        user, session.getId(), issuedAt, issuedAt.plus(authenticationSettings.accessTokenLifetime())))
+                        user,
+                        session.getId(),
+                        issuedAt,
+                        issuedAt.plus(authenticationConfiguration.getDuration(ACCESS_TOKEN_LIFETIME))))
                 .refreshToken(refreshToken)
-                .expiresIn(authenticationSettings.accessTokenLifetime().toSeconds())
+                .expiresIn(authenticationConfiguration
+                        .getDuration(ACCESS_TOKEN_LIFETIME)
+                        .toSeconds())
                 .user(info)
                 .requirePasswordChange(user.isFirstLogin())
                 .build();
@@ -176,6 +186,7 @@ public class AuthApplicationService {
         // Giữ khóa User đến khi cập nhật mật khẩu, lịch sử và mọi refresh token hoàn tất.
         // Lỗi sai mật khẩu được trả khỏi callback để commit bộ đếm trước khi trả lỗi cho client.
         ErrorCode error = new TransactionTemplate(transactionManager).execute(status -> {
+            var authenticationConfiguration = systemConfigService.getSnapshot();
             User user = userRepository
                     .findByIdForUpdate(claims.userId())
                     .orElseThrow(() -> new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED));
@@ -198,14 +209,18 @@ public class AuthApplicationService {
             if (!user.isFirstLogin()) {
                 passwordPolicy.validateCurrentPasswordInput(request.getCurrentPassword());
                 if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
-                    recordFailedAttempt(user, now);
+                    recordFailedAttempt(user, now, authenticationConfiguration);
                     return ErrorCode.INVALID_CREDENTIALS;
                 }
             }
 
             // Kiểm tra giới hạn byte trước khi gọi BCrypt.
             // first-login chỉ bỏ qua mật khẩu hiện tại, không bỏ policy.
-            passwordPolicy.validate(request.getNewPassword(), request.getConfirmPassword(), user.getUsername());
+            passwordPolicy.validate(
+                    request.getNewPassword(),
+                    request.getConfirmPassword(),
+                    user.getUsername(),
+                    authenticationConfiguration.getInteger(PASSWORD_MINIMUM_LENGTH));
             passwordPolicy.validatePasswordReuse(
                     passwordEncoder.matches(request.getNewPassword(), user.getPasswordHash()),
                     user.getPreviousPasswordHash() != null
@@ -246,13 +261,15 @@ public class AuthApplicationService {
         }
     }
 
-    private void recordFailedAttempt(User user, LocalDateTime now) {
+    private void recordFailedAttempt(
+            User user, LocalDateTime now, SystemConfigSnapshotResponse authenticationConfiguration) {
         int failedAttempts = user.getFailedLoginCount() + 1;
 
         user.setFailedLoginCount(failedAttempts);
 
-        if (failedAttempts >= authenticationSettings.maxFailedLogins()) {
-            user.setLockedUntil(now.plus(authenticationSettings.temporaryLockDuration()));
+        if (failedAttempts >= authenticationConfiguration.getInteger(AUTHENTICATION_MAXIMUM_FAILED_LOGINS)) {
+            user.setLockedUntil(
+                    now.plus(authenticationConfiguration.getDuration(AUTHENTICATION_TEMPORARY_LOCK_DURATION)));
         }
         userRepository.save(user);
     }

@@ -99,8 +99,8 @@ public final class TimetablePolicy {
                     .filter(schedule -> schedule.moduleClassId().equals(requirement.moduleClassId()))
                     .toList();
 
-            if (requirement.maxCapacity() < 1 || requirement.maxCapacity() > ModuleClassPolicy.MAX_CAPACITY)
-                violations.add("Sức chứa lớp phải từ 1 đến " + ModuleClassPolicy.MAX_CAPACITY);
+            // Trần cấu hình chỉ áp dụng khi tạo/sửa lớp, không làm mất hiệu lực sức chứa đã chốt trong lịch.
+            if (requirement.maxCapacity() < 1) violations.add("Sức chứa lớp phải lớn hơn 0");
 
             if (requirement.lecturerId() == null
                     || problem.lecturers().stream()

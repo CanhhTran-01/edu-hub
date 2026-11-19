@@ -54,14 +54,14 @@ class EnrollmentPlanningFacadeImplTest {
     }
 
     @Test
-    void rejectsMissingOrInvertedRegistrationSettings() {
+    void rejectsMissingOrMalformedHistoryScopeYear() {
+        settings.setFirstSupportedAdmissionYear(null);
         assertThatThrownBy(settings::validate)
                 .isInstanceOf(com.eduhub.edu_hub.enrollment.application.exception.EnrollmentException.class);
-        settings.setMinimumCredits(21);
-        settings.setMaximumCredits(20);
+        settings.setFirstSupportedAdmissionYear(26);
         assertThatThrownBy(settings::validate)
                 .isInstanceOf(com.eduhub.edu_hub.enrollment.application.exception.EnrollmentException.class);
-        settings.setMinimumCredits(12);
+        settings.setFirstSupportedAdmissionYear(2026);
         settings.validate();
     }
 }

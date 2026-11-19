@@ -11,17 +11,17 @@ import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class PasswordPolicyTest {
-    private final PasswordPolicy validator = new PasswordPolicy(8);
+    private final PasswordPolicy validator = new PasswordPolicy();
 
     @Test
     void acceptsValidNewPassword() {
-        assertThatCode(() -> validator.validate("NewPass1!", "NewPass1!", "student"))
+        assertThatCode(() -> validator.validate("NewPass1!", "NewPass1!", "student", 8))
                 .doesNotThrowAnyException();
     }
 
     @Test
     void reportsEveryFailedCondition() {
-        assertThatThrownBy(() -> validator.validate("abc ", "different", "student"))
+        assertThatThrownBy(() -> validator.validate("abc ", "different", "student", 8))
                 .isInstanceOfSatisfying(PasswordValidationException.class, exception -> {
                     assertThat(exception.getErrors()).hasSize(6);
                     assertThat(exception.getErrors()).extracting("field").contains("newPassword", "confirmPassword");
@@ -30,15 +30,15 @@ class PasswordPolicyTest {
 
     @Test
     void rejectsExactUsernameButKeepsCaseSensitiveComparison() {
-        assertThatThrownBy(() -> validator.validate("Student1!", "Student1!", "Student1!"))
+        assertThatThrownBy(() -> validator.validate("Student1!", "Student1!", "Student1!", 8))
                 .isInstanceOf(PasswordValidationException.class);
-        assertThatCode(() -> validator.validate("Student1!", "Student1!", "student1!"))
+        assertThatCode(() -> validator.validate("Student1!", "Student1!", "student1!", 8))
                 .doesNotThrowAnyException();
     }
 
     @Test
     void usesConfiguredMinimumLength() {
-        assertThatThrownBy(() -> new PasswordPolicy(12).validate("NewPass1!", "NewPass1!", "student"))
+        assertThatThrownBy(() -> validator.validate("NewPass1!", "NewPass1!", "student", 12))
                 .isInstanceOf(PasswordValidationException.class);
     }
 
@@ -46,13 +46,13 @@ class PasswordPolicyTest {
     void enforcesBcryptByteBoundaryForAsciiAndUnicode() {
         String asciiBoundary = "Aa1!" + "b".repeat(68);
         String unicodeBoundary = "Aa1!" + "á".repeat(34);
-        assertThatCode(() -> validator.validate(asciiBoundary, asciiBoundary, "student"))
+        assertThatCode(() -> validator.validate(asciiBoundary, asciiBoundary, "student", 8))
                 .doesNotThrowAnyException();
-        assertThatCode(() -> validator.validate(unicodeBoundary, unicodeBoundary, "student"))
+        assertThatCode(() -> validator.validate(unicodeBoundary, unicodeBoundary, "student", 8))
                 .doesNotThrowAnyException();
-        assertThatThrownBy(() -> validator.validate(asciiBoundary + "b", asciiBoundary + "b", "student"))
+        assertThatThrownBy(() -> validator.validate(asciiBoundary + "b", asciiBoundary + "b", "student", 8))
                 .isInstanceOf(PasswordValidationException.class);
-        assertThatThrownBy(() -> validator.validate(unicodeBoundary + "á", unicodeBoundary + "á", "student"))
+        assertThatThrownBy(() -> validator.validate(unicodeBoundary + "á", unicodeBoundary + "á", "student", 8))
                 .isInstanceOf(PasswordValidationException.class);
     }
 

@@ -17,7 +17,12 @@ public class OpeningDemandPolicy {
     private static final Pattern SEMESTER_CODE = Pattern.compile("^HK_([12])_([0-9]{4})_([0-9]{4})$");
 
     public List<SubjectDemand> calculate(
-            String semesterCode, List<PlanningSubject> planningSubjects, AcademicPlanningSnapshot planningSnapshot) {
+            String semesterCode,
+            List<PlanningSubject> planningSubjects,
+            AcademicPlanningSnapshot planningSnapshot,
+            int recommendedClassCapacity) {
+
+        if (recommendedClassCapacity < 1) throw new ModuleClassException(ErrorCode.VALIDATION_ERROR);
 
         // Valide mã kỳ
         var matcher = SEMESTER_CODE.matcher(semesterCode);
@@ -95,7 +100,7 @@ public class OpeningDemandPolicy {
 
         // trả lại dữ liệu đã xử lý
         return demandsBySubjectId.values().stream()
-                .map(StudentDemandBySubject::summarizeDemand)
+                .map(demand -> demand.summarizeDemand(recommendedClassCapacity))
                 .sorted(Comparator.comparing(demand -> demand.subject().subjectCode()))
                 .toList();
     }
@@ -109,14 +114,14 @@ public class OpeningDemandPolicy {
         }
 
         // xử lý dữ liệu nhu cầu cho subject
-        private SubjectDemand summarizeDemand() {
+        private SubjectDemand summarizeDemand(int recommendedClassCapacity) {
             return new SubjectDemand(
                     planningSubject,
                     count(OpeningDemandCategory.ON_TIME),
                     count(OpeningDemandCategory.RETAKE),
                     count(OpeningDemandCategory.MISSED),
                     studentsById.size(),
-                    (studentsById.size() + ModuleClassPolicy.MAX_CAPACITY - 1) / ModuleClassPolicy.MAX_CAPACITY);
+                    (int) ((studentsById.size() + (long) recommendedClassCapacity - 1) / recommendedClassCapacity));
         }
 
         private int count(OpeningDemandCategory demandCategory) {

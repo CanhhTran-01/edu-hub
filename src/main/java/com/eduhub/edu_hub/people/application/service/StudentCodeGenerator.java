@@ -7,8 +7,9 @@ import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
 import com.eduhub.edu_hub.people.domain.policy.StudentCodePolicy;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService;
+import com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -17,8 +18,7 @@ public class StudentCodeGenerator {
     private final StudentRepository studentRepository;
     private final CurriculumFacade.Majors curriculumMajors;
 
-    @Value("${admission.student-code-format:[MaNganh][SttKhoa][SttLop][SttSVTrongLop]}")
-    private String studentCodeFormat = "[MaNganh][SttKhoa][SttLop][SttSVTrongLop]";
+    private final SystemConfigService systemConfigService;
 
     public String generateStudentCode(AdministrativeClass administrativeClass, int studentSequence) {
         return StudentCodePolicy.appendStudentSequence(prefix(administrativeClass), studentSequence);
@@ -60,6 +60,10 @@ public class StudentCodeGenerator {
         int cohortNumber = configuredCohort;
         int classNumber = AdministrativeClassNames.sequence(administrativeClass.getClassName(), configuredCohort)
                 .orElseThrow(() -> new ProfileCreationException(ErrorCode.INVALID_STUDENT_CODE_CLASS));
-        return StudentCodePolicy.generatePrefix(canonicalCode, cohortNumber, classNumber, studentCodeFormat);
+        return StudentCodePolicy.generatePrefix(
+                canonicalCode,
+                cohortNumber,
+                classNumber,
+                systemConfigService.getSnapshot().getString(SystemConfigKey.STUDENT_CODE_FORMAT));
     }
 }

@@ -71,7 +71,7 @@ class ModuleClassControllerTest {
     }
 
     @Test
-    void createsBatchWithDefaultCapacityAndReturnsCreatedClasses() throws Exception {
+    void leavesOmittedCapacityForServiceToResolveFromCurrentConfiguration() throws Exception {
         when(service.createModuleClasses(eq(7L), any()))
                 .thenReturn(List.of(ModuleClassResponse.builder()
                         .id(101L)
@@ -95,7 +95,7 @@ class ModuleClassControllerTest {
                         .getClasses()
                         .getFirst()
                         .getMaxCapacity())
-                .isEqualTo(80);
+                .isNull();
     }
 
     @ParameterizedTest
@@ -106,7 +106,6 @@ class ModuleClassControllerTest {
                 "{\"subjects\":[null]}",
                 "{\"subjects\":[{\"subjectId\":1,\"classes\":[]}]}",
                 "{\"subjects\":[{\"subjectId\":1,\"classes\":[null]}]}",
-                "{\"subjects\":[{\"subjectId\":1,\"classes\":[{\"maxCapacity\":81}]}]}",
                 "{\"subjects\":[{\"subjectId\":1,\"classes\":[{\"maxCapacity\":null}]}]}",
                 "{\"subjects\":[{\"subjectId\":1,\"classes\":[{\"maxCapacity\":10.5}]}]}"
             })
@@ -195,7 +194,6 @@ class ModuleClassControllerTest {
                 "{\"maxCapacity\":60,\"reason\":\"   \"}",
                 "{\"maxCapacity\":null,\"reason\":\"Đổi sức chứa\"}",
                 "{\"maxCapacity\":10.5,\"reason\":\"Đổi sức chứa\"}",
-                "{\"maxCapacity\":81,\"reason\":\"Đổi sức chứa\"}",
                 "{\"maxCapacity\":0,\"reason\":\"Đổi sức chứa\"}"
             })
     void patchRequiresValidCapacityAndReason(String body) throws Exception {
@@ -335,5 +333,27 @@ class ModuleClassControllerTest {
                 .andExpect(jsonPath("$.data.subjectId").value(1))
                 .andExpect(jsonPath("$.data.lecturerId").value(5001))
                 .andExpect(jsonPath("$.data.schedules[0].roomId").value(501));
+    }
+
+    @Test
+    void readsCurrentCapacityLimitsForCreationForm() throws Exception {
+        when(service.getCapacityConfiguration())
+                .thenReturn(new com.eduhub.edu_hub.scheduling.api.dto.response.ModuleClassCapacityResponse(60, 120));
+        mvc.perform(get("/api/v1/module-classes/configuration"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.data.defaultCapacity").value(60))
+                .andExpect(jsonPath("$.data.maximumCapacity").value(120));
+    }
+
+    @Test
+    void delegatesDynamicUpperBoundToApplicationService() throws Exception {
+        when(service.updateModuleClassCapacity(eq(101L), any()))
+                .thenThrow(new ModuleClassException(ErrorCode.VALIDATION_ERROR));
+        mvc.perform(patch("/api/v1/module-classes/101")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"maxCapacity\":81,\"reason\":\"Đổi sức chứa\"}"))
+                .andExpect(status().isBadRequest());
+        verify(service).updateModuleClassCapacity(eq(101L), any());
     }
 }

@@ -5,8 +5,9 @@ import com.eduhub.edu_hub.people.domain.model.Faculty;
 import com.eduhub.edu_hub.people.domain.policy.LecturerCodePolicy;
 import com.eduhub.edu_hub.people.infrastructure.persistence.LecturerCodeCounterRepository;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService;
+import com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,18 +17,21 @@ import org.springframework.transaction.annotation.Transactional;
 public class LecturerCodeGenerator {
     private final LecturerCodeCounterRepository lecturerCodeCounterRepository;
 
-    @Value("${people.lecturer-code-format:[MaKhoa][NamTuyenDung][SttGV]}")
-    private String lecturerCodeFormat = "[MaKhoa][NamTuyenDung][SttGV]";
+    private final SystemConfigService systemConfigService;
 
     public String generateLecturerCode(Faculty faculty, Integer recruitmentYear, int lecturerSequence) {
         return LecturerCodePolicy.generateCode(
-                faculty.getFacultyCode(), recruitmentYear, lecturerSequence, lecturerCodeFormat);
+                faculty.getFacultyCode(),
+                recruitmentYear,
+                lecturerSequence,
+                systemConfigService.getSnapshot().getString(SystemConfigKey.LECTURER_CODE_FORMAT));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public int allocateNextLecturerSequence(Faculty faculty, Integer recruitmentYear) {
         LecturerCodePolicy.validateCodeScope(faculty.getFacultyCode(), recruitmentYear);
-        LecturerCodePolicy.validateCodeFormat(lecturerCodeFormat);
+        LecturerCodePolicy.validateCodeFormat(
+                systemConfigService.getSnapshot().getString(SystemConfigKey.LECTURER_CODE_FORMAT));
         return lecturerCodeCounterRepository
                 .allocateNextLecturerSequence(
                         faculty.getId(), recruitmentYear, LecturerCodePolicy.MAXIMUM_LECTURER_SEQUENCE)

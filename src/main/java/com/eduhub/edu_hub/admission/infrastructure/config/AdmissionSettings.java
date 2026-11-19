@@ -10,10 +10,7 @@ import org.springframework.stereotype.Component;
 @Getter
 @Setter
 public class AdmissionSettings {
-    // TODO: một số field sau này sẽ quy vào table SystemConfig, 1 số sẽ ở yaml
-    private int minCapacity = 40;
-    private int maxCapacity = 50;
-    private int reserveCapacity = 15;
+    // Giới hạn tài nguyên và lease worker vẫn thuộc cấu hình triển khai.
     private int maxImportRows = 50000;
     private int confirmationLeaseMinutes = 5;
 }

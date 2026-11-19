@@ -37,7 +37,8 @@ class AdmissionPlanQueryServiceTest {
             new AdmissionScoreBalancePolicy(),
             new com.eduhub.edu_hub.admission.api.mapper.AdmissionPlanResponseMapper(),
             org.mapstruct.factory.Mappers.getMapper(
-                    com.eduhub.edu_hub.admission.api.mapper.AdmissionScenarioResponseMapper.class));
+                    com.eduhub.edu_hub.admission.api.mapper.AdmissionScenarioResponseMapper.class),
+            com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData.configuredService());
 
     @ParameterizedTest
     @CsvSource({"1,0", "2,0", "3,0", "4,1", "5,1"})

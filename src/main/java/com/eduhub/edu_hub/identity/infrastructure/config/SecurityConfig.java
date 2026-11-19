@@ -100,8 +100,8 @@ public class SecurityConfig {
     }
 
     @Bean
-    PasswordPolicy passwordPolicy(PasswordSettings settings) {
-        return new PasswordPolicy(settings.getMinimumLength());
+    PasswordPolicy passwordPolicy() {
+        return new PasswordPolicy();
     }
 
     @Bean

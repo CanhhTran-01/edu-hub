@@ -88,7 +88,8 @@ class ModuleClassManagementServiceTest {
                 CLOCK,
                 classScheduleQueryService,
                 classScheduleRepository,
-                roomRepository);
+                roomRepository,
+                com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData.configuredService());
         semester = Semester.builder()
                 .semesterCode("HK_1_2026_2027")
                 .startDate(LocalDate.parse("2026-08-11"))

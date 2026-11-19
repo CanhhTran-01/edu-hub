@@ -1,7 +1,5 @@
 package com.eduhub.edu_hub.admission.application.service;
 
-import static com.eduhub.edu_hub.admission.domain.policy.AdmissionDuplicateNamePolicy.MAX_SAME_NAME_PER_CLASS;
-
 import com.eduhub.edu_hub.admission.api.dto.response.AdmissionApplicantResponse;
 import com.eduhub.edu_hub.admission.api.dto.response.AdmissionClassPreviewResponse;
 import com.eduhub.edu_hub.admission.api.dto.response.AdmissionPlanResponse;
@@ -20,6 +18,8 @@ import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.application.facade.dto.*;
 import com.eduhub.edu_hub.scheduling.application.facade.SchedulingFacade;
 import com.eduhub.edu_hub.shared.exception.*;
+import com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService;
+import com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey;
 import com.eduhub.edu_hub.shared.text.TextsNormalizer;
 import java.math.*;
 import java.util.*;
@@ -41,8 +41,14 @@ public class AdmissionPlanQueryService {
     private final AdmissionScoreBalancePolicy scoreBalancePolicy;
     private final AdmissionPlanResponseMapper planResponseMapper;
     private final AdmissionScenarioResponseMapper scenarioResponseMapper;
+    private final SystemConfigService systemConfigService;
 
     public AdmissionPlanResponse buildPlanResponse(AdmissionPlan plan) {
+        return buildPlanResponse(
+                plan, systemConfigService.getSnapshot().getInteger(SystemConfigKey.ADMISSION_MAXIMUM_SAME_NAME));
+    }
+
+    public AdmissionPlanResponse buildPlanResponse(AdmissionPlan plan, int maximumSameName) {
         var planApplicants = applicantRepository.findByPlan_IdOrderByRowNumber(plan.getId());
         var plannedClasses = planClassRepository.findByPlan_IdOrderByPosition(plan.getId());
         var classesById = peopleAdmissionFacade
@@ -88,10 +94,10 @@ public class AdmissionPlanQueryService {
                             LinkedHashMap::new,
                             Collectors.toList()));
             for (var group : applicantsByNormalizedName.values())
-                if (group.size() > MAX_SAME_NAME_PER_CLASS)
+                if (group.size() > maximumSameName)
                     warnings.add("Lớp " + administrativeClass.getClassName() + " có " + group.size()
                             + " sinh viên trùng họ tên: " + group.getFirst().getFullName() + " (tối đa "
-                            + MAX_SAME_NAME_PER_CLASS + ")");
+                            + maximumSameName + ")");
             int projectedClassSize =
                     plan.getState() == AdmissionPlanStatus.DRAFT || plan.getState() == AdmissionPlanStatus.CLASSES_READY
                             ? plannedClass.getTargetSize()

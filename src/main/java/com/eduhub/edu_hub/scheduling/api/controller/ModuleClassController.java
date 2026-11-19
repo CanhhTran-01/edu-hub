@@ -5,6 +5,7 @@ import com.eduhub.edu_hub.scheduling.api.dto.request.CreateModuleClassesRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.ModuleClassPublicationRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.ModuleClassSearchRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.UpdateModuleClassRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.response.ModuleClassCapacityResponse;
 import com.eduhub.edu_hub.scheduling.api.dto.response.ModuleClassPublicationResponse;
 import com.eduhub.edu_hub.scheduling.api.dto.response.ModuleClassResponse;
 import com.eduhub.edu_hub.scheduling.api.dto.response.ModuleClassSimpleResponse;
@@ -17,6 +18,7 @@ import com.eduhub.edu_hub.shared.common.PageResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -30,6 +32,13 @@ public class ModuleClassController {
     private final ApiResponseFactory apiResponseFactory;
     private final ModuleClassApplicationService moduleClassApplicationService;
     private final ModuleClassPublicationService publicationService;
+
+    @GetMapping("/module-classes/configuration")
+    public ResponseEntity<ApiResponse<ModuleClassCapacityResponse>> getCapacityConfiguration() {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(apiResponseFactory.success(moduleClassApplicationService.getCapacityConfiguration()));
+    }
 
     @PostMapping("/semesters/{semesterId}/module-classes/publish")
     public ApiResponse<ModuleClassPublicationResponse> publish(

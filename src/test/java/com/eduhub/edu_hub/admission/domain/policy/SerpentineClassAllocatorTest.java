@@ -19,7 +19,7 @@ class SerpentineClassAllocatorTest {
         var slots = slots(4, 3, 3);
         var rows = new ArrayList<AdmissionApplicant>();
         for (int i = 0; i < 10; i++) rows.add(row("HS" + i, "Sinh viên " + i, 30 - i));
-        allocator.allocateByScore(rows, slots);
+        allocator.allocateByScore(rows, slots, 3);
         assertThat(rows.stream()
                         .filter(row -> row.getAdministrativeClassId().equals(1L))
                         .toList())
@@ -47,7 +47,7 @@ class SerpentineClassAllocatorTest {
                 row("D", "  NGUYỄN   VĂN AN ", 27),
                 row("E", "Nguyễn Văn An", 26),
                 row("F", "Phạm Văn Dũng", 25));
-        allocator.allocateByScore(rows, slots);
+        allocator.allocateByScore(rows, slots, 3);
         assertThat(rows)
                 .extracting(AdmissionApplicant::getAdministrativeClassId)
                 .containsExactly(1L, 2L, 2L, 1L, 1L, 2L);
@@ -65,7 +65,7 @@ class SerpentineClassAllocatorTest {
                 row("F", "Phạm Văn Dũng", 25),
                 row("G", "Vũ Văn Em", 24),
                 row("H", "  NGUYỄN   VĂN AN ", 23));
-        allocator.allocateByScore(rows, slots);
+        allocator.allocateByScore(rows, slots, 3);
         assertThat(rows.getLast().getAdministrativeClassId()).isEqualTo(2L);
         assertThat(rows.get(6).getAdministrativeClassId()).isEqualTo(1L);
         for (var slot : slots) {
@@ -93,7 +93,7 @@ class SerpentineClassAllocatorTest {
                 row("F", "Nguyễn An", 25),
                 row("G", "Nguyễn An", 24),
                 row("H", "Nguyễn An", 23));
-        allocator.allocateByScore(rows, slots(4, 4));
+        allocator.allocateByScore(rows, slots(4, 4), 3);
         assertThat(rows).allMatch(row -> row.getAdministrativeClassId() != null);
         assertThat(rows.stream()
                         .map(AdmissionApplicant::getAdministrativeClassId)
@@ -123,7 +123,7 @@ class SerpentineClassAllocatorTest {
                 row("B", "Nguyễn Văn An", 29),
                 row("C", "Nguyễn Văn An", 28),
                 row("D", "Nguyễn Văn An", 27));
-        allocator.allocateByScore(rows, slots, List.of(enrolled));
+        allocator.allocateByScore(rows, slots, List.of(enrolled), 3);
         assertThat(enrolled.getAdministrativeClassId()).isEqualTo(slots.get(1).getAdministrativeClassId());
         assertThat(enrolled.getState()).isEqualTo(AdmissionApplicantStatus.ENROLLED);
         assertThat(rows).allMatch(row -> row.getAdministrativeClassId()
@@ -141,7 +141,7 @@ class SerpentineClassAllocatorTest {
                 row("C", "Nguyễn Văn An", 28),
                 row("D", "Nguyễn Văn An", 27),
                 row("E", "Nguyễn Văn An", 26));
-        allocator.allocateByScore(rows, slots, List.of(enrolled));
+        allocator.allocateByScore(rows, slots, List.of(enrolled), 3);
         assertThat(enrolled.getAdministrativeClassId()).isEqualTo(slots.get(1).getAdministrativeClassId());
         assertThat(pendingCandidate.getAdministrativeClassId())
                 .isEqualTo(slots.getFirst().getAdministrativeClassId());
@@ -158,7 +158,7 @@ class SerpentineClassAllocatorTest {
                 enrolled("OLD-C", "Nguyễn Văn An", 28, slots.getFirst().getAdministrativeClassId()),
                 enrolled("OLD-D", "Nguyễn Văn An", 27, slots.getFirst().getAdministrativeClassId()));
         var pending = row("NEW", "Trần Văn Bình", 26);
-        allocator.allocateByScore(List.of(pending), slots, enrolled);
+        allocator.allocateByScore(List.of(pending), slots, enrolled, 3);
         assertThat(enrolled).allMatch(row -> row.getAdministrativeClassId()
                 .equals(slots.getFirst().getAdministrativeClassId()));
         assertThat(pending.getAdministrativeClassId()).isEqualTo(slots.get(1).getAdministrativeClassId());
@@ -177,7 +177,7 @@ class SerpentineClassAllocatorTest {
                 enrolled("OLD-A", "Nguyễn Văn An", 25, slots.get(1).getAdministrativeClassId()),
                 enrolled("OLD-B", "Nguyễn Văn An", 24, slots.get(1).getAdministrativeClassId()),
                 enrolled("OLD-C", "Nguyễn Văn An", 23, slots.get(1).getAdministrativeClassId()));
-        allocator.allocateByScore(rows, slots, enrolled);
+        allocator.allocateByScore(rows, slots, enrolled, 3);
         assertThat(rows.getLast().getAdministrativeClassId())
                 .isEqualTo(slots.getFirst().getAdministrativeClassId());
         assertThat(rows.get(1).getAdministrativeClassId())
@@ -197,7 +197,7 @@ class SerpentineClassAllocatorTest {
                 enrolled("OLD-A", "Trần Văn Bình", 25, slots.getFirst().getAdministrativeClassId()),
                 enrolled("OLD-B", "Trần Văn Bình", 24, slots.getFirst().getAdministrativeClassId()),
                 enrolled("OLD-C", "Trần Văn Bình", 23, slots.getFirst().getAdministrativeClassId()));
-        allocator.allocateByScore(rows, slots, enrolled);
+        allocator.allocateByScore(rows, slots, enrolled, 3);
         assertThat(rows.getLast().getAdministrativeClassId())
                 .isEqualTo(slots.getFirst().getAdministrativeClassId());
         assertThat(rows.get(1).getAdministrativeClassId())
@@ -207,7 +207,7 @@ class SerpentineClassAllocatorTest {
     @Test
     void breaksEqualScoreTiesByFullNameInsteadOfApplicationCode() {
         var rows = List.of(row("A", "Trần Văn Bình", 25), row("Z", "Nguyễn Văn An", 25));
-        allocator.allocateByScore(rows, slots(1, 1));
+        allocator.allocateByScore(rows, slots(1, 1), 3);
         assertThat(rows)
                 .extracting(AdmissionApplicant::getAdministrativeClassId)
                 .containsExactly(2L, 1L);

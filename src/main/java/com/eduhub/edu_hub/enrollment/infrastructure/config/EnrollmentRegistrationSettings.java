@@ -8,24 +8,17 @@ import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
-/** Giới hạn tín chỉ và mốc khóa mới có lịch sử được quản lý từ đầu trong hệ thống. */
+/** Mốc khóa mới có lịch sử được quản lý từ đầu; giới hạn tín chỉ đọc từ SystemConfig. */
 @Component
 @Getter
 @Setter
 @ConfigurationProperties(prefix = "enrollment.registration")
 public class EnrollmentRegistrationSettings {
-    private Integer minimumCredits;
-    private Integer maximumCredits;
     private Integer firstSupportedAdmissionYear;
 
     @PostConstruct
     public void validate() {
-        if (minimumCredits == null
-                || minimumCredits < 0
-                || maximumCredits == null
-                || maximumCredits < 1
-                || minimumCredits > maximumCredits
-                || firstSupportedAdmissionYear == null
+        if (firstSupportedAdmissionYear == null
                 || firstSupportedAdmissionYear < 1000
                 || firstSupportedAdmissionYear > 9999) {
             throw new EnrollmentException(ErrorCode.ENROLLMENT_CONFIGURATION_INVALID);

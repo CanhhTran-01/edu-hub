@@ -11,9 +11,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 class PasswordSettingsTest {
     @Test
     void exemptsSystemGeneratedPasswordFromStrengthRulesButEnforcesBcryptByteLimit() {
-        assertThat(new PasswordSettings(8, "1").getInitialPassword()).isEqualTo("1");
-        assertThatCode(() -> new PasswordSettings(8, "á".repeat(36))).doesNotThrowAnyException();
-        assertThatThrownBy(() -> new PasswordSettings(8, "á".repeat(37)))
+        assertThat(new PasswordSettings("1").getInitialPassword()).isEqualTo("1");
+        assertThatCode(() -> new PasswordSettings("á".repeat(36))).doesNotThrowAnyException();
+        assertThatThrownBy(() -> new PasswordSettings("á".repeat(37)))
                 .isInstanceOf(IdentityConfigurationException.class);
     }
 
@@ -21,14 +21,7 @@ class PasswordSettingsTest {
     @NullAndEmptySource
     @ValueSource(strings = {" ", "\t"})
     void rejectsEmptyInitialPassword(String initialPassword) {
-        assertThatThrownBy(() -> new PasswordSettings(8, initialPassword))
-                .isInstanceOf(IdentityConfigurationException.class);
-    }
-
-    @ParameterizedTest
-    @ValueSource(ints = {0, 7, 73})
-    void rejectsUnsupportedMinimumLength(int minimumLength) {
-        assertThatThrownBy(() -> new PasswordSettings(minimumLength, "temporary"))
+        assertThatThrownBy(() -> new PasswordSettings(initialPassword))
                 .isInstanceOf(IdentityConfigurationException.class);
     }
 }

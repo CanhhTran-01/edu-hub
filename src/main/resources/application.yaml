@@ -85,6 +85,7 @@ admission:
   min-capacity: 40
   max-capacity: 50
   reserve-capacity: 15
+  maximum-same-name-per-class: 3
   max-import-rows: 50000
   student-code-format: "[MaNganh][SttKhoa][SttLop][SttSVTrongLop]"
   notifications-enabled: true
@@ -94,6 +95,9 @@ people:
   lecturer-code-format: "[MaKhoa][NamTuyenDung][SttGV]"
 
 scheduling:
+  module-class:
+    default-capacity: 80
+    maximum-capacity: 80
   timetabling:
     spent-limit-seconds: ${TIMETABLE_SOLVING_SECONDS:60}
     maximum-sessions-per-plan: ${TIMETABLE_MAXIMUM_SESSIONS:10000}
@@ -108,7 +112,8 @@ notification:
 
 enrollment:
   registration:
-    # Các giá trị quy chế phải được cấu hình rõ ràng; không tự giả định ngưỡng hoặc phạm vi khóa.
+    # Hai giới hạn tín chỉ là nguồn khởi tạo khi chưa được quản trị thiết lập trong SystemConfig.
+    # Năm bắt đầu hỗ trợ vẫn bắt buộc cấu hình triển khai sau khi đối soát lịch sử.
     minimum-credits: ${ENROLLMENT_MINIMUM_CREDITS:}
     maximum-credits: ${ENROLLMENT_MAXIMUM_CREDITS:}
     first-supported-admission-year: ${ENROLLMENT_FIRST_SUPPORTED_ADMISSION_YEAR:}

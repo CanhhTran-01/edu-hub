@@ -83,6 +83,8 @@ class ModuleClassApplicationServiceTest {
     private com.eduhub.edu_hub.scheduling.domain.repository.RoomRepository roomRepository;
 
     private ModuleClassApplicationService service;
+    private final com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService systemConfigService =
+            com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData.configuredService();
 
     @BeforeEach
     void setUp() {
@@ -98,7 +100,8 @@ class ModuleClassApplicationServiceTest {
                 CLOCK,
                 classScheduleQueryService,
                 classScheduleRepository,
-                roomRepository);
+                roomRepository,
+                systemConfigService);
     }
 
     @Test
@@ -324,7 +327,11 @@ class ModuleClassApplicationServiceTest {
         assertThat(response.getContent().getFirst().getSemesterCode()).isEqualTo("HK_1_2026_2027");
         assertThat(response.getContent().get(1).getLecturerName()).isNull();
         verify(classes).findAll(ArgumentMatchers.<Specification<ModuleClass>>any(), eq(pageable));
-        verifyNoInteractions(classScheduleQueryService, classScheduleRepository, roomRepository);
+        verifyNoInteractions(
+                classScheduleQueryService,
+                classScheduleRepository,
+                roomRepository,
+                com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData.configuredService());
     }
 
     @Test
@@ -340,6 +347,26 @@ class ModuleClassApplicationServiceTest {
         assertThat(response.getTotalElements()).isEqualTo(3);
         assertThat(response.getPageNumber()).isEqualTo(2);
         verifyNoInteractions(curriculum, people, classScheduleQueryService);
+    }
+
+    @Test
+    void resolvesOmittedCapacityAndAcceptsValuesAboveOldLimitFromOneCurrentSnapshot() {
+        prepare(semester());
+        when(systemConfigService.getSnapshot())
+                .thenReturn(com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData.snapshot(Map.of(
+                        com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey
+                                        .MODULE_CLASS_DEFAULT_CAPACITY,
+                                "60",
+                        com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey
+                                        .MODULE_CLASS_MAXIMUM_CAPACITY,
+                                "120")));
+        var subject = subjectRequest(1, 100);
+        subject.setClasses(
+                List.of(new CreateModuleClassRequest(), subject.getClasses().getFirst()));
+        when(classes.saveAllAndFlush(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        var response = service.createModuleClasses(7L, batch(subject));
+        assertThat(response).extracting(ModuleClassResponse::getMaxCapacity).containsExactly(60, 100);
+        verify(systemConfigService).getSnapshot();
     }
 
     private void prepare(Semester semester) {

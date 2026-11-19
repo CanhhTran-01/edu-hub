@@ -8,24 +8,27 @@ import com.eduhub.edu_hub.people.application.exception.ProfileCreationException;
 import com.eduhub.edu_hub.people.domain.model.Faculty;
 import com.eduhub.edu_hub.people.infrastructure.persistence.LecturerCodeCounterRepository;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData;
+import com.eduhub.edu_hub.shared.systemconfig.api.dto.response.SystemConfigSnapshotResponse;
+import com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService;
+import com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
 import org.springframework.core.env.MutablePropertySources;
 import org.springframework.core.env.PropertiesPropertySource;
 import org.springframework.core.env.PropertySourcesPropertyResolver;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.util.ReflectionTestUtils;
 
 class LecturerCodeGeneratorTest {
     private final JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+    private final SystemConfigService systemConfigService = SystemConfigTestData.configuredService();
     private final LecturerCodeGenerator lecturerCodeGenerator =
-            new LecturerCodeGenerator(new LecturerCodeCounterRepository(jdbcTemplate));
+            new LecturerCodeGenerator(new LecturerCodeCounterRepository(jdbcTemplate), systemConfigService);
 
     @Test
     void formatsScopedSequencesAndStopsAtNineHundredNinetyNineWithoutRetry() {
@@ -113,13 +116,10 @@ class LecturerCodeGeneratorTest {
         yamlProperties.setProperty("people.lecturer-code-format", "[MaKhoa]-[NamTuyenDung]-[SttGV]");
         MutablePropertySources propertySources = new MutablePropertySources();
         propertySources.addLast(new PropertiesPropertySource("applicationYaml", yamlProperties));
-        String formatExpression = LecturerCodeGenerator.class
-                .getDeclaredField("lecturerCodeFormat")
-                .getAnnotation(Value.class)
-                .value();
+        String formatExpression = "${people.lecturer-code-format}";
         String resolvedFormat =
                 new PropertySourcesPropertyResolver(propertySources).resolveRequiredPlaceholders(formatExpression);
-        ReflectionTestUtils.setField(lecturerCodeGenerator, "lecturerCodeFormat", resolvedFormat);
+        configureFormat(resolvedFormat);
 
         assertThat(lecturerCodeGenerator.generateLecturerCode(faculty(1L, "CNTT"), 2026, 1))
                 .isEqualTo("CNTT-26-001");
@@ -128,7 +128,7 @@ class LecturerCodeGeneratorTest {
 
     @Test
     void supportsConfiguredComponentOrderAndPreservesYearAndSequencePadding() {
-        ReflectionTestUtils.setField(lecturerCodeGenerator, "lecturerCodeFormat", "[SttGV]_[MaKhoa]-[NamTuyenDung]");
+        configureFormat("[SttGV]_[MaKhoa]-[NamTuyenDung]");
         assertThat(lecturerCodeGenerator.generateLecturerCode(faculty(1L, "CNTT"), 2006, 7))
                 .isEqualTo("007_CNTT-06");
         verifyNoInteractions(jdbcTemplate);
@@ -149,7 +149,7 @@ class LecturerCodeGeneratorTest {
                 "[MaKhoa] [NamTuyenDung][SttGV]"
             })
     void rejectsInvalidFormulaBeforeAllocatingAnySequence(String codeFormat) {
-        ReflectionTestUtils.setField(lecturerCodeGenerator, "lecturerCodeFormat", codeFormat);
+        configureFormat(codeFormat);
         Faculty faculty = faculty(1L, "CNTT");
         assertThatThrownBy(() -> lecturerCodeGenerator.generateLecturerCode(faculty, 2026, 1))
                 .isInstanceOfSatisfying(
@@ -160,6 +160,12 @@ class LecturerCodeGeneratorTest {
                         ProfileCreationException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.VALIDATION_ERROR));
         verifyNoInteractions(jdbcTemplate);
+    }
+
+    private void configureFormat(String codeFormat) {
+        var configuration = mock(SystemConfigSnapshotResponse.class);
+        when(configuration.getString(SystemConfigKey.LECTURER_CODE_FORMAT)).thenReturn(codeFormat);
+        when(systemConfigService.getSnapshot()).thenReturn(configuration);
     }
 
     private String allocateAndGenerateLecturerCode(Faculty faculty, Integer recruitmentYear) {

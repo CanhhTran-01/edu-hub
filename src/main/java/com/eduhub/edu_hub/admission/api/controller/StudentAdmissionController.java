@@ -41,7 +41,7 @@ public class StudentAdmissionController {
     private final AdmissionConfirmationService confirmationService;
     private final AdmissionNotificationQueryService notificationQueryService;
 
-    // TODO: Khi tích hợp SystemParamConfig, đọc cấu hình mặc định từ nguồn đó; hiện dùng AdmissionSettings.
+    // Cấu hình mặc định được đọc từ SystemConfigService dùng chung trong shared.
 
     // 1. Lấy sĩ số tối thiểu, tối đa và dự phòng mặc định để điền màn nhập học.
     @GetMapping("/student-admissions/configuration")

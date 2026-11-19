@@ -1,5 +1,7 @@
 package com.eduhub.edu_hub.enrollment.application.service;
 
+import static com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey.*;
+
 import com.eduhub.edu_hub.curriculum.api.dto.response.*;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.curriculum.application.facade.dto.CurriculumSubjectResponse;
@@ -20,6 +22,8 @@ import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
 import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import com.eduhub.edu_hub.shared.systemconfig.api.dto.response.SystemConfigSnapshotResponse;
+import com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService;
 import java.time.*;
 import java.util.*;
 import java.util.regex.Pattern;
@@ -42,6 +46,7 @@ public class EnrollmentApplicationService {
     private final CurriculumFacade.Registration curriculumRegistration;
     private final SchedulingFacade.Registration schedulingFacade;
     private final EnrollmentRegistrationSettings settings;
+    private final SystemConfigService systemConfigService;
     private final Clock clock;
 
     @Transactional
@@ -50,6 +55,7 @@ public class EnrollmentApplicationService {
         // TODO: giai đoạn này chỉ là đăng ký môn lần đầu. Học lại và học cải thiện là nghiệp vụ riêng, làm sau.
 
         Long userId = requireCurrentUser(principal);
+        var creditConfiguration = systemConfigService.getSnapshot();
 
         var student = peopleFacade.findStudentByUserId(userId);
         requireEligibleStudent(student);
@@ -76,9 +82,9 @@ public class EnrollmentApplicationService {
                 semesterId,
                 allowed,
                 registeredCredits,
-                settings.getMinimumCredits(),
-                settings.getMaximumCredits(),
-                warnings(registeredCredits),
+                creditConfiguration.getInteger(ENROLLMENT_MINIMUM_CREDITS),
+                creditConfiguration.getInteger(ENROLLMENT_MAXIMUM_CREDITS),
+                warnings(registeredCredits, creditConfiguration),
                 scope(),
                 classes.stream()
                         .map(moduleClass -> {
@@ -97,6 +103,7 @@ public class EnrollmentApplicationService {
     @Transactional
     public EnrollmentRegistrationResponse register(Jwt principal, RegisterModuleClassRequest request) {
         Long userId = requireCurrentUser(principal);
+        var creditConfiguration = systemConfigService.getSnapshot();
 
         if (request == null || request.getModuleClassId() == null || request.getModuleClassId() <= 0)
             throw new EnrollmentException(ErrorCode.VALIDATION_ERROR);
@@ -117,7 +124,7 @@ public class EnrollmentApplicationService {
                         && enrollment.getModuleClassId().equals(moduleClass.getId())
                         && enrollment.getStatus() == EnrollmentStatus.REGISTERED)
                 .findFirst();
-        if (existing.isPresent()) return registrationResponse(existing.get(), student, history);
+        if (existing.isPresent()) return registrationResponse(existing.get(), student, history, creditConfiguration);
         if (!curriculumSubjectIds(student).contains(moduleClass.getSubjectId()))
             throw new EnrollmentException(ErrorCode.ENROLLMENT_SUBJECT_NOT_IN_CURRICULUM);
 
@@ -155,7 +162,7 @@ public class EnrollmentApplicationService {
 
         int registeredCredits = EnrollmentRegistrationPolicy.registeredCredits(history, semesterId);
         EnrollmentRegistrationPolicy.requireWithinCreditLimit(
-                registeredCredits, subject.getCredits(), settings.getMaximumCredits());
+                registeredCredits, subject.getCredits(), creditConfiguration.getInteger(ENROLLMENT_MAXIMUM_CREDITS));
         if (moduleClass.getCurrentSize() >= moduleClass.getMaxCapacity())
             throw new EnrollmentException(ErrorCode.CAPACITY_FULL);
 
@@ -195,12 +202,13 @@ public class EnrollmentApplicationService {
                 student.studentId(),
                 moduleClass.getId(),
                 enrollment.getId());
-        return registrationResponse(enrollment, student, updatedHistory);
+        return registrationResponse(enrollment, student, updatedHistory, creditConfiguration);
     }
 
     @Transactional
     public EnrollmentRegistrationResponse drop(Jwt principal, Long enrollmentId) {
         Long userId = requireCurrentUser(principal);
+        var creditConfiguration = systemConfigService.getSnapshot();
 
         // Chỉ đọc danh tính để xác định chủ sở hữu; không tải Enrollment trước khi khóa sinh viên.
         var studentIdentity = peopleFacade.findStudentByUserId(userId);
@@ -222,7 +230,8 @@ public class EnrollmentApplicationService {
             return registrationResponse(
                     enrollment,
                     student,
-                    enrollmentRepository.findAllByStudentIdOrderByRegisteredAtAscIdAsc(student.studentId()));
+                    enrollmentRepository.findAllByStudentIdOrderByRegisteredAtAscIdAsc(student.studentId()),
+                    creditConfiguration);
 
         if (enrollment.getStatus() != EnrollmentStatus.REGISTERED)
             throw new EnrollmentException(ErrorCode.ENROLLMENT_CLASS_NOT_OPEN);
@@ -246,7 +255,8 @@ public class EnrollmentApplicationService {
         return registrationResponse(
                 enrollment,
                 student,
-                enrollmentRepository.findAllByStudentIdOrderByRegisteredAtAscIdAsc(student.studentId()));
+                enrollmentRepository.findAllByStudentIdOrderByRegisteredAtAscIdAsc(student.studentId()),
+                creditConfiguration);
     }
 
     private Set<Long> curriculumSubjectIds(EnrollmentStudentResponse student) {
@@ -302,14 +312,17 @@ public class EnrollmentApplicationService {
     }
 
     private EnrollmentRegistrationResponse registrationResponse(
-            Enrollment enrollment, EnrollmentStudentResponse student, List<Enrollment> history) {
+            Enrollment enrollment,
+            EnrollmentStudentResponse student,
+            List<Enrollment> history,
+            SystemConfigSnapshotResponse creditConfiguration) {
         int credits = EnrollmentRegistrationPolicy.registeredCredits(history, enrollment.getSemesterId());
         return new EnrollmentRegistrationResponse(
                 toResponse(enrollment, student),
                 credits,
-                settings.getMinimumCredits(),
-                settings.getMaximumCredits(),
-                warnings(credits),
+                creditConfiguration.getInteger(ENROLLMENT_MINIMUM_CREDITS),
+                creditConfiguration.getInteger(ENROLLMENT_MAXIMUM_CREDITS),
+                warnings(credits, creditConfiguration),
                 scope());
     }
 
@@ -339,8 +352,9 @@ public class EnrollmentApplicationService {
                 .build();
     }
 
-    private List<String> warnings(int credits) {
-        return EnrollmentRegistrationPolicy.minimumCreditWarnings(credits, settings.getMinimumCredits());
+    private List<String> warnings(int credits, SystemConfigSnapshotResponse creditConfiguration) {
+        return EnrollmentRegistrationPolicy.minimumCreditWarnings(
+                credits, creditConfiguration.getInteger(ENROLLMENT_MINIMUM_CREDITS));
     }
 
     private EnrollmentScopeResponse scope() {

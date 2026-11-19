@@ -12,7 +12,6 @@ import com.eduhub.edu_hub.admission.application.exception.AdmissionPlanException
 import com.eduhub.edu_hub.admission.domain.model.AdmissionPlan;
 import com.eduhub.edu_hub.admission.domain.policy.AdmissionCapacityPolicy;
 import com.eduhub.edu_hub.admission.domain.repository.AdmissionPlanRepository;
-import com.eduhub.edu_hub.admission.infrastructure.config.AdmissionSettings;
 import com.eduhub.edu_hub.admission.infrastructure.spreadsheet.AdmissionSpreadsheetTemplateWriter;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
@@ -35,7 +34,7 @@ class AdmissionPlanningServiceTest {
             planRepository,
             peopleAdmissionFacade,
             majorCatalogFacade,
-            new AdmissionSettings(),
+            com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData.configuredService(),
             new AdmissionCapacityPolicy(),
             planQueryService,
             importService,

@@ -126,7 +126,7 @@ class OpeningDemandPolicyTest {
                         subject.getCredits(),
                         subject.getRecommendSemester()))
                 .toList();
-        return openingDemandPolicy.calculate(semesterCode, planningSubjects, planningSnapshot).stream()
+        return openingDemandPolicy.calculate(semesterCode, planningSubjects, planningSnapshot, 80).stream()
                 .map(demand -> OpeningSubjectResponseMapper.toResponse(demand, planningSnapshot))
                 .toList();
     }

@@ -6,15 +6,18 @@ import static org.mockito.Mockito.*;
 import com.eduhub.edu_hub.notification.application.event.AdmissionNotificationQueued;
 import com.eduhub.edu_hub.notification.application.service.AdmissionNotificationDispatchService;
 import com.eduhub.edu_hub.notification.application.service.QueuedAdmissionNotificationSender;
+import com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData;
+import com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService;
+import com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
 
 class AdmissionNotificationDispatcherTest {
     private final AdmissionNotificationDispatchService dispatchService =
             mock(AdmissionNotificationDispatchService.class);
     private final QueuedAdmissionNotificationSender sender = mock(QueuedAdmissionNotificationSender.class);
+    private final SystemConfigService systemConfigService = SystemConfigTestData.configuredService();
     private final AdmissionNotificationDispatcher dispatcher =
-            new AdmissionNotificationDispatcher(dispatchService, sender);
+            new AdmissionNotificationDispatcher(dispatchService, sender, systemConfigService);
 
     @Test
     void asyncKickoffOnlyUsesInitialDeliveryPath() {
@@ -32,7 +35,9 @@ class AdmissionNotificationDispatcherTest {
 
     @Test
     void disabledDispatchSkipsBothAsyncKickoffAndScheduledPolling() {
-        ReflectionTestUtils.setField(dispatcher, "admissionNotificationsEnabled", false);
+        when(systemConfigService.getSnapshot())
+                .thenReturn(SystemConfigTestData.snapshot(
+                        java.util.Map.of(SystemConfigKey.ADMISSION_NOTIFICATIONS_ENABLED, "false")));
 
         dispatcher.onAdmissionNotificationQueued(new AdmissionNotificationQueued(1L));
         dispatcher.sendDueNotifications();

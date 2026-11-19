@@ -1,5 +1,7 @@
 package com.eduhub.edu_hub.scheduling.application.service;
 
+import static com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey.*;
+
 import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.curriculum.domain.model.Subject;
@@ -10,6 +12,7 @@ import com.eduhub.edu_hub.scheduling.api.dto.request.CancelModuleClassRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.CreateModuleClassesRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.ModuleClassSearchRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.UpdateModuleClassRequest;
+import com.eduhub.edu_hub.scheduling.api.dto.response.ModuleClassCapacityResponse;
 import com.eduhub.edu_hub.scheduling.api.dto.response.ModuleClassResponse;
 import com.eduhub.edu_hub.scheduling.api.dto.response.ModuleClassSimpleResponse;
 import com.eduhub.edu_hub.scheduling.api.dto.response.OpeningSubjectResponse;
@@ -35,6 +38,7 @@ import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.mapper.PageMapper;
+import com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import java.time.*;
@@ -62,6 +66,15 @@ public class ModuleClassApplicationService {
     private final ClassScheduleQueryService classScheduleQueryService;
     private final ClassScheduleRepository classScheduleRepository;
     private final RoomRepository roomRepository;
+    private final SystemConfigService systemConfigService;
+
+    @Transactional(readOnly = true)
+    public ModuleClassCapacityResponse getCapacityConfiguration() {
+        var configuration = systemConfigService.getSnapshot();
+        return new ModuleClassCapacityResponse(
+                configuration.getInteger(MODULE_CLASS_DEFAULT_CAPACITY),
+                configuration.getInteger(MODULE_CLASS_MAXIMUM_CAPACITY));
+    }
 
     @Transactional(readOnly = true)
     public List<OpeningSubjectResponse> findSubjectsToOpen(Long semesterId) {
@@ -94,7 +107,8 @@ public class ModuleClassApplicationService {
                                         planningSubject.getCredits(),
                                         planningSubject.getRecommendSemester()))
                                 .toList(),
-                        planningSnapshot)
+                        planningSnapshot,
+                        systemConfigService.getSnapshot().getInteger(MODULE_CLASS_DEFAULT_CAPACITY))
                 .stream()
                 .map(demand -> OpeningSubjectResponseMapper.toResponse(demand, planningSnapshot))
                 .toList();
@@ -114,7 +128,10 @@ public class ModuleClassApplicationService {
     public List<ModuleClassResponse> createModuleClasses(Long semesterId, CreateModuleClassesRequest request) {
 
         // validate lại request (refactor sau)
-        Set<Long> subjectIds = validateBatch(request);
+        var configuration = systemConfigService.getSnapshot();
+        int defaultCapacity = configuration.getInteger(MODULE_CLASS_DEFAULT_CAPACITY);
+        int maximumCapacity = configuration.getInteger(MODULE_CLASS_MAXIMUM_CAPACITY);
+        Set<Long> subjectIds = validateBatch(request, maximumCapacity);
 
         // Mọi luồng mở lớp/cập nhật kỳ phải cùng khóa row trong semester_table trước khi kiểm tra và cấp STT.
         Semester semester = semesterRepository
@@ -174,7 +191,8 @@ public class ModuleClassApplicationService {
                         .subject(subjectReference)
                         .moduleClassCode(moduleClassCode)
                         .classSequence(sequence)
-                        .maxCapacity(classRequest.getMaxCapacity())
+                        .maxCapacity(
+                                classRequest.getMaxCapacity() == null ? defaultCapacity : classRequest.getMaxCapacity())
                         .currentSize(0)
                         .status(ModuleClassStatus.UNSCHEDULED) // trạng thái sau khi tạo lớp
                         .build();
@@ -204,11 +222,13 @@ public class ModuleClassApplicationService {
     @Transactional
     public ModuleClassResponse updateModuleClassCapacity(Long moduleClassId, UpdateModuleClassRequest request) {
 
+        int maximumCapacity = systemConfigService.getSnapshot().getInteger(MODULE_CLASS_MAXIMUM_CAPACITY);
+
         // validate lại request
         if (request == null
                 || request.getMaxCapacity() == null
                 || request.getMaxCapacity() < 1
-                || request.getMaxCapacity() > ModuleClassPolicy.MAX_CAPACITY) {
+                || request.getMaxCapacity() > maximumCapacity) {
 
             throw new ModuleClassException(ErrorCode.VALIDATION_ERROR);
         }
@@ -224,7 +244,7 @@ public class ModuleClassApplicationService {
                     List.of(new FieldErrorDetail(
                             "maxCapacity",
                             "Sĩ số hiện có: " + moduleClass.getCurrentSize() + "; sức chứa mới phải từ "
-                                    + moduleClass.getCurrentSize() + " đến " + ModuleClassPolicy.MAX_CAPACITY)));
+                                    + moduleClass.getCurrentSize() + " đến " + maximumCapacity)));
         }
 
         // lấy dữ liệu học phần, giảng viên của lớp học phần, sức chứa
@@ -459,7 +479,7 @@ public class ModuleClassApplicationService {
                         .getOrDefault(moduleClass.getId(), List.of()));
     }
 
-    private Set<Long> validateBatch(CreateModuleClassesRequest request) {
+    private Set<Long> validateBatch(CreateModuleClassesRequest request, int maximumCapacity) {
         if (request == null
                 || request.getSubjects() == null
                 || request.getSubjects().isEmpty()) throw new ModuleClassException(ErrorCode.VALIDATION_ERROR);
@@ -478,9 +498,10 @@ public class ModuleClassApplicationService {
 
             for (var classRequest : subjectRequest.getClasses()) {
                 if (classRequest == null
-                        || classRequest.getMaxCapacity() == null
-                        || classRequest.getMaxCapacity() < 1
-                        || classRequest.getMaxCapacity() > ModuleClassPolicy.MAX_CAPACITY)
+                        || !classRequest.isMaxCapacitySpecifiedCorrectly()
+                        || (classRequest.getMaxCapacity() != null
+                                && (classRequest.getMaxCapacity() < 1
+                                        || classRequest.getMaxCapacity() > maximumCapacity)))
                     throw new ModuleClassException(ErrorCode.VALIDATION_ERROR);
             }
         }

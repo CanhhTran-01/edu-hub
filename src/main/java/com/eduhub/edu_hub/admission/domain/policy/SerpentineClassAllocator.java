@@ -1,7 +1,5 @@
 package com.eduhub.edu_hub.admission.domain.policy;
 
-import static com.eduhub.edu_hub.admission.domain.policy.AdmissionDuplicateNamePolicy.MAX_SAME_NAME_PER_CLASS;
-
 import com.eduhub.edu_hub.admission.application.exception.AdmissionPlanException;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionApplicant;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionPlanClass;
@@ -20,16 +18,19 @@ public class SerpentineClassAllocator {
     rồi chia lần lượt vào các lớp theo chiều đi tới rồi đi lùi, để các lớp có chất lượng đầu vào đều nhau.
     */
 
-    public void allocateByScore(List<AdmissionApplicant> applicants, List<AdmissionPlanClass> classCapacities) {
-        allocateByScore(applicants, classCapacities, List.of());
+    public void allocateByScore(
+            List<AdmissionApplicant> applicants, List<AdmissionPlanClass> classCapacities, int maximumSameName) {
+        allocateByScore(applicants, classCapacities, List.of(), maximumSameName);
     }
 
     public void allocateByScore(
             List<AdmissionApplicant> applicants,
             List<AdmissionPlanClass> classCapacities,
-            List<AdmissionApplicant> enrolledApplicants) {
+            List<AdmissionApplicant> enrolledApplicants,
+            int maximumSameName) {
 
-        if (classCapacities.isEmpty()
+        if (maximumSameName < 1
+                || classCapacities.isEmpty()
                 || classCapacities.stream()
                                 .mapToInt(AdmissionPlanClass::getTargetSize)
                                 .sum()
@@ -71,11 +72,11 @@ public class SerpentineClassAllocator {
         allApplicants.addAll(applicantsByDescendingScore);
 
         // tách sinh viên trùng họ tên trong cùng một lớp
-        redistributeDuplicateNames(allApplicants, classCapacities);
+        redistributeDuplicateNames(allApplicants, classCapacities, maximumSameName);
     }
 
     private void redistributeDuplicateNames(
-            List<AdmissionApplicant> applicants, List<AdmissionPlanClass> classCapacities) {
+            List<AdmissionApplicant> applicants, List<AdmissionPlanClass> classCapacities, int maximumSameName) {
 
         for (int index = 0; index < classCapacities.size(); index++) {
 
@@ -90,7 +91,7 @@ public class SerpentineClassAllocator {
                 String name = TextsNormalizer.normalizeKey(duplicateNameApplicant.getFullName()); // lấy tên thí sinh
 
                 // Tăng đếm; chưa vượt giới hạn thì chấp nhận bỏ qua
-                if (countsByNormalizedName.merge(name, 1, Integer::sum) <= MAX_SAME_NAME_PER_CLASS) continue;
+                if (countsByNormalizedName.merge(name, 1, Integer::sum) <= maximumSameName) continue;
 
                 if (!duplicateNameApplicant.isPendingEnrollment())
                     continue; // Vượt giới hạn nhưng đã nhập học thì không được đổi lớp
@@ -107,7 +108,8 @@ public class SerpentineClassAllocator {
                     Long neighborClassId = classCapacities.get(neighborIndex).getAdministrativeClassId();
 
                     // Lớp kề đã đủ 3 người tên này thì bỏ qua, không chuyển sang lớp này
-                    if (countApplicantsWithName(applicants, neighborClassId, name) >= MAX_SAME_NAME_PER_CLASS) continue;
+                    // NOTE: 3 là mặc định; điều kiện thực tế nhận ngưỡng từ bản chụp cấu hình của lần phân bổ.
+                    if (countApplicantsWithName(applicants, neighborClassId, name) >= maximumSameName) continue;
 
                     for (AdmissionApplicant candidate : findApplicantsInClass(applicants, neighborClassId)) {
 
@@ -116,8 +118,7 @@ public class SerpentineClassAllocator {
 
                         // ứng viên chuyển sang lớp hiện tại không được làm lớp này vượt giới hạn
                         String candidateName = TextsNormalizer.normalizeKey(candidate.getFullName());
-                        if (countApplicantsWithName(applicants, classId, candidateName) >= MAX_SAME_NAME_PER_CLASS)
-                            continue;
+                        if (countApplicantsWithName(applicants, classId, candidateName) >= maximumSameName) continue;
 
                         // Trong các ứng viên hợp lệ, chọn người có chênh lệch điểm nhỏ nhất với duplicate
                         BigDecimal scoreDifference = duplicateNameApplicant

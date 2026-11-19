@@ -25,11 +25,13 @@ class StudentCodeGeneratorTest {
     @Mock
     CurriculumFacade.Majors majors;
 
+    private final com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService systemConfigService =
+            com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData.configuredService();
     private StudentCodeGenerator generator;
 
     @BeforeEach
     void setUp() {
-        generator = new StudentCodeGenerator(students, majors);
+        generator = new StudentCodeGenerator(students, majors, systemConfigService);
     }
 
     @Test
@@ -88,8 +90,10 @@ class StudentCodeGeneratorTest {
     @Test
     void supportsConfiguredFormulaAndKeepsPersistedSequenceIndependentOfRosterOrder() {
         AdministrativeClass value = administrativeClass(1L, "CT", "CT8", "L01");
-        org.springframework.test.util.ReflectionTestUtils.setField(
-                generator, "studentCodeFormat", "[MaNganh]-[SttKhoa]-[SttLop]-[SttSVTrongLop]");
+        when(systemConfigService.getSnapshot())
+                .thenReturn(com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData.snapshot(java.util.Map.of(
+                        com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey.STUDENT_CODE_FORMAT,
+                        "[MaNganh]-[SttKhoa]-[SttLop]-[SttSVTrongLop]")));
         assertThat(generator.generateStudentCode(value, 1)).isEqualTo("CNTT-08-01-01");
         value.setLastStudentSequence(28);
         assertThat(generator.allocateNextStudentSequence(value)).isEqualTo(29);
@@ -99,8 +103,10 @@ class StudentCodeGeneratorTest {
     @Test
     void rejectsFormulaThatOmitsAnIdentityComponent() {
         AdministrativeClass value = administrativeClass(1L, "CT", "CT8", "L01");
-        org.springframework.test.util.ReflectionTestUtils.setField(
-                generator, "studentCodeFormat", "[MaNganh][SttSVTrongLop]");
+        when(systemConfigService.getSnapshot())
+                .thenReturn(com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData.snapshot(java.util.Map.of(
+                        com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey.STUDENT_CODE_FORMAT,
+                        "[MaNganh][SttSVTrongLop]")));
         assertThatThrownBy(() -> generator.generateStudentCode(value, 1)).isInstanceOf(BaseException.class);
     }
 

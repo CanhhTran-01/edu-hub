@@ -16,11 +16,11 @@ import com.eduhub.edu_hub.identity.domain.model.User;
 import com.eduhub.edu_hub.identity.domain.policy.PasswordPolicy;
 import com.eduhub.edu_hub.identity.domain.repository.RefreshTokenRepository;
 import com.eduhub.edu_hub.identity.domain.repository.UserRepository;
-import com.eduhub.edu_hub.identity.infrastructure.config.AuthenticationSettings;
 import com.eduhub.edu_hub.identity.infrastructure.security.CustomUserDetail;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.shared.config.TimeConfig;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -55,15 +55,17 @@ class AuthApplicationServiceTest {
     private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     private final PasswordEncoder passwordEncoder = spy(new BCryptPasswordEncoder(4));
     private final AuthenticationManager authenticationManager = mock(AuthenticationManager.class);
+    private final com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService systemConfigService =
+            SystemConfigTestData.configuredService();
     private final AuthApplicationService service = new AuthApplicationService(
             users,
             refreshTokens,
             tokens,
-            new PasswordPolicy(8),
+            new PasswordPolicy(),
             transactionManager,
             passwordEncoder,
             authenticationManager,
-            new AuthenticationSettings(5, Duration.ofMinutes(15), Duration.ofMinutes(15), Duration.ofDays(7)),
+            systemConfigService,
             mock(PeopleFacade.LoginProfile.class),
             CLOCK);
     private final Jwt authenticatedJwt = Jwt.withTokenValue("unit-token")
@@ -328,6 +330,42 @@ class AuthApplicationServiceTest {
         assertThat(account.getFailedLoginCount()).isEqualTo(5);
         assertThat(account.getLockedUntil()).isNotNull();
         verify(transactionManager, times(2)).commit(any());
+    }
+
+    @Test
+    void appliesChangedFailureThresholdAndLockDurationWithoutRecreatingService() {
+        User account = allowPasswordChange();
+        assertThatThrownBy(() -> service.changePassword(authenticatedJwt, passwordChange("wrong", "NextPass2!")))
+                .isInstanceOf(IdentityAuthenticationException.class);
+        assertThat(account.getLockedUntil()).isNull();
+        when(systemConfigService.getSnapshot())
+                .thenReturn(SystemConfigTestData.snapshot(java.util.Map.of(
+                        com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey
+                                        .AUTHENTICATION_MAXIMUM_FAILED_LOGINS,
+                                "2",
+                        com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey
+                                        .AUTHENTICATION_TEMPORARY_LOCK_DURATION,
+                                "5m")));
+        assertThatThrownBy(() -> service.changePassword(authenticatedJwt, passwordChange("wrong", "NextPass2!")))
+                .isInstanceOf(IdentityAuthenticationException.class);
+        assertThat(account.getFailedLoginCount()).isEqualTo(2);
+        assertThat(account.getLockedUntil()).isEqualTo(LocalDateTime.now(CLOCK).plusMinutes(5));
+    }
+
+    @Test
+    void usesCurrentPasswordMinimumForEachChangeWithoutRecreatingPolicy() {
+        User account = allowPasswordChange();
+        when(systemConfigService.getSnapshot())
+                .thenReturn(SystemConfigTestData.snapshot(java.util.Map.of(
+                        com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey.PASSWORD_MINIMUM_LENGTH,
+                        "12")));
+        assertThatThrownBy(
+                        () -> service.changePassword(authenticatedJwt, passwordChange("CurrentPass1!", "NextPass2!")))
+                .isInstanceOf(PasswordValidationException.class);
+        when(systemConfigService.getSnapshot()).thenReturn(SystemConfigTestData.snapshot(java.util.Map.of()));
+        service.changePassword(authenticatedJwt, passwordChange("CurrentPass1!", "NextPass2!"));
+        assertThat(passwordEncoder.matches("NextPass2!", account.getPasswordHash()))
+                .isTrue();
     }
 
     @Test

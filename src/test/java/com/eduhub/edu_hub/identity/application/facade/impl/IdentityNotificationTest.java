@@ -43,7 +43,7 @@ class IdentityNotificationTest {
             mock(CurrentUserAuthenticationService.class),
             immediateEmailNotifications,
             new BCryptPasswordEncoder(4),
-            new PasswordSettings(8, "configured-temp"),
+            new PasswordSettings("configured-temp"),
             CLOCK);
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
     private User user;

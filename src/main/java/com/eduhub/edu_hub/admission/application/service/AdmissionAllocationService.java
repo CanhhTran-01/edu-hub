@@ -17,6 +17,8 @@ import com.eduhub.edu_hub.admission.domain.repository.AdmissionApplicantReposito
 import com.eduhub.edu_hub.admission.domain.repository.AdmissionPlanClassRepository;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.shared.exception.*;
+import com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService;
+import com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +37,7 @@ public class AdmissionAllocationService {
     private final AdmissionCapacityPolicy capacityPolicy;
     private final SerpentineClassAllocator classAllocator;
     private final AdmissionPlanQueryService planQueryService;
+    private final SystemConfigService systemConfigService;
 
     @Transactional
     public AdmissionPlanResponse previewAllocation(Long planId, PreviewAdmissionAllocationRequest request) {
@@ -99,7 +102,9 @@ public class AdmissionAllocationService {
         }
 
         // Phân bổ và chuyển trạng thái
-        classAllocator.allocateByScore(pendingApplicants, remainingClassCapacities, enrolledApplicants);
+        int maximumSameName = systemConfigService.getSnapshot().getInteger(SystemConfigKey.ADMISSION_MAXIMUM_SAME_NAME);
+        classAllocator.allocateByScore(
+                pendingApplicants, remainingClassCapacities, enrolledApplicants, maximumSameName);
         plan.setState(AdmissionPlanStatus.PREVIEWED);
 
         AdmissionPlanPolicy.incrementRevision(plan);
@@ -109,7 +114,7 @@ public class AdmissionAllocationService {
                 pendingApplicants.size(),
                 plannedClasses.size());
 
-        return planQueryService.buildPlanResponse(plan);
+        return planQueryService.buildPlanResponse(plan, maximumSameName);
     }
 
     @Transactional

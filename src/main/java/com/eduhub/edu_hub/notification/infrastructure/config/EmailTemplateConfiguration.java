@@ -2,7 +2,6 @@ package com.eduhub.edu_hub.notification.infrastructure.config;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.thymeleaf.TemplateEngine;
@@ -10,7 +9,6 @@ import org.thymeleaf.templatemode.TemplateMode;
 import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 
 @Configuration
-@EnableConfigurationProperties(NotificationMailSettings.class)
 public class EmailTemplateConfiguration {
     @Bean("notificationEmailTemplateEngine")
     public TemplateEngine notificationEmailTemplateEngine() {

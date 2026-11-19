@@ -1,5 +1,7 @@
 package com.eduhub.edu_hub.admission.application.service;
 
+import static com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey.*;
+
 import com.eduhub.edu_hub.admission.api.dto.request.CreateAdmissionPlanFromFileRequest;
 import com.eduhub.edu_hub.admission.api.dto.request.ImportAdmissionApplicantsRequest;
 import com.eduhub.edu_hub.admission.api.dto.response.AdmissionCapacityResponse;
@@ -8,12 +10,12 @@ import com.eduhub.edu_hub.admission.application.exception.AdmissionPlanException
 import com.eduhub.edu_hub.admission.domain.model.AdmissionPlan;
 import com.eduhub.edu_hub.admission.domain.policy.AdmissionCapacityPolicy;
 import com.eduhub.edu_hub.admission.domain.repository.AdmissionPlanRepository;
-import com.eduhub.edu_hub.admission.infrastructure.config.AdmissionSettings;
 import com.eduhub.edu_hub.admission.infrastructure.spreadsheet.AdmissionSpreadsheetScope;
 import com.eduhub.edu_hub.admission.infrastructure.spreadsheet.AdmissionSpreadsheetTemplateWriter;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.shared.exception.*;
+import com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,17 +29,18 @@ public class AdmissionPlanningService {
     private final AdmissionPlanRepository planRepository;
     private final PeopleFacade.Admission peopleAdmissionFacade;
     private final CurriculumFacade.Majors majorCatalogFacade;
-    private final AdmissionSettings admissionSettings;
+    private final SystemConfigService systemConfigService;
     private final AdmissionCapacityPolicy capacityPolicy;
     private final AdmissionPlanQueryService planQueryService;
     private final AdmissionImportService importService;
     private final AdmissionSpreadsheetTemplateWriter templateWriter;
 
     public AdmissionCapacityResponse getDefaultCapacityConfiguration() {
+        var configuration = systemConfigService.getSnapshot();
         return new AdmissionCapacityResponse(
-                admissionSettings.getMinCapacity(),
-                admissionSettings.getMaxCapacity(),
-                admissionSettings.getReserveCapacity());
+                configuration.getInteger(ADMISSION_MINIMUM_CAPACITY),
+                configuration.getInteger(ADMISSION_MAXIMUM_CAPACITY),
+                configuration.getInteger(ADMISSION_RESERVE_CAPACITY));
     }
 
     public byte[] generateImportTemplate(Long majorId, Long cohortId) {
@@ -53,10 +56,16 @@ public class AdmissionPlanningService {
     @Transactional
     public AdmissionPlanResponse createPlanFromFile(CreateAdmissionPlanFromFileRequest request) {
         // 1. Chốt cấu hình sĩ số của phương án trước khi đọc và phân loại hồ sơ trong file.
-        int minCapacity = request.minCapacity() == null ? admissionSettings.getMinCapacity() : request.minCapacity();
-        int maxCapacity = request.maxCapacity() == null ? admissionSettings.getMaxCapacity() : request.maxCapacity();
-        int reserveCapacity =
-                request.reserveCapacity() == null ? admissionSettings.getReserveCapacity() : request.reserveCapacity();
+        var configuration = systemConfigService.getSnapshot();
+        int minCapacity = request.minCapacity() == null
+                ? configuration.getInteger(ADMISSION_MINIMUM_CAPACITY)
+                : request.minCapacity();
+        int maxCapacity = request.maxCapacity() == null
+                ? configuration.getInteger(ADMISSION_MAXIMUM_CAPACITY)
+                : request.maxCapacity();
+        int reserveCapacity = request.reserveCapacity() == null
+                ? configuration.getInteger(ADMISSION_RESERVE_CAPACITY)
+                : request.reserveCapacity();
         capacityPolicy.validateCapacityLimits(minCapacity, maxCapacity, reserveCapacity);
 
         // 2. Ngành/khóa người dùng chọn là phạm vi chính thức; file chỉ cung cấp thông tin để đối chiếu.

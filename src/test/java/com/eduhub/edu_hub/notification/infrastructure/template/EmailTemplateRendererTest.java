@@ -1,24 +1,27 @@
 package com.eduhub.edu_hub.notification.infrastructure.template;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 import com.eduhub.edu_hub.notification.api.dto.request.SendAccountEmailRequest;
 import com.eduhub.edu_hub.notification.api.dto.request.SendAdmissionConfirmationEmailRequest;
 import com.eduhub.edu_hub.notification.domain.enums.EmailTemplateType;
 import com.eduhub.edu_hub.notification.infrastructure.config.EmailTemplateConfiguration;
-import com.eduhub.edu_hub.notification.infrastructure.config.NotificationMailSettings;
+import com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData;
+import com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService;
+import com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class EmailTemplateRendererTest {
-    private NotificationMailSettings settings;
+    private SystemConfigService settings;
     private EmailTemplateRenderer renderer;
 
     @BeforeEach
     void templates() {
-        settings = new NotificationMailSettings();
-        settings.setLoginUrl("https://eduhub.example.com/login");
-        settings.setSupportEmail("support@example.com");
+        settings = SystemConfigTestData.configuredService(java.util.Map.of(
+                SystemConfigKey.MAIL_LOGIN_URL, "https://eduhub.example.com/login",
+                SystemConfigKey.MAIL_SUPPORT_EMAIL, "support@example.com"));
         renderer =
                 new EmailTemplateRenderer(new EmailTemplateConfiguration().notificationEmailTemplateEngine(), settings);
     }
@@ -101,8 +104,9 @@ class EmailTemplateRendererTest {
 
     @Test
     void absentLoginAndSupportConfigurationDoesNotExposePlaceholderLinks() {
-        settings.setLoginUrl("");
-        settings.setSupportEmail("");
+        when(settings.getSnapshot())
+                .thenReturn(SystemConfigTestData.snapshot(
+                        java.util.Map.of(SystemConfigKey.MAIL_LOGIN_URL, "", SystemConfigKey.MAIL_SUPPORT_EMAIL, "")));
         var email = renderer.renderAdmissionConfirmationEmail(SendAdmissionConfirmationEmailRequest.builder()
                 .username("CNTT080101")
                 .build());

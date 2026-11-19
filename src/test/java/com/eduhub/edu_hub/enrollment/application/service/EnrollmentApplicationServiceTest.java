@@ -56,14 +56,14 @@ class EnrollmentApplicationServiceTest {
     private final Jwt principal =
             Jwt.withTokenValue("token").header("alg", "HS256").subject("sv").build();
     private EnrollmentApplicationService service;
+    private final com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService systemConfigService =
+            com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData.configuredService();
     private final EnrollmentStudentResponse student = new EnrollmentStudentResponse(
             10L, "SV10", "Sinh viên", 1L, 2L, TrainingType.CHINH_QUY, 2026, ActivityStatus.STUDYING);
 
     @BeforeEach
     void setUp() {
         // Các con số dưới đây chỉ là quy chế của tình huống unit test, không phải mặc định runtime.
-        settings.setMinimumCredits(12);
-        settings.setMaximumCredits(20);
         settings.setFirstSupportedAdmissionYear(2026);
         service = new EnrollmentApplicationService(
                 enrollmentRepository,
@@ -73,6 +73,7 @@ class EnrollmentApplicationServiceTest {
                 curriculumRegistration,
                 schedulingFacade,
                 settings,
+                systemConfigService,
                 clock);
     }
 
@@ -172,6 +173,30 @@ class EnrollmentApplicationServiceTest {
         prepareRegistration(List.of(enrollment(EnrollmentStatus.REGISTERED, 101L, 6L, 18)));
         assertError(() -> service.register(principal, request()), ErrorCode.ENROLLMENT_CREDIT_LIMIT_EXCEEDED);
         verify(schedulingFacade, never()).reserveSeat(anyLong());
+    }
+
+    @Test
+    void readsChangedCreditLimitsOnNextRegistrationAndReturnsTheSameLimitsUsedForValidation() {
+        prepareRegistration(List.of());
+        when(systemConfigService.getSnapshot())
+                .thenReturn(com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData.snapshot(Map.of(
+                        com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey.ENROLLMENT_MINIMUM_CREDITS,
+                                "0",
+                        com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey.ENROLLMENT_MAXIMUM_CREDITS,
+                                "2")));
+        assertError(() -> service.register(principal, request()), ErrorCode.ENROLLMENT_CREDIT_LIMIT_EXCEEDED);
+        verify(schedulingFacade, never()).reserveSeat(anyLong());
+        when(systemConfigService.getSnapshot())
+                .thenReturn(com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData.snapshot(Map.of(
+                        com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey.ENROLLMENT_MINIMUM_CREDITS,
+                                "0",
+                        com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey.ENROLLMENT_MAXIMUM_CREDITS,
+                                "4")));
+        when(enrollmentRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        var response = service.register(principal, request());
+        assertThat(response.maximumCredits()).isEqualTo(4);
+        assertThat(response.minimumCredits()).isZero();
+        assertThat(response.warnings()).isEmpty();
     }
 
     @Test

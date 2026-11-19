@@ -8,14 +8,9 @@ import java.util.List;
 
 public class PasswordPolicy {
     public static final int MAX_PASSWORD_BYTES = 72;
-    private final int minimumLength;
-
-    public PasswordPolicy(int minimumLength) {
-        this.minimumLength = minimumLength;
-    }
 
     /** Luôn áp dụng cho mật khẩu người dùng tự đặt, kể cả lần đổi mật khẩu đầu tiên. */
-    public void validate(String password, String confirmation, String username) {
+    public void validate(String password, String confirmation, String username, int minimumLength) {
         List<FieldErrorDetail> errors = new ArrayList<>();
 
         if (password == null || password.isBlank()) {

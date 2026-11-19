@@ -1,18 +1,29 @@
 package com.eduhub.edu_hub.scheduling.api.dto.request;
 
 import com.eduhub.edu_hub.scheduling.api.serialization.ClassCapacityDeserializer;
-import com.eduhub.edu_hub.scheduling.domain.policy.ModuleClassPolicy;
-import jakarta.validation.constraints.Max;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import tools.jackson.databind.annotation.JsonDeserialize;
 
 @Data
 public class CreateModuleClassRequest {
-    @NotNull
     @Min(1)
-    @Max(ModuleClassPolicy.MAX_CAPACITY)
     @JsonDeserialize(using = ClassCapacityDeserializer.class)
-    private Integer maxCapacity = ModuleClassPolicy.MAX_CAPACITY;
+    private Integer maxCapacity;
+
+    @JsonIgnore
+    private boolean maxCapacityPresent;
+
+    public void setMaxCapacity(Integer maxCapacity) {
+        this.maxCapacity = maxCapacity;
+        this.maxCapacityPresent = true;
+    }
+
+    @JsonIgnore
+    @AssertTrue(message = "Sức chứa không được là null khi đã gửi field")
+    public boolean isMaxCapacitySpecifiedCorrectly() {
+        return !maxCapacityPresent || maxCapacity != null;
+    }
 }

@@ -186,6 +186,10 @@ public enum ErrorCode {
             4608, "Nguồn tri thức chưa sẵn sàng hoặc không phù hợp với thao tác", HttpStatus.CONFLICT),
     CHAT_SESSION_CHANGED(4609, "Hội thoại đã có tin nhắn mới, vui lòng gửi lại câu hỏi", HttpStatus.CONFLICT),
 
+    // Cấu hình tham số hệ thống
+    SYSTEM_CONFIG_CHANGED(4701, "Cấu hình đã thay đổi, vui lòng tải lại", HttpStatus.CONFLICT),
+    SYSTEM_CONFIG_UNAVAILABLE(4702, "Tham số hệ thống chưa được cấu hình hợp lệ", HttpStatus.SERVICE_UNAVAILABLE),
+
     // Security
     UNAUTHENTICATED(4000, "Vui lòng đăng nhập", HttpStatus.UNAUTHORIZED),
     UNAUTHORIZED(4001, "Không có quyền truy cập", HttpStatus.FORBIDDEN);

@@ -46,7 +46,7 @@ class IdentityProfileFacadeTest {
             new CurrentUserAuthenticationService(users, sessions, tokens, CLOCK),
             mock(NotificationFacade.ImmediateEmail.class),
             mock(PasswordEncoder.class),
-            new PasswordSettings(8, "12345"),
+            new PasswordSettings("12345"),
             CLOCK);
     User user;
     RefreshToken session;

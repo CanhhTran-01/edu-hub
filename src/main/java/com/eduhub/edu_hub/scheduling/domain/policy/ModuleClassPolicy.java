@@ -8,9 +8,6 @@ import lombok.NoArgsConstructor;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class ModuleClassPolicy {
-    // TODO(CAPACITY_CONFIG): đồng bộ cả constraint database khi dùng cấu hình động.
-    public static final int MAX_CAPACITY = 80;
-
     public static String normalizeChangeReason(String reason) {
         if (reason == null || reason.isBlank()) throw new ModuleClassException(ErrorCode.VALIDATION_ERROR);
         return reason.strip();
