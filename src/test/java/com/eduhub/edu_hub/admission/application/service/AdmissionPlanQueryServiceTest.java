@@ -3,6 +3,7 @@ package com.eduhub.edu_hub.admission.application.service;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.eduhub.edu_hub.admission.domain.enums.AdmissionApplicantStatus;
 import com.eduhub.edu_hub.admission.domain.enums.AdmissionPlanStatus;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionApplicant;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionPlan;
@@ -24,6 +25,80 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class AdmissionPlanQueryServiceTest {
+
+    @Test
+    void doesNotRecommendOldTargetsWhenSupplementExceedsAvailableClassIdentifiers() {
+        var names = java.util.stream.IntStream.range(0, 991)
+                .mapToObj(index -> "Thí sinh " + index)
+                .toList();
+        var plan = prepare(names);
+        plan.setState(AdmissionPlanStatus.DRAFT);
+        var population = applicants.findByPlan_IdAndDeletedFalseOrderByRowNumber(1L);
+        population.getFirst().setState(AdmissionApplicantStatus.ENROLLED);
+        population.stream().skip(1).forEach(applicant -> applicant.setAdministrativeClassId(null));
+        planClasses.findByPlan_IdOrderByPosition(1L).getFirst().setTargetSize(1);
+
+        var response = view.buildPlanResponse(plan);
+
+        assertThat(response.canConfirm()).isFalse();
+        assertThat(response.scenarios()).isEmpty();
+        assertThat(response.warnings()).contains("Không đủ phạm vi 99 lớp để cấp định danh cho số sinh viên này");
+    }
+
+    @Test
+    void describesFrozenEnrollmentSizesInsteadOfSuggestingAnEvenRedistribution() {
+        var names = java.util.stream.IntStream.range(0, 11)
+                .mapToObj(index -> "Thí sinh " + index)
+                .toList();
+        var plan = prepare(names);
+        plan.setSelectedClassCount(2);
+        var population = applicants.findByPlan_IdAndDeletedFalseOrderByRowNumber(1L);
+        population.stream().limit(10).forEach(applicant -> applicant.setState(AdmissionApplicantStatus.ENROLLED));
+        population.getLast().setAdministrativeClassId(11L);
+        var firstClass = planClasses.findByPlan_IdOrderByPosition(1L).getFirst();
+        firstClass.setTargetSize(10);
+        when(planClasses.findByPlan_IdOrderByPosition(1L))
+                .thenReturn(List.of(
+                        firstClass,
+                        AdmissionPlanClass.builder()
+                                .administrativeClassId(11L)
+                                .targetSize(1)
+                                .build()));
+        when(people.findClassesByIds(java.util.Set.of(10L, 11L)))
+                .thenReturn(List.of(
+                        AdmissionClassInfo.builder()
+                                .id(10L)
+                                .className("L01")
+                                .currentSize(10)
+                                .build(),
+                        AdmissionClassInfo.builder()
+                                .id(11L)
+                                .className("L02")
+                                .currentSize(0)
+                                .build()));
+
+        var response = view.buildPlanResponse(plan);
+
+        assertThat(response.canConfirm()).isTrue();
+        assertThat(response.scenarios()).singleElement().satisfies(scenario -> assertThat(scenario.targetSizes())
+                .containsExactly(10, 1));
+    }
+
+    @Test
+    void permitsConfirmingValidApplicantsWhileInvalidRowsRemainVisible() {
+        var plan = prepare(List.of("Nguyễn Văn An"));
+        var population = applicants.findByPlan_IdAndDeletedFalseOrderByRowNumber(1L);
+        population.add(AdmissionApplicant.builder()
+                .state(com.eduhub.edu_hub.admission.domain.enums.AdmissionApplicantStatus.INVALID)
+                .build());
+        var response = view.buildPlanResponse(plan);
+        assertThat(response.canConfirm()).isTrue();
+        assertThat(response.confirmationBlockReasons()).isEmpty();
+        assertThat(response.applicants()).hasSize(2);
+        population.getFirst().setAdministrativeClassId(null);
+        assertThat(view.buildPlanResponse(plan).canConfirm()).isFalse();
+    }
+
     private final AdmissionApplicantRepository applicants = mock(AdmissionApplicantRepository.class);
     private final AdmissionPlanClassRepository planClasses = mock(AdmissionPlanClassRepository.class);
     private final PeopleFacade.Admission people = mock(PeopleFacade.Admission.class);
@@ -116,7 +191,7 @@ class AdmissionPlanQueryServiceTest {
             rows.add(row);
         }
 
-        when(applicants.findByPlan_IdOrderByRowNumber(1L)).thenReturn(rows);
+        when(applicants.findByPlan_IdAndDeletedFalseOrderByRowNumber(1L)).thenReturn(rows);
         when(planClasses.findByPlan_IdOrderByPosition(1L)).thenReturn(List.of(slot));
         when(rooms.countSuitableRooms(10)).thenReturn(1L);
         when(people.findClassPrefixes())

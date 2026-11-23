@@ -5,6 +5,8 @@ import com.eduhub.edu_hub.admission.api.dto.response.AdmissionCapacityResponse;
 import com.eduhub.edu_hub.admission.api.dto.response.AdmissionClassPreviewResponse;
 import com.eduhub.edu_hub.admission.api.dto.response.AdmissionPlanResponse;
 import com.eduhub.edu_hub.admission.api.dto.response.AdmissionScenarioResponse;
+import com.eduhub.edu_hub.admission.domain.enums.AdmissionApplicantStatus;
+import com.eduhub.edu_hub.admission.domain.enums.AdmissionPlanStatus;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionApplicant;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionPlan;
 import com.eduhub.edu_hub.people.application.facade.dto.AdmissionStudentInfo;
@@ -42,7 +44,8 @@ public class AdmissionPlanResponseMapper {
             List<AdmissionApplicantResponse> applicantResponses,
             List<AdmissionScenarioResponse> scenarioResponses,
             BigDecimal averageScoreDifference,
-            List<String> warnings) {
+            List<String> warnings,
+            List<String> confirmationBlockReasons) {
         return AdmissionPlanResponse.builder()
                 .id(plan.getId())
                 .revision(plan.getRevision())
@@ -61,6 +64,12 @@ public class AdmissionPlanResponseMapper {
                 .scenarios(scenarioResponses)
                 .averageScoreDifference(averageScoreDifference)
                 .warnings(List.copyOf(warnings))
+                .canConfirm(confirmationBlockReasons.isEmpty())
+                .confirmationBlockReasons(confirmationBlockReasons)
+                .canImportApplicants(plan.getState() != AdmissionPlanStatus.CONFIRMING)
+                .canViewEmailProgress(applicantResponses.stream()
+                        .anyMatch(applicant ->
+                                AdmissionApplicantStatus.ENROLLED.name().equals(applicant.state())))
                 .build();
     }
 }

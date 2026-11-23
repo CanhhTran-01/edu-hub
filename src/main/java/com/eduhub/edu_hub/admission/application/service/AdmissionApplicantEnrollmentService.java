@@ -28,7 +28,9 @@ public class AdmissionApplicantEnrollmentService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void enroll(Long planId, String confirmationToken, Long applicantId) {
         var plan = confirmationLease.requireActiveConfirmation(planId, confirmationToken);
-        var applicant = applicantRepository.findById(applicantId).orElseThrow();
+        var applicant = applicantRepository
+                .findByIdAndDeletedFalse(applicantId)
+                .orElseThrow(() -> new AdmissionEnrollmentException(ErrorCode.ADMISSION_APPLICANT_NOT_FOUND));
         if (!applicant.getPlan().getId().equals(planId))
             throw new AdmissionEnrollmentException(ErrorCode.VALIDATION_ERROR);
         if (!applicant.isPendingEnrollment()) return;

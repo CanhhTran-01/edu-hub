@@ -1,5 +1,6 @@
 package com.eduhub.edu_hub.notification.domain.policy;
 
+import com.eduhub.edu_hub.notification.domain.enums.NotificationDeliveryState;
 import com.eduhub.edu_hub.notification.domain.enums.NotificationStatus;
 import com.eduhub.edu_hub.notification.domain.model.QueuedAdmissionNotification;
 import java.time.LocalDateTime;
@@ -25,5 +26,17 @@ public final class NotificationRetryPolicy {
                 && notification.getState() != NotificationStatus.SKIPPED
                 && notification.getFailureCount() < MAX_DELIVERY_ATTEMPTS
                 && !notification.getNextAttemptAt().isAfter(attemptTime);
+    }
+
+    /** FAILED còn lượt là chờ retry, chỉ hết lượt mới kết thúc xử lý thất bại. */
+    public static NotificationDeliveryState classifyDeliveryState(NotificationStatus state, int failureCount) {
+        return switch (state) {
+            case PENDING -> NotificationDeliveryState.PENDING;
+            case SENT -> NotificationDeliveryState.SENT;
+            case SKIPPED -> NotificationDeliveryState.SKIPPED;
+            case FAILED -> failureCount < MAX_DELIVERY_ATTEMPTS
+                    ? NotificationDeliveryState.WAITING_RETRY
+                    : NotificationDeliveryState.PERMANENTLY_FAILED;
+        };
     }
 }

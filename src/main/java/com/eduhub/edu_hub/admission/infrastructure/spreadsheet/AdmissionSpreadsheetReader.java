@@ -24,7 +24,7 @@ public class AdmissionSpreadsheetReader {
             .toList();
 
     public List<AdmissionSpreadsheetApplicant> parse(MultipartFile file, AdmissionSpreadsheetScope expectedScope) {
-        // validate file trước khi xử lý
+
         validateUploadedFile(file);
 
         // Mở file xlsx upload bằng try-with-resources

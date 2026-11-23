@@ -61,8 +61,7 @@ class AdmissionPlanningServiceTest {
         when(importService.importApplicants(7L, new ImportAdmissionApplicantsRequest(0, file)))
                 .thenReturn(importedPlan);
 
-        var response = planningService.createPlanFromFile(
-                new CreateAdmissionPlanFromFileRequest(1L, 8L, null, null, null, file));
+        var response = planningService.createPlanFromFile(new CreateAdmissionPlanFromFileRequest(1L, 8L, file));
 
         assertThat(response).isSameAs(importedPlan);
         assertThat(response.totalStudents()).isEqualTo(83);
@@ -81,26 +80,37 @@ class AdmissionPlanningServiceTest {
     }
 
     @Test
-    void preservesCustomCapacityFromTheUploadRequest() {
-        when(importService.importApplicants(7L, new ImportAdmissionApplicantsRequest(0, file)))
-                .thenReturn(AdmissionPlanResponse.builder().id(7L).build());
-        planningService.createPlanFromFile(new CreateAdmissionPlanFromFileRequest(1L, 8L, 30, 55, 7, file));
-        ArgumentCaptor<AdmissionPlan> savedPlan = ArgumentCaptor.forClass(AdmissionPlan.class);
-        verify(planRepository).saveAndFlush(savedPlan.capture());
-        assertThat(savedPlan.getValue().getMajorId()).isEqualTo(1L);
-        assertThat(savedPlan.getValue().getCohortId()).isEqualTo(8L);
-        assertThat(savedPlan.getValue().getMinCapacity()).isEqualTo(30);
-        assertThat(savedPlan.getValue().getMaxCapacity()).isEqualTo(55);
-        assertThat(savedPlan.getValue().getReserveCapacity()).isEqualTo(7);
+    void rejectsCreatingAnotherPlanInTheSameScopeAfterTakingTheCohortLock() {
+        when(planRepository.existsByMajorIdAndCohortIdAndDeletedFalse(1L, 8L)).thenReturn(true);
+        assertThatThrownBy(
+                        () -> planningService.createPlanFromFile(new CreateAdmissionPlanFromFileRequest(1L, 8L, file)))
+                .isInstanceOfSatisfying(AdmissionPlanException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.ADMISSION_PLAN_ALREADY_EXISTS));
+        var lockOrder = inOrder(peopleAdmissionFacade, planRepository);
+        lockOrder.verify(peopleAdmissionFacade).lockCohort(8L);
+        lockOrder.verify(planRepository).existsByMajorIdAndCohortIdAndDeletedFalse(1L, 8L);
+        verify(planRepository, never()).saveAndFlush(any());
+        verifyNoInteractions(importService);
     }
 
     @Test
-    void rejectsInvalidCapacityBeforeCreatingOrImportingAPlan() {
-        assertThatThrownBy(() -> planningService.createPlanFromFile(
-                        new CreateAdmissionPlanFromFileRequest(1L, 8L, 50, 40, 15, file)))
-                .isInstanceOfSatisfying(AdmissionPlanException.class, exception -> assertThat(exception.getErrorCode())
-                        .isEqualTo(ErrorCode.ADMISSION_INVALID_CAPACITY));
-        verifyNoInteractions(planRepository, importService, majorCatalogFacade, peopleAdmissionFacade);
+    void returnsAnEmptyLookupWithoutCreatingAPlan() {
+        var response = planningService.findPlanByScope(1L, 8L);
+        assertThat(response.plan()).isNull();
+        assertThat(response.majorId()).isEqualTo(1L);
+        verifyNoInteractions(importService, planQueryService);
+        verify(planRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void opensThePreviouslySavedPlanByScope() {
+        var existingPlan = AdmissionPlan.builder().build();
+        var response = AdmissionPlanResponse.builder().id(7L).build();
+        when(planRepository.findByMajorIdAndCohortIdAndDeletedFalse(1L, 8L))
+                .thenReturn(java.util.Optional.of(existingPlan));
+        when(planQueryService.buildPlanResponse(existingPlan)).thenReturn(response);
+        assertThat(planningService.findPlanByScope(1L, 8L).plan()).isSameAs(response);
+        verifyNoInteractions(importService);
     }
 
     @Test
@@ -109,8 +119,8 @@ class AdmissionPlanningServiceTest {
                 List.of(new FieldErrorDetail("majorCode", "Ngành trong file không khớp")));
         when(importService.importApplicants(7L, new ImportAdmissionApplicantsRequest(0, file)))
                 .thenThrow(scopeError);
-        assertThatThrownBy(() -> planningService.createPlanFromFile(
-                        new CreateAdmissionPlanFromFileRequest(1L, 8L, null, null, null, file)))
+        assertThatThrownBy(
+                        () -> planningService.createPlanFromFile(new CreateAdmissionPlanFromFileRequest(1L, 8L, file)))
                 .isSameAs(scopeError);
         verifyNoInteractions(planQueryService);
     }

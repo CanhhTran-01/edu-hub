@@ -10,6 +10,15 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 class AdmissionCapacityPolicyTest {
+
+    @Test
+    void describesTheActualFrozenClassSizesInsteadOfRecomputingAnEvenScenario() {
+        var scenario = new AdmissionCapacityPolicy().describeClassSizes(List.of(50, 35, 50), 40, 50, 15, 3, true);
+        assertThat(scenario.targetSizes()).containsExactly(50, 35, 50);
+        assertThat(scenario.belowMinimum()).isTrue();
+        assertThat(scenario.level()).isEqualTo("BELOW_MINIMUM");
+    }
+
     private final AdmissionCapacityPolicy policy = new AdmissionCapacityPolicy();
 
     @Test
@@ -88,5 +97,47 @@ class AdmissionCapacityPolicyTest {
             }
         }
         assertThat(policy.generateScenarios(Integer.MAX_VALUE, 1, 50, 15, 1)).isEmpty();
+    }
+
+    @Test
+    void automaticallySelectsTheFewestNormalClasses() {
+        assertThat(new AdmissionCapacityPolicy().selectAutomaticClassSizes(83, List.of(), 40, 50, 15))
+                .containsExactly(42, 41);
+    }
+
+    @Test
+    void opensANormalClassBeforeUsingAdditionalReserveSeats() {
+        assertThat(new AdmissionCapacityPolicy().selectAutomaticClassSizes(140, List.of(50, 50), 40, 50, 15))
+                .containsExactly(50, 50, 40);
+    }
+
+    @Test
+    void keepsEnrolledStudentsWhileUsingReserveWhenNoNormalAllocationExists() {
+        assertThat(new AdmissionCapacityPolicy().selectAutomaticClassSizes(110, List.of(50, 50), 40, 50, 15))
+                .containsExactly(55, 55);
+    }
+
+    @Test
+    void permitsAnUnderfilledNewClassWhenExistingReserveCannotFitTheSupplement() {
+        assertThat(new AdmissionCapacityPolicy().selectAutomaticClassSizes(135, List.of(50, 50), 40, 50, 15))
+                .containsExactly(50, 50, 35);
+    }
+
+    @Test
+    void considersTheWholePendingPopulationInsteadOfFillingOldClassesFirst() {
+        assertThat(new AdmissionCapacityPolicy().selectAutomaticClassSizes(130, List.of(45, 45), 40, 50, 15))
+                .containsExactly(45, 45, 40);
+    }
+
+    @Test
+    void doesNotRequireMovingPreviouslyEnrolledReserveStudents() {
+        assertThat(new AdmissionCapacityPolicy().selectAutomaticClassSizes(160, List.of(60, 60), 40, 50, 15))
+                .containsExactly(60, 60, 40);
+    }
+
+    @Test
+    void returnsNoAutomaticAllocationBeyondTheClassIdentifierLimit() {
+        assertThat(new AdmissionCapacityPolicy().selectAutomaticClassSizes(9901, List.of(), 40, 50, 15))
+                .isEmpty();
     }
 }

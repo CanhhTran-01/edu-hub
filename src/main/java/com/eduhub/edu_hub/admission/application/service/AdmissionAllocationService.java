@@ -2,7 +2,6 @@ package com.eduhub.edu_hub.admission.application.service;
 
 import com.eduhub.edu_hub.admission.api.dto.request.AdjustAdmissionAssignmentsRequest;
 import com.eduhub.edu_hub.admission.api.dto.request.AdmissionAssignmentRequest;
-import com.eduhub.edu_hub.admission.api.dto.request.PreviewAdmissionAllocationRequest;
 import com.eduhub.edu_hub.admission.api.dto.response.AdmissionPlanResponse;
 import com.eduhub.edu_hub.admission.application.exception.AdmissionPlanException;
 import com.eduhub.edu_hub.admission.domain.enums.AdmissionApplicantStatus;
@@ -10,12 +9,10 @@ import com.eduhub.edu_hub.admission.domain.enums.AdmissionPlanStatus;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionApplicant;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionPlan;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionPlanClass;
-import com.eduhub.edu_hub.admission.domain.policy.AdmissionCapacityPolicy;
 import com.eduhub.edu_hub.admission.domain.policy.AdmissionPlanPolicy;
 import com.eduhub.edu_hub.admission.domain.policy.SerpentineClassAllocator;
 import com.eduhub.edu_hub.admission.domain.repository.AdmissionApplicantRepository;
 import com.eduhub.edu_hub.admission.domain.repository.AdmissionPlanClassRepository;
-import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.shared.exception.*;
 import com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService;
 import com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey;
@@ -30,91 +27,59 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class AdmissionAllocationService {
     private final AdmissionPlanLockService planLockService;
+    private final AdmissionClassPreparationService classPreparationService;
     private final AdmissionPlanClassRepository planClassRepository;
     private final AdmissionApplicantRepository applicantRepository;
 
-    private final PeopleFacade.Admission peopleAdmissionFacade;
-    private final AdmissionCapacityPolicy capacityPolicy;
     private final SerpentineClassAllocator classAllocator;
     private final AdmissionPlanQueryService planQueryService;
     private final SystemConfigService systemConfigService;
 
-    @Transactional
-    public AdmissionPlanResponse previewAllocation(Long planId, PreviewAdmissionAllocationRequest request) {
-
-        AdmissionPlan plan = planLockService.lockPlanAtRevision(planId, request.expectedRevision()); // xử lý concurrent
-        AdmissionPlanPolicy.requireEditable(plan); // phải ở trạng thái còn cho phép sửa
-
-        // chuẩn bị dữ liệu: Các “chỗ lớp” của kế hoạch, toàn bộ thí sinh, thí sinh đang chờ, thí sinh đã phân bổ
-        List<AdmissionPlanClass> plannedClasses = planClassRepository.findByPlan_IdOrderByPosition(planId);
-        List<AdmissionApplicant> allApplicants = applicantRepository.findByPlan_IdOrderByRowNumber(planId);
-        List<AdmissionApplicant> pendingApplicants = allApplicants.stream()
+    /**
+     * Tự chuẩn bị/phân bổ sau upload hoặc sửa hồ sơ. Cùng transaction với thay đổi đầu vào,
+     * không tự tăng revision lần nữa và không tạo Student/User trước khi Admin xác nhận.
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void prepareAndAllocateApplicants(AdmissionPlan plan, List<AdmissionApplicant> allApplicants) {
+        var pendingApplicants = allApplicants.stream()
                 .filter(AdmissionApplicant::isPendingEnrollment)
                 .toList();
-        List<AdmissionApplicant> enrolledApplicants = allApplicants.stream()
+        var enrolledApplicants = allApplicants.stream()
                 .filter(applicant -> applicant.getState() == AdmissionApplicantStatus.ENROLLED)
                 .toList();
-
-        if (plannedClasses.isEmpty()
-                || pendingApplicants.isEmpty()
-                || pendingApplicants.size() + enrolledApplicants.size() != plan.getTotalStudents()) {
-            // dữ liệu lệch so với lúc import
-            throw new AdmissionPlanException(ErrorCode.ADMISSION_INVALID_STATE);
+        plan.setTotalStudents(pendingApplicants.size() + enrolledApplicants.size());
+        allApplicants.stream()
+                .filter(applicant -> applicant.getState() != AdmissionApplicantStatus.ENROLLED)
+                .forEach(applicant -> applicant.setAdministrativeClassId(null));
+        if (pendingApplicants.isEmpty()) {
+            plan.setState(enrolledApplicants.isEmpty() ? AdmissionPlanStatus.DRAFT : AdmissionPlanStatus.CONFIRMED);
+            return;
         }
-
-        // Tính sĩ số mục tiêu mỗi lớp
-        List<Integer> targetClassSizes =
-                capacityPolicy.distributeEvenly(plan.getTotalStudents(), plannedClasses.size());
-        if (targetClassSizes.getFirst() > plan.getMaxCapacity() + plan.getReserveCapacity()) {
-            throw new AdmissionPlanException(ErrorCode.ADMISSION_INVALID_CAPACITY);
+        // chuẩn bị dữ liệu: Các “chỗ lớp” của kế hoạch, toàn bộ thí sinh, thí sinh đang chờ, thí sinh đã phân bổ
+        var plannedClasses = classPreparationService.prepareClassesAutomatically(plan, allApplicants);
+        if (plannedClasses.isEmpty()) {
+            // Không có phương án trong phạm vi định danh; giữ hồ sơ để Admin xem lỗi, chưa cho xác nhận.
+            plan.setState(AdmissionPlanStatus.DRAFT);
+            return;
         }
-
         List<AdmissionPlanClass> remainingClassCapacities = new ArrayList<>();
-
-        for (int index = 0; index < plannedClasses.size(); index++) {
-
-            var plannedClass = plannedClasses.get(index);
-
-            var administrativeClass = peopleAdmissionFacade.lockClass(plannedClass.getAdministrativeClassId());
-
+        for (AdmissionPlanClass plannedClass : plannedClasses) {
             long enrolledCount = enrolledApplicants.stream()
-                    .filter(applicant -> applicant.getAdministrativeClassId().equals(administrativeClass.getId()))
+                    .filter(applicant -> Objects.equals(
+                            applicant.getAdministrativeClassId(), plannedClass.getAdministrativeClassId()))
                     .count();
-
-            if (administrativeClass.isDeleted()
-                    || administrativeClass.getMaxCapacity() != plan.getMaxCapacity()
-                    || administrativeClass.getReserveCapacity() != plan.getReserveCapacity()
-                    || administrativeClass.getCurrentSize() != enrolledCount
-                    || enrolledCount > targetClassSizes.get(index)) {
-
-                // dữ liệu đã đổi so với lúc cấu hình
-                throw new AdmissionPlanException(ErrorCode.ADMISSION_DATA_CHANGED);
-            }
-
-            plannedClass.setTargetSize(targetClassSizes.get(index));
-
             // Chỉ phân vào số chỗ còn lại; không chuyển lớp những người đã nhập học thành công.
-            AdmissionPlanClass remainingClassCapacity = AdmissionPlanClass.builder()
-                    .administrativeClassId(administrativeClass.getId())
-                    .targetSize(targetClassSizes.get(index) - (int) enrolledCount)
-                    .build();
-            remainingClassCapacities.add(remainingClassCapacity);
+            remainingClassCapacities.add(AdmissionPlanClass.builder()
+                    .administrativeClassId(plannedClass.getAdministrativeClassId())
+                    .targetSize(plannedClass.getTargetSize() - (int) enrolledCount)
+                    .build());
         }
-
         // Phân bổ và chuyển trạng thái
         int maximumSameName = systemConfigService.getSnapshot().getInteger(SystemConfigKey.ADMISSION_MAXIMUM_SAME_NAME);
         classAllocator.allocateByScore(
                 pendingApplicants, remainingClassCapacities, enrolledApplicants, maximumSameName);
         plan.setState(AdmissionPlanStatus.PREVIEWED);
-
-        AdmissionPlanPolicy.incrementRevision(plan);
-        log.info(
-                "Previewed admission assignment: planId={}, students={}, classes={}",
-                planId,
-                pendingApplicants.size(),
-                plannedClasses.size());
-
-        return planQueryService.buildPlanResponse(plan, maximumSameName);
+        // Cảnh báo dự phòng/dưới tối thiểu chỉ được chấp nhận bằng request xác nhận của Admin.
     }
 
     @Transactional
@@ -128,7 +93,8 @@ public class AdmissionAllocationService {
         }
 
         List<AdmissionPlanClass> plannedClasses = planClassRepository.findByPlan_IdOrderByPosition(planId);
-        List<AdmissionApplicant> planApplicants = applicantRepository.findByPlan_IdOrderByRowNumber(planId);
+        List<AdmissionApplicant> planApplicants =
+                applicantRepository.findByPlan_IdAndDeletedFalseOrderByRowNumber(planId);
         Set<Long> adjustedApplicantIds = new HashSet<>();
 
         for (AdmissionAssignmentRequest assignment : request.assignments()) {
