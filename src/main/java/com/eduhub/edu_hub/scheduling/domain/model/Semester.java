@@ -46,7 +46,4 @@ public class Semester extends BaseEntity {
 
     @Column(name = "is_locked", nullable = false)
     private boolean locked;
-
-    @Column(name = "locked_grade", nullable = false)
-    private boolean lockedGrade;
 }

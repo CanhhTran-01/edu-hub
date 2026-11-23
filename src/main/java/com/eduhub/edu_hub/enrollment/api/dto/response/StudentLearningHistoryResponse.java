@@ -32,5 +32,8 @@ public record StudentLearningHistoryResponse(
             BigDecimal finalExamScore,
             BigDecimal courseScore10,
             String courseScoreLetter,
-            BigDecimal courseScore4) {}
+            BigDecimal courseScore4,
+            LocalDateTime gradePublishedAt,
+            LocalDateTime gradeLockAt,
+            boolean gradeLocked) {}
 }

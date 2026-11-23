@@ -349,6 +349,9 @@ public class EnrollmentApplicationService {
                 .courseScore10(enrollment.getCourseScore10())
                 .courseScoreLetter(enrollment.getCourseScoreLetter())
                 .courseScore4(enrollment.getCourseScore4())
+                .gradePublishedAt(enrollment.getGradePublishedAt())
+                .gradeLockAt(enrollment.getGradeLockAt())
+                .gradeLocked(enrollment.isGradeLocked(LocalDateTime.now(clock)))
                 .build();
     }
 

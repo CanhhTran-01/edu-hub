@@ -216,8 +216,7 @@ public class ProcessScoreService {
         if (moduleClass.status() != ModuleClassStatus.CLOSED && moduleClass.status() != ModuleClassStatus.COMPLETED)
             throw new EnrollmentException(ErrorCode.PROCESS_SCORE_CLASS_NOT_READY);
 
-        // TODO(GRADE_LOCK): UC khóa/mở khóa điểm sẽ áp dụng Semester.lockedGrade cho chế độ chỉ đọc
-        //  và chặn mọi đường ghi. Hiện theo phạm vi đã chốt chưa áp dụng cờ này hoặc giới hạn ngày kết thúc kỳ.
+        // Hạn khóa thuộc từng Enrollment; kiểm tra lại ngay trước khi ghi, không khóa toàn học kỳ.
         return moduleClass;
     }
 
@@ -244,6 +243,12 @@ public class ProcessScoreService {
     }
 
     private void applyChanges(List<ProcessScoreChange> changes) {
+        var currentBusinessTime = LocalDateTime.now(clock);
+        // Kiểm tra cả lô trước khi sửa; trạng thái khóa không phụ thuộc scheduler hoặc thời điểm tải giao diện.
+        for (var change : changes) {
+            if (change.enrollment().isGradeLocked(currentBusinessTime))
+                throw new EnrollmentException(ErrorCode.GRADE_LOCKED);
+        }
         var updatedAt = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
         for (var change : changes) {
             var enrollment = change.enrollment();

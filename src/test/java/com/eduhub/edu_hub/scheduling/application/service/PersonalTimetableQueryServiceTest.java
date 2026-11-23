@@ -228,6 +228,9 @@ class PersonalTimetableQueryServiceTest {
                 null,
                 null,
                 null,
-                null);
+                null,
+                null,
+                null,
+                false);
     }
 }

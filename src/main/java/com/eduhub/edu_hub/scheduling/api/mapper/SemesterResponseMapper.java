@@ -14,6 +14,7 @@ public final class SemesterResponseMapper {
         SemesterStatus status = SemesterPolicy.determineStatus(semester.getStartDate(), semester.getEndDate(), today);
 
         // TODO: isLocked và lockedGrade cần phân định rõ ràng, có thực sự cần isLocked không ?
+        // NOTE: Quyết định hiện tại giữ isLocked cho nghiệp vụ kỳ học; hạn khóa điểm đã chuyển sang từng Enrollment.
 
         return SemesterResponse.builder()
                 .id(semester.getId())
@@ -25,7 +26,6 @@ public final class SemesterResponseMapper {
                 .registrationEnd(semester.getRegistrationEnd())
                 .status(status)
                 .isLocked(semester.isLocked())
-                .lockedGrade(semester.isLockedGrade())
                 .build();
     }
 }

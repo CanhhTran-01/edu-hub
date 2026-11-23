@@ -17,6 +17,9 @@ public interface PeopleFacade {
     }
 
     interface Enrollment {
+        /** Tìm hồ sơ lịch sử theo MSSV/họ tên để Enrollment lọc điểm trước khi phân trang. */
+        Set<Long> findRosterStudentIdsByKeyword(String keyword);
+
         /** Giữ hồ sơ lịch sử, kể cả đã ẩn/ngừng học, khi lượt đăng ký vẫn thuộc danh sách lớp. */
         List<StudentRosterProfileResponse> findRosterStudentsByIds(Set<Long> studentIds);
 

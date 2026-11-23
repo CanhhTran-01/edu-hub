@@ -8,6 +8,8 @@ import com.eduhub.edu_hub.enrollment.domain.policy.EnrollmentRegistrationPolicy;
 import com.eduhub.edu_hub.enrollment.domain.repository.EnrollmentRepository;
 import com.eduhub.edu_hub.enrollment.infrastructure.config.EnrollmentRegistrationSettings;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,9 +22,11 @@ public class EnrollmentStudentRecordsFacadeImpl implements EnrollmentFacade.Stud
     private final EnrollmentRepository enrollmentRepository;
     private final PeopleFacade.Enrollment peopleFacade;
     private final EnrollmentRegistrationSettings settings;
+    private final Clock clock;
 
     @Override
     public StudentLearningHistoryResponse findLearningHistory(Long studentId) {
+        var currentBusinessTime = LocalDateTime.now(clock);
         var history = enrollmentRepository.findAllByStudentIdOrderByRegisteredAtAscIdAsc(studentId);
         Integer admissionYear =
                 peopleFacade.findAdmissionYearsByStudentIds(Set.of(studentId)).get(studentId);
@@ -56,7 +60,10 @@ public class EnrollmentStudentRecordsFacadeImpl implements EnrollmentFacade.Stud
                                 enrollment.getFinalExamScore(),
                                 enrollment.getCourseScore10(),
                                 enrollment.getCourseScoreLetter(),
-                                enrollment.getCourseScore4()))
+                                enrollment.getCourseScore4(),
+                                enrollment.getGradePublishedAt(),
+                                enrollment.getGradeLockAt(),
+                                enrollment.isGradeLocked(currentBusinessTime)))
                         .toList());
     }
 }

@@ -54,7 +54,7 @@ public class KnowledgeSourceIngestionWorker {
                     future.get(properties.getIngestionTimeout().toMillis(), TimeUnit.MILLISECONDS);
                     return;
                 } catch (InterruptedException exception) {
-                    if (future != null) future.cancel(true);
+                    future.cancel(true);
                     Thread.currentThread().interrupt();
                     ingestionService.failSource(task, "Tác vụ bị gián đoạn. Vui lòng yêu cầu xử lý lại.");
                     return;

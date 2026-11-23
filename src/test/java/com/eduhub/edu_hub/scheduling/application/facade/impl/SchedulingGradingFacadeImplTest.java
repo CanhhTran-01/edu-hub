@@ -21,10 +21,7 @@ class SchedulingGradingFacadeImplTest {
 
     @Test
     void locksSemesterBeforeLoadingTheAssignedClassAndReturnsOnlyTheGradingContext() {
-        var semester = Semester.builder()
-                .semesterCode("HK_1_2026_2027")
-                .lockedGrade(true)
-                .build();
+        var semester = Semester.builder().semesterCode("HK_1_2026_2027").build();
         semester.setId(1L);
         var lecturer = mock(Lecturer.class);
         when(lecturer.getId()).thenReturn(70L);

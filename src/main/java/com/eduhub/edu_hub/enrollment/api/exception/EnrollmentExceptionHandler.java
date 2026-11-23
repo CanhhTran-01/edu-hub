@@ -1,5 +1,6 @@
 package com.eduhub.edu_hub.enrollment.api.exception;
 
+import com.eduhub.edu_hub.enrollment.api.controller.CourseGradeController;
 import com.eduhub.edu_hub.enrollment.api.controller.EnrollmentController;
 import com.eduhub.edu_hub.enrollment.api.controller.ProcessScoreController;
 import com.eduhub.edu_hub.enrollment.application.exception.EnrollmentException;
@@ -18,7 +19,8 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.*;
 import tools.jackson.databind.exc.MismatchedInputException;
 
-@RestControllerAdvice(assignableTypes = {EnrollmentController.class, ProcessScoreController.class})
+@RestControllerAdvice(
+        assignableTypes = {EnrollmentController.class, ProcessScoreController.class, CourseGradeController.class})
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @lombok.extern.slf4j.Slf4j
 @RequiredArgsConstructor
@@ -54,12 +56,15 @@ public class EnrollmentExceptionHandler {
         org.springframework.web.multipart.support.MissingServletRequestPartException.class
     })
     public ResponseEntity<ApiResponse<Void>> handleInvalidUpload(Exception exception, HttpServletRequest request) {
+        ErrorCode uploadError = request.getRequestURI().contains("/course-grades/")
+                ? ErrorCode.COURSE_GRADE_IMPORT_INVALID
+                : ErrorCode.PROCESS_SCORE_IMPORT_INVALID;
         return ResponseEntity.badRequest()
                 .body(apiResponseFactory
                         .<Void>builder()
                         .success(false)
-                        .code(ErrorCode.PROCESS_SCORE_IMPORT_INVALID.getCode())
-                        .message(ErrorCode.PROCESS_SCORE_IMPORT_INVALID.getMessage())
+                        .code(uploadError.getCode())
+                        .message(uploadError.getMessage())
                         .errors(List.of(new FieldErrorDetail("file", "Cần tệp XLSX hợp lệ, tối đa 5 MB")))
                         .path(request.getRequestURI())
                         .build());

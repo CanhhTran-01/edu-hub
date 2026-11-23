@@ -172,6 +172,12 @@ public enum ErrorCode {
             4503, "Chỉ nhập điểm cho lớp đã chốt danh sách hoặc kết thúc giảng dạy", HttpStatus.CONFLICT),
     PROCESS_SCORE_IMPORT_INVALID(4504, "Tệp điểm quá trình không hợp lệ", HttpStatus.BAD_REQUEST),
     PROCESS_SCORE_TEMPLATE_FAILED(4505, "Không tạo được mẫu điểm quá trình", HttpStatus.INTERNAL_SERVER_ERROR),
+    COURSE_GRADE_IMPORT_INVALID(4506, "Tệp điểm thi học phần không hợp lệ", HttpStatus.BAD_REQUEST),
+    COURSE_GRADE_TEMPLATE_FAILED(4507, "Không tạo được mẫu điểm thi học phần", HttpStatus.INTERNAL_SERVER_ERROR),
+    COURSE_GRADE_CONFIGURATION_INVALID(
+            4508, "Thang quy đổi điểm học phần chưa được cấu hình hợp lệ", HttpStatus.SERVICE_UNAVAILABLE),
+    COURSE_GRADE_LOCK_CONFIGURATION_INVALID(
+            4509, "Thời hạn điều chỉnh điểm chưa được cấu hình hợp lệ", HttpStatus.SERVICE_UNAVAILABLE),
 
     // AI
     KNOWLEDGE_SOURCE_NOT_FOUND(4601, "Không tìm thấy nguồn tri thức", HttpStatus.NOT_FOUND),

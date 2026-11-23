@@ -110,7 +110,6 @@ class ModuleClassRosterServiceTest {
         when(people.findLecturerIdByUserId(9L)).thenReturn(Optional.of(201L));
         var moduleClass = moduleClass(201L, ModuleClassStatus.COMPLETED);
         moduleClass.getSemester().setLocked(true);
-        moduleClass.getSemester().setLockedGrade(true);
         when(classes.findByIdAndDeletedFalse(100L)).thenReturn(Optional.of(moduleClass));
         var details = ModuleClassResponse.builder().id(100L).semesterId(7L).build();
         when(classService.findModuleClassById(100L)).thenReturn(details);
