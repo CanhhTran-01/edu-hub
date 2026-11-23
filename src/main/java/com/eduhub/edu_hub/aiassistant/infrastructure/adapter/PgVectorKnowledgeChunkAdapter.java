@@ -101,7 +101,7 @@ public class PgVectorKnowledgeChunkAdapter implements KnowledgeChunkPort {
                     chunk.content, chunk.token_count, source.effective_date,
                     1 - (chunk.embedding <=> cast(:embedding as vector)) as relevance_score
                 from knowledge_chunks chunk join knowledge_sources source on source.id = chunk.source_id
-                where """
+                where\s"""
                         + AVAILABLE_SOURCE
                         + """
                  and (chunk.embedding <=> cast(:embedding as vector)) <= (1 - :minimumScore)

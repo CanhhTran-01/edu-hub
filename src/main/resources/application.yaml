@@ -111,6 +111,12 @@ notification:
     support-email: ${NOTIFICATION_MAIL_SUPPORT_EMAIL:}
 
 enrollment:
+  grading:
+    # Ví dụ 14d, 30d, 12h; 0 để khóa ngay. Đổi cấu hình chỉ áp dụng lượt công bố mới sau khi khởi động lại.
+    grade-correction-window: ${ENROLLMENT_GRADE_CORRECTION_WINDOW:14d}
+    # TODO(COURSE_GRADE_SCALE): Điền bảng quy đổi sau
+    # Mỗi khoảng gồm minimum-score, letter và grade-point
+    grade-scale: []
   registration:
     # Hai giới hạn tín chỉ là nguồn khởi tạo khi chưa được quản trị thiết lập trong SystemConfig.
     # Năm bắt đầu hỗ trợ vẫn bắt buộc cấu hình triển khai sau khi đối soát lịch sử.

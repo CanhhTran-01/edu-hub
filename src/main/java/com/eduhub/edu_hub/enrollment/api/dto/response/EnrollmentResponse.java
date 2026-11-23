@@ -30,4 +30,7 @@ public class EnrollmentResponse {
     private BigDecimal courseScore10;
     private String courseScoreLetter;
     private BigDecimal courseScore4;
+    private LocalDateTime gradePublishedAt;
+    private LocalDateTime gradeLockAt;
+    private boolean gradeLocked;
 }

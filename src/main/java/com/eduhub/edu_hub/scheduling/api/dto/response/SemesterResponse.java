@@ -17,5 +17,4 @@ public class SemesterResponse {
     private LocalDate registrationEnd;
     private SemesterStatus status; // suy ra từ ngày hiện tại, không lưu trong database
     private Boolean isLocked; // khóa thông tin kỳ + lớp học phần
-    private Boolean lockedGrade; // khóa điểm
 }

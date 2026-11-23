@@ -15,8 +15,12 @@ class EnrollmentStudentRecordsFacadeImplTest {
     EnrollmentRepository enrollmentRepository = mock(EnrollmentRepository.class);
     PeopleFacade.Enrollment peopleFacade = mock(PeopleFacade.Enrollment.class);
     EnrollmentRegistrationSettings settings = new EnrollmentRegistrationSettings();
-    EnrollmentStudentRecordsFacadeImpl facade =
-            new EnrollmentStudentRecordsFacadeImpl(enrollmentRepository, peopleFacade, settings);
+    EnrollmentStudentRecordsFacadeImpl facade = new EnrollmentStudentRecordsFacadeImpl(
+            enrollmentRepository,
+            peopleFacade,
+            settings,
+            java.time.Clock.fixed(
+                    java.time.Instant.parse("2026-11-23T03:00:00Z"), java.time.ZoneId.of("Asia/Ho_Chi_Minh")));
 
     @Test
     void excludesDroppedAndHiddenRowsButPreservesHistoricalPassForPrerequisites() {
@@ -59,5 +63,29 @@ class EnrollmentStudentRecordsFacadeImplTest {
                 .build();
         enrollment.setId(enrollmentId);
         return enrollment;
+    }
+
+    @Test
+    void exposesPublishedGradesAndTheExactLockDeadlineToStudentAcademicQueries() {
+        settings.setFirstSupportedAdmissionYear(2026);
+        var graded = enrollment(1, EnrollmentStatus.REGISTERED);
+        var publishedAt = java.time.LocalDateTime.parse("2026-11-09T10:00:00");
+        graded.updateCourseGrade(
+                new java.math.BigDecimal("9"),
+                new java.math.BigDecimal("8"),
+                "B",
+                new java.math.BigDecimal("3"),
+                EnrollmentStatus.COMPLETED,
+                publishedAt,
+                publishedAt.plusDays(14),
+                publishedAt);
+        when(enrollmentRepository.findAllByStudentIdOrderByRegisteredAtAscIdAsc(77L))
+                .thenReturn(List.of(graded));
+        when(peopleFacade.findAdmissionYearsByStudentIds(Set.of(77L))).thenReturn(Map.of(77L, 2026));
+        var displayed = facade.findLearningHistory(77L).enrollments().getFirst();
+        assertThat(displayed.finalExamScore()).isEqualByComparingTo("9");
+        assertThat(displayed.gradePublishedAt()).isEqualTo(publishedAt);
+        assertThat(displayed.gradeLockAt()).isEqualTo(publishedAt.plusDays(14));
+        assertThat(displayed.gradeLocked()).isTrue();
     }
 }

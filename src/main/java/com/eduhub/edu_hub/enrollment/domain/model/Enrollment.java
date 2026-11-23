@@ -77,6 +77,37 @@ public class Enrollment extends BaseEntity {
     @Column(name = "course_score_grade_4")
     private BigDecimal courseScore4;
 
+    private LocalDateTime gradePublishedAt;
+
+    private LocalDateTime gradeLockAt;
+
+    /** Kết quả cũ thiếu mốc công bố được giữ chỉ đọc, không suy ngày công bố từ metadata audit. */
+    public boolean isGradeLocked(LocalDateTime currentBusinessTime) {
+        return gradeLockAt != null ? !currentBusinessTime.isBefore(gradeLockAt) : courseScore10 != null;
+    }
+
+    /** Lưu đồng thời điểm thi, các hệ điểm và kết quả; điều chỉnh không thay hạn đã chốt khi công bố. */
+    public void updateCourseGrade(
+            BigDecimal finalExamScore,
+            BigDecimal courseScore10,
+            String courseScoreLetter,
+            BigDecimal courseScore4,
+            EnrollmentStatus status,
+            LocalDateTime currentBusinessTime,
+            LocalDateTime initialGradeLockAt,
+            LocalDateTime updatedAt) {
+        this.finalExamScore = finalExamScore;
+        this.courseScore10 = courseScore10;
+        this.courseScoreLetter = courseScoreLetter;
+        this.courseScore4 = courseScore4;
+        this.status = status;
+        if (courseScore10 != null && gradePublishedAt == null) {
+            gradePublishedAt = currentBusinessTime;
+            gradeLockAt = initialGradeLockAt;
+        }
+        setUpdatedAt(updatedAt);
+    }
+
     /** Mốc hủy theo giờ Việt Nam, còn updatedAt của audit vẫn theo UTC. */
     public void drop(LocalDateTime droppedAt, LocalDateTime updatedAt) {
         this.status = EnrollmentStatus.DROPPED;
@@ -97,9 +128,4 @@ public class Enrollment extends BaseEntity {
         this.note = note;
         setUpdatedAt(updatedAt);
     }
-
-    // TODO(FINAL_EXAM_GRADING): UC nhập điểm thi sẽ tính điểm học phần khi đủ quá trình và điểm thi:
-    //  0,3*quá trình+0,7*thi, HALF_UP một chữ số; quy đổi hệ điểm và cập nhật COMPLETED/FAILED
-    //  theo quy chế đã chốt. Hiện nhập điểm quá trình không thay điểm thi, tổng kết hoặc trạng thái lượt học.
-    //  Lớp hết lịch giảng dạy không tự tạo điểm hoặc xác nhận sinh viên đã đạt môn.
 }

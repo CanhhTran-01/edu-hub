@@ -20,11 +20,16 @@ class EnrollmentMappingTest {
         try (var migration = getClass()
                         .getResourceAsStream("/db/migration/V20261113055035__implement_module_class_enrollment.sql");
                 var noteMigration = getClass()
-                        .getResourceAsStream("/db/migration/V20261116134626__add_enrollment_process_score_note.sql")) {
+                        .getResourceAsStream("/db/migration/V20261116134626__add_enrollment_process_score_note.sql");
+                var gradeMigration = getClass()
+                        .getResourceAsStream(
+                                "/db/migration/V20261123053742__publish_and_lock_individual_course_grades.sql")) {
             assertThat(migration).isNotNull();
             assertThat(noteMigration).isNotNull();
+            assertThat(gradeMigration).isNotNull();
             String migrationSql = new String(migration.readAllBytes(), StandardCharsets.UTF_8) + "\n"
-                    + new String(noteMigration.readAllBytes(), StandardCharsets.UTF_8);
+                    + new String(noteMigration.readAllBytes(), StandardCharsets.UTF_8) + "\n"
+                    + new String(gradeMigration.readAllBytes(), StandardCharsets.UTF_8);
             var metadata = new MetadataSources(registry)
                     .addAnnotatedClass(Enrollment.class)
                     .getMetadataBuilder()

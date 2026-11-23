@@ -236,7 +236,7 @@ class EnrollmentApplicationServiceTest {
         verify(schedulingFacade).releaseSeat(100L);
         service.drop(principal, 90L);
         verify(schedulingFacade, times(1)).releaseSeat(100L);
-        verify(enrollmentRepository, never()).delete(any());
+        verify(enrollmentRepository, never()).delete(any(Enrollment.class));
     }
 
     @Test

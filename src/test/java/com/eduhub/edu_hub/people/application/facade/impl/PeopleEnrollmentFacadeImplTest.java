@@ -39,4 +39,14 @@ class PeopleEnrollmentFacadeImplTest {
         assertThat(facade.findRosterStudentsByIds(Set.of())).isEmpty();
         verifyNoInteractions(students, entityManager);
     }
+
+    @Test
+    void gradeSearchNormalizesAndEscapesKeywordsBeforeThePeopleQuery() {
+        when(students.findRosterStudentIdsByKeyword("%sv!%!_!!%")).thenReturn(Set.of(7L));
+        assertThat(facade.findRosterStudentIdsByKeyword("  SV%_!  ")).containsExactly(7L);
+        verify(students).findRosterStudentIdsByKeyword("%sv!%!_!!%");
+        assertThat(facade.findRosterStudentIdsByKeyword("  ")).isEmpty();
+        verifyNoMoreInteractions(students);
+        verifyNoInteractions(entityManager);
+    }
 }

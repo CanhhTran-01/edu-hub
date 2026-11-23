@@ -4,10 +4,17 @@ import com.eduhub.edu_hub.enrollment.domain.enums.EnrollmentStatus;
 import com.eduhub.edu_hub.enrollment.domain.model.Enrollment;
 import java.util.*;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
+public interface EnrollmentRepository extends JpaRepository<Enrollment, Long>, JpaSpecificationExecutor<Enrollment> {
+    Optional<Enrollment> findByIdAndDeletedFalse(Long enrollmentId);
+
+    @Query(
+            "select enrollment.moduleClassId from Enrollment enrollment where enrollment.id = :enrollmentId and enrollment.deleted = false")
+    Optional<Long> findModuleClassIdByEnrollmentId(@Param("enrollmentId") Long enrollmentId);
+
     @Query(
             "select enrollment.semesterId from Enrollment enrollment "
                     + "where enrollment.id = :enrollmentId and enrollment.studentId = :studentId and enrollment.deleted = false")

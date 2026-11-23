@@ -14,6 +14,10 @@ import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
 public interface StudentRepository extends JpaRepository<Student, Long>, JpaSpecificationExecutor<Student> {
+    @Query("select student.id from Student student where lower(student.studentCode) like :keywordPattern escape '!' "
+            + "or lower(student.fullName) like :keywordPattern escape '!'")
+    java.util.Set<Long> findRosterStudentIdsByKeyword(@Param("keywordPattern") String keywordPattern);
+
     @Query("select new com.eduhub.edu_hub.people.api.dto.response.StudentRosterProfileResponse("
             + "student.id, student.studentCode, student.fullName) from Student student where student.id in :studentIds")
     List<StudentRosterProfileResponse> findRosterProfilesByIds(

@@ -247,6 +247,9 @@ class StudentAcademicQueryServiceTest {
                 null,
                 grade4 == null ? null : new BigDecimal("7"),
                 grade4 == null ? null : "B",
-                grade4 == null ? null : new BigDecimal(grade4));
+                grade4 == null ? null : new BigDecimal(grade4),
+                null,
+                null,
+                grade4 != null);
     }
 }

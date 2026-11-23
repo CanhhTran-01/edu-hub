@@ -20,6 +20,18 @@ public class PeopleEnrollmentFacadeImpl implements PeopleFacade.Enrollment {
     private final jakarta.persistence.EntityManager entityManager;
 
     @Override
+    public Set<Long> findRosterStudentIdsByKeyword(String keyword) {
+        if (keyword == null || keyword.isBlank()) return Set.of();
+        String keywordPattern = "%"
+                + keyword.strip()
+                        .toLowerCase(Locale.ROOT)
+                        .replace("!", "!!")
+                        .replace("%", "!%")
+                        .replace("_", "!_") + "%";
+        return studentRepository.findRosterStudentIdsByKeyword(keywordPattern);
+    }
+
+    @Override
     public List<StudentRosterProfileResponse> findRosterStudentsByIds(Set<Long> studentIds) {
         // Chỉ đọc ba trường cần hiển thị; chia lô để không tạo một mệnh đề IN quá lớn.
         var orderedStudentIds = studentIds.stream().sorted().toList();

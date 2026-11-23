@@ -94,7 +94,6 @@ class SemesterApplicationServiceTest {
         assertThat(result.getSemesterCode()).isEqualTo("HK_1_2026_2027");
         assertThat(result.getStatus()).isEqualTo(SemesterStatus.ONGOING);
         assertThat(result.getIsLocked()).isFalse();
-        assertThat(result.getLockedGrade()).isFalse();
         var captor = ArgumentCaptor.forClass(Semester.class);
         verify(repository).saveAndFlush(captor.capture());
         assertThat(captor.getValue().isDeleted()).isFalse();
@@ -203,9 +202,9 @@ class SemesterApplicationServiceTest {
     }
 
     @Test
-    void updatesNameCodeAndDatesWhilePreservingIdentityAndLockFlags() {
+    void updatesNameCodeAndDatesWhilePreservingIdentityAndSemesterLock() {
         var semester = semester(LocalDate.parse("2026-09-01"), LocalDate.parse("2026-12-31"));
-        semester.setLockedGrade(true);
+        semester.setLocked(true);
         semester.setCreatedAt(LocalDateTime.parse("2026-07-01T00:00:00"));
         when(repository.findForUpdateByIdAndDeletedFalse(1L)).thenReturn(Optional.of(semester));
         when(repository.saveAndFlush(semester)).thenReturn(semester);
@@ -216,7 +215,7 @@ class SemesterApplicationServiceTest {
 
         assertThat(result.getId()).isEqualTo(1L);
         assertThat(result.getSemesterCode()).isEqualTo("HK_2_2026_2027");
-        assertThat(result.getLockedGrade()).isTrue();
+        assertThat(result.getIsLocked()).isTrue();
         assertThat(semester.getCreatedAt()).isEqualTo(LocalDateTime.parse("2026-07-01T00:00:00"));
         verify(repository).existsBySemesterNameAndIdNot("Học kì 2 năm học 2026-2027", 1L);
     }
