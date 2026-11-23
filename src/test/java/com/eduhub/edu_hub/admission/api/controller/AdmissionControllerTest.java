@@ -6,8 +6,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.eduhub.edu_hub.admission.api.dto.request.CreateAdmissionPlanFromFileRequest;
+import com.eduhub.edu_hub.admission.api.dto.request.DeleteAdmissionApplicantRequest;
 import com.eduhub.edu_hub.admission.api.dto.request.ImportAdmissionApplicantsRequest;
-import com.eduhub.edu_hub.admission.api.dto.request.PrepareAdmissionClassesRequest;
 import com.eduhub.edu_hub.admission.api.dto.response.AdmissionApplicantResponse;
 import com.eduhub.edu_hub.admission.api.dto.response.AdmissionCapacityResponse;
 import com.eduhub.edu_hub.admission.api.dto.response.AdmissionPlanResponse;
@@ -15,7 +15,6 @@ import com.eduhub.edu_hub.admission.api.exception.AdmissionExceptionHandler;
 import com.eduhub.edu_hub.admission.application.exception.AdmissionImportScopeException;
 import com.eduhub.edu_hub.admission.application.exception.AdmissionPlanException;
 import com.eduhub.edu_hub.admission.application.service.AdmissionAllocationService;
-import com.eduhub.edu_hub.admission.application.service.AdmissionClassPreparationService;
 import com.eduhub.edu_hub.admission.application.service.AdmissionConfirmationService;
 import com.eduhub.edu_hub.admission.application.service.AdmissionImportService;
 import com.eduhub.edu_hub.admission.application.service.AdmissionNotificationQueryService;
@@ -37,7 +36,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-class StudentAdmissionControllerTest {
+class AdmissionControllerTest {
 
     private static final Clock CLOCK = Clock.fixed(
             Instant.parse("2026-11-18T17:30:00Z"),
@@ -45,21 +44,23 @@ class StudentAdmissionControllerTest {
     private final ApiResponseFactory apiResponseFactory = new ApiResponseFactory(CLOCK);
     private final AdmissionPlanningService planning = mock(AdmissionPlanningService.class);
     private final AdmissionImportService admissionImportService = mock(AdmissionImportService.class);
-    private final AdmissionClassPreparationService classPreparationService =
-            mock(AdmissionClassPreparationService.class);
+    private final AdmissionAllocationService allocationService = mock(AdmissionAllocationService.class);
+    private final com.eduhub.edu_hub.admission.application.service.AdmissionApplicantCorrectionService
+            correctionService =
+                    mock(com.eduhub.edu_hub.admission.application.service.AdmissionApplicantCorrectionService.class);
+    private final AdmissionNotificationQueryService notificationQueryService =
+            mock(AdmissionNotificationQueryService.class);
     private MockMvc mvc;
 
     @BeforeEach
     void setup() {
         when(planning.getDefaultCapacityConfiguration()).thenReturn(new AdmissionCapacityResponse(40, 50, 15));
-        mvc = MockMvcBuilders.standaloneSetup(new StudentAdmissionController(
-                        apiResponseFactory,
-                        planning,
-                        admissionImportService,
-                        classPreparationService,
-                        mock(AdmissionAllocationService.class),
-                        mock(AdmissionConfirmationService.class),
-                        mock(AdmissionNotificationQueryService.class)))
+        mvc = MockMvcBuilders.standaloneSetup(
+                        new AdmissionController(
+                                apiResponseFactory, planning, mock(AdmissionConfirmationService.class)),
+                        new AdmissionPlanAdjustmentController(
+                                apiResponseFactory, admissionImportService, correctionService, allocationService),
+                        new AdmissionNotificationController(apiResponseFactory, notificationQueryService))
                 .setControllerAdvice(
                         new AdmissionExceptionHandler(apiResponseFactory),
                         new GlobalExceptionHandler(apiResponseFactory))
@@ -85,81 +86,6 @@ class StudentAdmissionControllerTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value(ErrorCode.ENDPOINT_NOT_FOUND.getCode()));
         verifyNoInteractions(planning);
-    }
-
-    @Test
-    void listsClassesAtTheExistingUrlFromTheAdmissionController() throws Exception {
-        when(classPreparationService.listAdministrativeClasses(1L, 8L)).thenReturn(List.of());
-        mvc.perform(get("/api/v1/administrative-classes").param("majorId", "1").param("cohortId", "8"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data").isEmpty());
-        verify(classPreparationService).listAdministrativeClasses(1L, 8L);
-    }
-
-    @Test
-    void preparesClassesAtTheExistingUrlWithTheSameRequestFields() throws Exception {
-        mvc.perform(
-                        post("/api/v1/administrative-classes/from-admission-plan")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        """
-                                {"planId":1,"expectedRevision":0,"classCount":2,
-                                 "acceptReserve":false,"acceptBelowMinimum":false}
-                                """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true));
-        verify(classPreparationService)
-                .prepareClasses(new PrepareAdmissionClassesRequest(1L, 0, 2, null, false, false, null));
-    }
-
-    @Test
-    void stillRejectsMissingClassScopeAndInvalidClassCount() throws Exception {
-        mvc.perform(get("/api/v1/administrative-classes").param("majorId", "1")).andExpect(status().isBadRequest());
-        mvc.perform(
-                        post("/api/v1/administrative-classes/from-admission-plan")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        """
-                                {"planId":1,"expectedRevision":0,"classCount":0,
-                                 "acceptReserve":false,"acceptBelowMinimum":false}
-                                """))
-                .andExpect(status().isBadRequest());
-        verifyNoInteractions(classPreparationService);
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"null", "[]"})
-    void preservesTheDifferenceBetweenAutomaticReuseAndCreatingAllClasses(String existingClassIdsJson)
-            throws Exception {
-        mvc.perform(post("/api/v1/administrative-classes/from-admission-plan")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(
-                                """
-                                {"planId":1,"expectedRevision":0,"classCount":2,"existingClassIds":%s,
-                                 "acceptReserve":false,"acceptBelowMinimum":false}
-                                """
-                                        .formatted(existingClassIdsJson)))
-                .andExpect(status().isOk());
-        verify(classPreparationService)
-                .prepareClasses(new PrepareAdmissionClassesRequest(
-                        1L, 0, 2, existingClassIdsJson.equals("null") ? null : List.of(), false, false, null));
-    }
-
-    @Test
-    void keepsTheAdmissionErrorHandlerForClassPreparationAfterMergingControllers() throws Exception {
-        when(classPreparationService.prepareClasses(any()))
-                .thenThrow(new AdmissionPlanException(ErrorCode.ADMISSION_STALE_PLAN));
-        mvc.perform(
-                        post("/api/v1/administrative-classes/from-admission-plan")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        """
-                                {"planId":1,"expectedRevision":0,"classCount":2,
-                                 "acceptReserve":false,"acceptBelowMinimum":false}
-                                """))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value(ErrorCode.ADMISSION_STALE_PLAN.getCode()))
-                .andExpect(jsonPath("$.path").value("/api/v1/administrative-classes/from-admission-plan"));
     }
 
     @Test
@@ -235,18 +161,171 @@ class StudentAdmissionControllerTest {
     }
 
     @Test
-    void preservesMultipartFieldNamesAndOptionalCapacityWhenCreatingAPlan() throws Exception {
+    void acceptsOnlyScopeAndFileWhenCreatingAPlan() throws Exception {
         var file = new MockMultipartFile("file", "students.xlsx", "application/octet-stream", new byte[] {1});
-
         mvc.perform(multipart("/api/v1/student-admissions/plans/import")
                         .file(file)
                         .param("majorId", "1")
-                        .param("cohortId", "8")
-                        .param("minCapacity", "30")
-                        .param("reserveCapacity", "10"))
+                        .param("cohortId", "8"))
                 .andExpect(status().isOk());
+        verify(planning).createPlanFromFile(new CreateAdmissionPlanFromFileRequest(1L, 8L, file));
+    }
 
-        verify(planning).createPlanFromFile(new CreateAdmissionPlanFromFileRequest(1L, 8L, 30, null, 10, file));
+    @Test
+    void rejectsCapacityOverridesInsteadOfTrustingTheReadOnlyForm() throws Exception {
+        mvc.perform(multipart("/api/v1/student-admissions/plans/import")
+                        .file(new MockMultipartFile(
+                                "file", "students.xlsx", "application/octet-stream", new byte[] {1}))
+                        .param("majorId", "1")
+                        .param("cohortId", "8")
+                        .param("minCapacity", "30"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("minCapacity"));
+        verifyNoInteractions(planning);
+    }
+
+    @Test
+    void returnsAnExplicitNullWhenTheSelectedScopeHasNoPlan() throws Exception {
+        when(planning.findPlanByScope(1L, 8L))
+                .thenReturn(
+                        new com.eduhub.edu_hub.admission.api.dto.response.AdmissionPlanLookupResponse(1L, 8L, null));
+        mvc.perform(get("/api/v1/student-admissions/plans/by-scope")
+                        .param("majorId", "1")
+                        .param("cohortId", "8"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.plan").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "/api/v1/administrative-classes",
+                "/api/v1/administrative-classes/from-admission-plan",
+                "/api/v1/student-admissions/plans/7/allocation/preview"
+            })
+    void removesTheManualClassPreparationAndPreviewEndpoints(String endpoint) throws Exception {
+        mvc.perform(post(endpoint)).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void updatesAnInvalidApplicantThroughTheAdjustmentController() throws Exception {
+        mvc.perform(patch("/api/v1/student-admissions/plans/7/applicants/11")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expectedRevision\":3,\"email\":null}"))
+                .andExpect(status().isOk());
+        verify(correctionService)
+                .updateApplicant(
+                        eq(7L),
+                        eq(11L),
+                        argThat(request -> request.getExpectedRevision() == 3L
+                                && request.hasField("email")
+                                && request.getEmail() == null
+                                && !request.hasField("fullName")));
+    }
+
+    @Test
+    void removesAnApplicantThroughTheAdjustmentControllerAndReturnsTheUpdatedPlan() throws Exception {
+        when(correctionService.deleteApplicant(7L, 11L, new DeleteAdmissionApplicantRequest(3L)))
+                .thenReturn(AdmissionPlanResponse.builder()
+                        .id(7L)
+                        .revision(4)
+                        .applicants(List.of())
+                        .build());
+
+        mvc.perform(delete("/api/v1/student-admissions/plans/7/applicants/11").param("expectedRevision", "3"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(7))
+                .andExpect(jsonPath("$.data.revision").value(4))
+                .andExpect(jsonPath("$.data.applicants").isEmpty());
+
+        verify(correctionService).deleteApplicant(7L, 11L, new DeleteAdmissionApplicantRequest(3L));
+    }
+
+    @Test
+    void requiresTheRevisionQueryParameterForRemoval() throws Exception {
+        mvc.perform(delete("/api/v1/student-admissions/plans/7/applicants/11"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()))
+                .andExpect(jsonPath("$.errors[0].field").value("expectedRevision"));
+        verifyNoInteractions(correctionService);
+    }
+
+    @Test
+    void doesNotReadTheRemovalRevisionFromAJsonBody() throws Exception {
+        mvc.perform(delete("/api/v1/student-admissions/plans/7/applicants/11")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expectedRevision\":3}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("expectedRevision"));
+        verifyNoInteractions(correctionService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"-1", "1.5", "invalid"})
+    void rejectsInvalidRemovalRevisions(String revision) throws Exception {
+        mvc.perform(delete("/api/v1/student-admissions/plans/7/applicants/11").param("expectedRevision", revision))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()))
+                .andExpect(jsonPath("$.errors[0].field").value("expectedRevision"));
+        verifyNoInteractions(correctionService);
+    }
+
+    @Test
+    void returnsTheStaleRevisionErrorForRemoval() throws Exception {
+        when(correctionService.deleteApplicant(7L, 11L, new DeleteAdmissionApplicantRequest(3L)))
+                .thenThrow(new AdmissionPlanException(ErrorCode.ADMISSION_STALE_PLAN));
+        mvc.perform(delete("/api/v1/student-admissions/plans/7/applicants/11").param("expectedRevision", "3"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(4132));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"state", "studentId", "reuseAccount", "providedFields"})
+    void rejectsSystemFieldsEvenWhenTheyAreNull(String fieldName) throws Exception {
+        mvc.perform(patch("/api/v1/student-admissions/plans/7/applicants/11")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expectedRevision\":3,\"" + fieldName + "\":null}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value(fieldName));
+        verifyNoInteractions(correctionService);
+    }
+
+    @Test
+    void appliesTheAdmissionExceptionHandlerToTheAdjustmentController() throws Exception {
+        when(admissionImportService.importApplicants(anyLong(), any()))
+                .thenThrow(new AdmissionPlanException(ErrorCode.ADMISSION_STALE_PLAN));
+        mvc.perform(multipart("/api/v1/student-admissions/plans/7/applicants")
+                        .file(new MockMultipartFile(
+                                "file", "students.xlsx", "application/octet-stream", new byte[] {1}))
+                        .param("expectedRevision", "3"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(4132));
+    }
+
+    @Test
+    void readsEmailProgressWithoutCachingOrStartingAnotherSend() throws Exception {
+        when(notificationQueryService.getProgress(7L))
+                .thenReturn(new com.eduhub.edu_hub.notification.api.dto.response.AdmissionNotificationProgressResponse(
+                        7L, 2, 1, 0, 0, 1, 0, 2, new java.math.BigDecimal("100.00"), true, true));
+        mvc.perform(get("/api/v1/student-admissions/plans/7/notifications/progress"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.data.isComplete").value(true))
+                .andExpect(jsonPath("$.data.completionPercentage").value(100))
+                .andExpect(jsonPath("$.data.complete").doesNotExist());
+        verify(notificationQueryService).getProgress(7L);
+        verifyNoInteractions(planning, admissionImportService);
+    }
+
+    @Test
+    void validatesNotificationPaginationAndDeliveryState() throws Exception {
+        mvc.perform(get("/api/v1/student-admissions/plans/7/notifications/details")
+                        .param("size", "101"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/v1/student-admissions/plans/7/notifications/details")
+                        .param("deliveryState", "UNKNOWN"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(notificationQueryService);
     }
 
     @Test

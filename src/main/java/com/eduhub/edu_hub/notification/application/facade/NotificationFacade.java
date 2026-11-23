@@ -1,10 +1,14 @@
 package com.eduhub.edu_hub.notification.application.facade;
 
 import com.eduhub.edu_hub.notification.api.dto.request.QueueAdmissionNotificationRequest;
+import com.eduhub.edu_hub.notification.api.dto.request.SearchAdmissionNotificationsRequest;
 import com.eduhub.edu_hub.notification.api.dto.request.SendAccountEmailRequest;
 import com.eduhub.edu_hub.notification.api.dto.request.SendAdmissionConfirmationEmailRequest;
+import com.eduhub.edu_hub.notification.api.dto.response.AdmissionNotificationDetailResponse;
+import com.eduhub.edu_hub.notification.api.dto.response.AdmissionNotificationProgressResponse;
 import com.eduhub.edu_hub.notification.api.dto.response.AdmissionNotificationResponse;
 import com.eduhub.edu_hub.notification.api.dto.response.EmailDeliveryResponse;
+import com.eduhub.edu_hub.shared.common.PageResponse;
 import java.util.List;
 
 public interface NotificationFacade {
@@ -21,5 +25,11 @@ public interface NotificationFacade {
         Long enqueueAdmissionNotification(QueueAdmissionNotificationRequest request);
 
         List<AdmissionNotificationResponse> findNotificationsByAdmissionIds(List<Long> admissionIds);
+
+        AdmissionNotificationProgressResponse getNotificationProgress(
+                Long planId, List<Long> admissionIds, boolean confirmationInProgress, boolean confirmationFinished);
+
+        PageResponse<AdmissionNotificationDetailResponse> searchNotifications(
+                List<Long> admissionIds, SearchAdmissionNotificationsRequest request);
     }
 }

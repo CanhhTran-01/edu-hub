@@ -10,7 +10,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
-public interface QueuedAdmissionNotificationRepository extends JpaRepository<QueuedAdmissionNotification, Long> {
+public interface QueuedAdmissionNotificationRepository
+        extends JpaRepository<QueuedAdmissionNotification, Long>,
+                JpaSpecificationExecutor<QueuedAdmissionNotification> {
     @Query("select n.id from QueuedAdmissionNotification n where n.deleted = false "
             + "and n.state in :states and n.failureCount < :maxFailures and n.nextAttemptAt <= :now order by n.id")
     List<Long> findDueNotificationIds(
@@ -24,4 +26,17 @@ public interface QueuedAdmissionNotificationRepository extends JpaRepository<Que
     Optional<QueuedAdmissionNotification> findByIdForUpdate(@Param("id") Long notificationId);
 
     List<QueuedAdmissionNotification> findByAdmissionIdInAndDeletedFalseOrderById(List<Long> admissionIds);
+
+    interface DeliveryStateCount {
+        NotificationStatus getState();
+
+        int getFailureCount();
+
+        long getNotificationCount();
+    }
+
+    @Query("select n.state as state, n.failureCount as failureCount, count(n) as notificationCount "
+            + "from QueuedAdmissionNotification n where n.deleted = false and n.admissionId in :admissionIds "
+            + "group by n.state, n.failureCount")
+    List<DeliveryStateCount> countDeliveryStates(@Param("admissionIds") List<Long> admissionIds);
 }

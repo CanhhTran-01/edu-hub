@@ -18,4 +18,8 @@ public record AdmissionPlanResponse(
         List<AdmissionClassPreviewResponse> classes,
         List<AdmissionApplicantResponse> applicants,
         BigDecimal averageScoreDifference,
-        List<String> warnings) {}
+        List<String> warnings,
+        boolean canConfirm,
+        List<String> confirmationBlockReasons,
+        boolean canImportApplicants,
+        boolean canViewEmailProgress) {}

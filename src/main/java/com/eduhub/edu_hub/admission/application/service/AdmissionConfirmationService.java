@@ -54,7 +54,10 @@ public class AdmissionConfirmationService {
                 executeInTransaction(() -> {
                     var plan =
                             confirmationLease.requireActiveConfirmation(planId, confirmationBatch.confirmationToken());
-                    var applicant = applicantRepository.findById(applicantId).orElseThrow();
+                    var applicant = applicantRepository
+                            .findByIdAndDeletedFalse(applicantId)
+                            .orElseThrow(
+                                    () -> new AdmissionEnrollmentException(ErrorCode.ADMISSION_APPLICANT_NOT_FOUND));
                     if (applicant.isPendingEnrollment()) {
                         applicant.setState(AdmissionApplicantStatus.FAILED);
                         applicant.setErrorMessage(
@@ -89,7 +92,7 @@ public class AdmissionConfirmationService {
         if (plan.getState() != AdmissionPlanStatus.PREVIEWED
                 && plan.getState() != AdmissionPlanStatus.PARTIALLY_CONFIRMED
                 && !confirmationLeaseExpired) throw new AdmissionEnrollmentException(ErrorCode.ADMISSION_INVALID_STATE);
-        var planApplicants = applicantRepository.findByPlan_IdOrderByRowNumber(planId);
+        var planApplicants = applicantRepository.findByPlan_IdAndDeletedFalseOrderByRowNumber(planId);
         var plannedClasses = planClassRepository.findByPlan_IdOrderByPosition(planId);
         if (plannedClasses.isEmpty() || planApplicants.stream().noneMatch(AdmissionApplicant::isIncludedInPlan))
             throw new AdmissionEnrollmentException(ErrorCode.ADMISSION_INVALID_STATE);
@@ -160,7 +163,7 @@ public class AdmissionConfirmationService {
     private AdmissionConfirmationResponse completeConfirmationBatch(
             Long planId, String confirmationToken, ConfirmAdmissionEnrollmentRequest request) {
         var plan = planRepository.findForUpdate(planId).orElseThrow();
-        var planApplicants = applicantRepository.findByPlan_IdOrderByRowNumber(planId);
+        var planApplicants = applicantRepository.findByPlan_IdAndDeletedFalseOrderByRowNumber(planId);
         if (confirmationToken != null) {
             confirmationLease.requireActiveConfirmation(plan, confirmationToken);
             boolean hasPendingApplicants = planApplicants.stream().anyMatch(AdmissionApplicant::isPendingEnrollment);

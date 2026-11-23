@@ -5,6 +5,7 @@ import static com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKe
 import com.eduhub.edu_hub.admission.api.dto.request.CreateAdmissionPlanFromFileRequest;
 import com.eduhub.edu_hub.admission.api.dto.request.ImportAdmissionApplicantsRequest;
 import com.eduhub.edu_hub.admission.api.dto.response.AdmissionCapacityResponse;
+import com.eduhub.edu_hub.admission.api.dto.response.AdmissionPlanLookupResponse;
 import com.eduhub.edu_hub.admission.api.dto.response.AdmissionPlanResponse;
 import com.eduhub.edu_hub.admission.application.exception.AdmissionPlanException;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionPlan;
@@ -57,20 +58,20 @@ public class AdmissionPlanningService {
     public AdmissionPlanResponse createPlanFromFile(CreateAdmissionPlanFromFileRequest request) {
         // 1. Chốt cấu hình sĩ số của phương án trước khi đọc và phân loại hồ sơ trong file.
         var configuration = systemConfigService.getSnapshot();
-        int minCapacity = request.minCapacity() == null
-                ? configuration.getInteger(ADMISSION_MINIMUM_CAPACITY)
-                : request.minCapacity();
-        int maxCapacity = request.maxCapacity() == null
-                ? configuration.getInteger(ADMISSION_MAXIMUM_CAPACITY)
-                : request.maxCapacity();
-        int reserveCapacity = request.reserveCapacity() == null
-                ? configuration.getInteger(ADMISSION_RESERVE_CAPACITY)
-                : request.reserveCapacity();
+        int minCapacity = configuration.getInteger(ADMISSION_MINIMUM_CAPACITY);
+        int maxCapacity = configuration.getInteger(ADMISSION_MAXIMUM_CAPACITY);
+        int reserveCapacity = configuration.getInteger(ADMISSION_RESERVE_CAPACITY);
         capacityPolicy.validateCapacityLimits(minCapacity, maxCapacity, reserveCapacity);
 
         // 2. Ngành/khóa người dùng chọn là phạm vi chính thức; file chỉ cung cấp thông tin để đối chiếu.
         majorCatalogFacade.requireMajor(request.majorId());
         peopleAdmissionFacade.requireCohort(request.cohortId());
+
+        // Cùng khóa ngành–khóa ở bước tạo; unique index bảo vệ thêm các đường ghi cạnh tranh khác.
+        peopleAdmissionFacade.lockCohort(request.cohortId());
+        if (planRepository.existsByMajorIdAndCohortIdAndDeletedFalse(request.majorId(), request.cohortId())) {
+            throw new AdmissionPlanException(ErrorCode.ADMISSION_PLAN_ALREADY_EXISTS);
+        }
 
         // 3. Lưu phương án để lấy ID gắn hồ sơ; tổng số sẽ được import cập nhật từ các hồ sơ thực tế.
         AdmissionPlan plan = AdmissionPlan.builder()
@@ -99,5 +100,19 @@ public class AdmissionPlanningService {
         return planQueryService.buildPlanResponse(planRepository
                 .findByIdAndDeletedFalse(planId)
                 .orElseThrow(() -> new AdmissionPlanException(ErrorCode.ADMISSION_PLAN_NOT_FOUND)));
+    }
+
+    /** Mở lại cùng phương án theo ngành–khóa; không tạo plan từ thao tác GET. */
+    public AdmissionPlanLookupResponse findPlanByScope(Long majorId, Long cohortId) {
+        if (majorId == null || majorId <= 0 || cohortId == null || cohortId <= 0) {
+            throw new AdmissionPlanException(ErrorCode.VALIDATION_ERROR);
+        }
+        return new AdmissionPlanLookupResponse(
+                majorId,
+                cohortId,
+                planRepository
+                        .findByMajorIdAndCohortIdAndDeletedFalse(majorId, cohortId)
+                        .map(planQueryService::buildPlanResponse)
+                        .orElse(null));
     }
 }

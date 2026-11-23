@@ -98,12 +98,33 @@ public class AdmissionCapacityPolicy {
         if (totalStudents < 0 || classCount < 1) throw new AdmissionPlanException(ErrorCode.VALIDATION_ERROR);
 
         // phân phối đều total thành count phần bằng nhau nhất, danh sách theo thứ tự giảm dần
-        List<Integer> targetClassSizes = distributeEvenly(totalStudents, classCount);
-        if (targetClassSizes.getFirst() > maxCapacity + reserveCapacity)
+        return describeClassSizes(
+                distributeEvenly(totalStudents, classCount),
+                minCapacity,
+                maxCapacity,
+                reserveCapacity,
+                suitableRoomCount,
+                recommended);
+    }
+
+    /** Mô tả đúng sĩ số của phương án đã phân, kể cả khi phải giữ các lớp ENROLLED không đều nhau. */
+    public ClassDivisionScenario describeClassSizes(
+            List<Integer> targetClassSizes,
+            int minCapacity,
+            int maxCapacity,
+            int reserveCapacity,
+            long suitableRoomCount,
+            boolean recommended) {
+        validateCapacityLimits(minCapacity, maxCapacity, reserveCapacity);
+        if (targetClassSizes.isEmpty() || targetClassSizes.stream().anyMatch(size -> size < 0)) {
+            throw new AdmissionPlanException(ErrorCode.VALIDATION_ERROR);
+        }
+        int classCount = targetClassSizes.size();
+        if (targetClassSizes.stream().anyMatch(size -> size > maxCapacity + reserveCapacity))
             throw new AdmissionPlanException(ErrorCode.CLASS_CAPACITY_EXCEEDED);
 
         List<String> warnings = new ArrayList<>();
-        boolean hasUnderfilledClass = targetClassSizes.getLast() < minCapacity;
+        boolean hasUnderfilledClass = targetClassSizes.stream().anyMatch(size -> size < minCapacity);
         int reserveSeatsUsed = targetClassSizes.stream()
                 .mapToInt(size -> Math.max(0, size - maxCapacity))
                 .sum();
@@ -147,5 +168,60 @@ public class AdmissionCapacityPolicy {
 
     private int divideRoundUp(int totalStudents, int classCapacity) {
         return (int) ((totalStudents + (long) classCapacity - 1) / classCapacity);
+    }
+
+    /**
+     * Chọn ít lớp nhất theo thứ tự: không dùng thêm dự phòng, dùng dự phòng, rồi dưới tối thiểu.
+     * Sĩ số ENROLLED là cận dưới bất biến; phần tử đầu tương ứng các lớp đã có người nhập học.
+     * Lớp đã dùng dự phòng từ trước được giữ nguyên, không buộc chuyển người để chia đều tuyệt đối.
+     */
+    public List<Integer> selectAutomaticClassSizes(
+            int totalStudents,
+            List<Integer> enrolledClassSizes,
+            int minCapacity,
+            int maxCapacity,
+            int reserveCapacity) {
+        validateCapacityLimits(minCapacity, maxCapacity, reserveCapacity);
+        if (totalStudents < 0
+                || enrolledClassSizes.stream().anyMatch(size -> size < 1 || size > maxCapacity + reserveCapacity)
+                || enrolledClassSizes.stream().mapToInt(Integer::intValue).sum() > totalStudents) {
+            throw new AdmissionPlanException(ErrorCode.ADMISSION_INVALID_CAPACITY);
+        }
+        if (totalStudents == 0) return List.of();
+        for (int scenarioPriority = 0; scenarioPriority < 3; scenarioPriority++) {
+            boolean allowsReserve = scenarioPriority > 0;
+            boolean allowsUnderfilledClasses = scenarioPriority == 2;
+            for (int classCount = Math.max(1, enrolledClassSizes.size()); classCount <= 99; classCount++) {
+                List<Integer> lowerSizes = new ArrayList<>();
+                List<Integer> upperSizes = new ArrayList<>();
+                for (int classIndex = 0; classIndex < classCount; classIndex++) {
+                    int enrolledCount = classIndex < enrolledClassSizes.size() ? enrolledClassSizes.get(classIndex) : 0;
+                    lowerSizes.add(Math.max(enrolledCount, allowsUnderfilledClasses ? 1 : minCapacity));
+                    upperSizes.add(Math.max(enrolledCount, maxCapacity + (allowsReserve ? reserveCapacity : 0)));
+                }
+                int minimumPopulation =
+                        lowerSizes.stream().mapToInt(Integer::intValue).sum();
+                int maximumPopulation =
+                        upperSizes.stream().mapToInt(Integer::intValue).sum();
+                if (totalStudents < minimumPopulation || totalStudents > maximumPopulation) continue;
+                // Bổ sung vào lớp ít người nhất trong các cận cho phép; không di chuyển người ENROLLED.
+                List<Integer> targetSizes = new ArrayList<>(lowerSizes);
+                for (int remainingStudents = totalStudents - minimumPopulation;
+                        remainingStudents > 0;
+                        remainingStudents--) {
+                    int selectedClassIndex = -1;
+                    for (int classIndex = 0; classIndex < classCount; classIndex++) {
+                        if (targetSizes.get(classIndex) < upperSizes.get(classIndex)
+                                && (selectedClassIndex < 0
+                                        || targetSizes.get(classIndex) < targetSizes.get(selectedClassIndex))) {
+                            selectedClassIndex = classIndex;
+                        }
+                    }
+                    targetSizes.set(selectedClassIndex, targetSizes.get(selectedClassIndex) + 1);
+                }
+                return List.copyOf(targetSizes);
+            }
+        }
+        return List.of();
     }
 }

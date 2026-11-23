@@ -5,7 +5,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import lombok.*;
 
-/** Dữ liệu một dòng đã parse, chưa phải entity và chưa được đối chiếu danh tính trong hệ thống. */
+/** Dữ liệu một dòng đã parse từ file được import, chưa phải entity, chưa được đối chiếu danh tính trong hệ thống. */
 @Data
 @Builder
 public class AdmissionSpreadsheetApplicant {

@@ -9,6 +9,10 @@ import org.springframework.data.repository.query.Param;
 public interface AdmissionPlanRepository extends JpaRepository<AdmissionPlan, Long> {
     Optional<AdmissionPlan> findByIdAndDeletedFalse(Long id);
 
+    Optional<AdmissionPlan> findByMajorIdAndCohortIdAndDeletedFalse(Long majorId, Long cohortId);
+
+    boolean existsByMajorIdAndCohortIdAndDeletedFalse(Long majorId, Long cohortId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from AdmissionPlan p where p.id = :id and p.deleted = false")
     Optional<AdmissionPlan> findForUpdate(@Param("id") Long id);

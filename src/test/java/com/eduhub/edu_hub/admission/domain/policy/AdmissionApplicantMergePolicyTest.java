@@ -4,82 +4,110 @@ import static org.assertj.core.api.Assertions.*;
 
 import com.eduhub.edu_hub.admission.domain.enums.AdmissionApplicantStatus;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionApplicant;
-import com.eduhub.edu_hub.admission.domain.model.AdmissionPlan;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 class AdmissionApplicantMergePolicyTest {
     private final AdmissionApplicantMergePolicy mergePolicy =
             new AdmissionApplicantMergePolicy(new AdmissionIdentityPolicy());
 
     @Test
-    void ignoresAnEquivalentReimportWithoutChangingTheEnrolledApplicant() {
-        AdmissionApplicant enrolledApplicant = applicant("HS01", "Nguyễn Văn An", 6);
-        enrolledApplicant.setState(AdmissionApplicantStatus.ENROLLED);
-        enrolledApplicant.setStudentId(31L);
-        enrolledApplicant.setAdministrativeClassId(41L);
-        AdmissionApplicant incomingApplicant = applicant("HS01", "  NGUYỄN VĂN AN  ", 8);
-        incomingApplicant.setState(AdmissionApplicantStatus.EXISTING);
-        var existingApplicants = new ArrayList<>(List.of(enrolledApplicant));
+    void ignoresAnEquivalentSupplementWithoutChangingTheEnrolledApplicant() {
+        var enrolled = applicant("HS01", "012345678901", 6);
+        enrolled.setState(AdmissionApplicantStatus.ENROLLED);
+        enrolled.setStudentId(31L);
+        enrolled.setAdministrativeClassId(41L);
+        assertThat(mergePolicy.appendApplicants(List.of(enrolled), List.of(applicant("HS01", "012345678901", 6)), 6))
+                .containsExactly(enrolled);
+        assertThat(enrolled.getStudentId()).isEqualTo(31L);
+        assertThat(enrolled.getAdministrativeClassId()).isEqualTo(41L);
+        assertThat(enrolled.getState()).isEqualTo(AdmissionApplicantStatus.ENROLLED);
+    }
 
-        assertThat(mergePolicy.mergePreservingEnrolledApplicants(existingApplicants, List.of(incomingApplicant)))
-                .isSameAs(existingApplicants)
-                .containsExactly(enrolledApplicant);
-        assertThat(enrolledApplicant.getState()).isEqualTo(AdmissionApplicantStatus.ENROLLED);
-        assertThat(enrolledApplicant.getStudentId()).isEqualTo(31L);
-        assertThat(enrolledApplicant.getAdministrativeClassId()).isEqualTo(41L);
-        assertThat(enrolledApplicant.getFullName()).isEqualTo("Nguyễn Văn An");
+    @ParameterizedTest
+    @EnumSource(
+            value = AdmissionApplicantStatus.class,
+            names = {"VALID", "FAILED", "INVALID", "CONFLICT", "ENROLLED"})
+    void neverOverwritesAnExistingRowFromASupplementalFile(AdmissionApplicantStatus oldState) {
+        var existing = applicant("HS01", "012345678901", 6);
+        existing.setState(oldState);
+        existing.setId(11L);
+        var incoming = applicant("HS01", "012345678901", 6);
+        incoming.setFullName("Trần Văn Bình");
+        var combined = mergePolicy.appendApplicants(List.of(existing), List.of(incoming), 6);
+        assertThat(combined).containsExactly(existing, incoming);
+        assertThat(existing.getFullName()).isEqualTo("Nguyễn Văn An");
+        assertThat(existing.getState()).isEqualTo(oldState);
+        assertThat(existing.getId()).isEqualTo(11L);
+        assertThat(incoming.getState()).isEqualTo(AdmissionApplicantStatus.CONFLICT);
+        assertThat(incoming.getRowNumber()).isEqualTo(7);
     }
 
     @Test
-    void appendsAConflictingRowInsteadOfOverwritingAnEnrolledApplicant() {
-        AdmissionApplicant enrolledApplicant = applicant("HS01", "Nguyễn Văn An", 6);
-        enrolledApplicant.setState(AdmissionApplicantStatus.ENROLLED);
-        AdmissionApplicant incomingApplicant = applicant("HS01", "Trần Văn Bình", 6);
-        var existingApplicants = new ArrayList<>(List.of(enrolledApplicant));
-
-        assertThat(mergePolicy.mergePreservingEnrolledApplicants(existingApplicants, List.of(incomingApplicant)))
-                .containsExactly(enrolledApplicant, incomingApplicant);
-        assertThat(enrolledApplicant.getState()).isEqualTo(AdmissionApplicantStatus.ENROLLED);
-        assertThat(enrolledApplicant.getFullName()).isEqualTo("Nguyễn Văn An");
-        assertThat(incomingApplicant.getRowNumber()).isEqualTo(7);
-        assertThat(incomingApplicant.getState()).isEqualTo(AdmissionApplicantStatus.CONFLICT);
-        assertThat(incomingApplicant.getErrorMessage()).isEqualTo("Không ghi đè hồ sơ đã nhập học thành công");
+    void rejectsANewApplicationCodeForACitizenAlreadyEnrolledInThePlan() {
+        var enrolled = applicant("HS01", "012345678901", 6);
+        enrolled.setState(AdmissionApplicantStatus.ENROLLED);
+        var incoming = applicant("HS02", "012345678901", 6);
+        assertThat(mergePolicy.appendApplicants(List.of(enrolled), List.of(incoming), 6))
+                .containsExactly(enrolled, incoming);
+        assertThat(incoming.getState()).isEqualTo(AdmissionApplicantStatus.CONFLICT);
+        assertThat(enrolled.getState()).isEqualTo(AdmissionApplicantStatus.ENROLLED);
     }
 
     @Test
-    void updatesTheExistingInstanceWhilePreservingItsIdentityAndAuditFields() {
-        AdmissionPlan originalPlan = AdmissionPlan.builder().build();
-        AdmissionApplicant existingApplicant = applicant("HS01", "Nguyễn Văn An", 6);
-        existingApplicant.setId(11L);
-        existingApplicant.setPlan(originalPlan);
-        existingApplicant.setCreatedAt(LocalDateTime.of(2026, 11, 8, 10, 0));
-        existingApplicant.setCreatedBy("operator");
-        existingApplicant.setDeleted(true);
-        AdmissionApplicant incomingApplicant = applicant("HS01", "Nguyễn Văn An đã sửa", 20);
-        incomingApplicant.setId(99L);
-        var existingApplicants = new ArrayList<>(List.of(existingApplicant));
-
-        mergePolicy.mergePreservingEnrolledApplicants(existingApplicants, List.of(incomingApplicant));
-
-        assertThat(existingApplicants).singleElement().isSameAs(existingApplicant);
-        assertThat(existingApplicant.getFullName()).isEqualTo("Nguyễn Văn An đã sửa");
-        assertThat(existingApplicant.getId()).isEqualTo(11L);
-        assertThat(existingApplicant.getPlan()).isSameAs(originalPlan);
-        assertThat(existingApplicant.getRowNumber()).isEqualTo(6);
-        assertThat(existingApplicant.getCreatedAt()).isEqualTo(LocalDateTime.of(2026, 11, 8, 10, 0));
-        assertThat(existingApplicant.getCreatedBy()).isEqualTo("operator");
-        assertThat(existingApplicant.isDeleted()).isTrue();
+    void preservesExistingPendingApplicantsWhenOnlyNewRowsAreUploaded() {
+        var existing = applicant("HS01", "012345678901", 9);
+        var incoming = applicant("HS02", "012345678902", 6);
+        assertThat(mergePolicy.appendApplicants(List.of(existing), List.of(incoming), 9))
+                .containsExactly(existing, incoming);
+        assertThat(incoming.getRowNumber()).isEqualTo(10);
+        assertThat(incoming.getState()).isEqualTo(AdmissionApplicantStatus.VALID);
     }
 
-    private AdmissionApplicant applicant(String applicationCode, String fullName, int rowNumber) {
+    @Test
+    void appendsAfterDeletedRowsWithoutReusingTheirNumbers() {
+        var existing = applicant("HS01", "012345678901", 9);
+        var firstIncoming = applicant("HS02", "012345678902", 6);
+        var secondIncoming = applicant("HS03", "012345678903", 8);
+
+        var combined = mergePolicy.appendApplicants(List.of(existing), List.of(firstIncoming, secondIncoming), 17);
+
+        assertThat(combined).containsExactly(existing, firstIncoming, secondIncoming);
+        assertThat(existing.getRowNumber()).isEqualTo(9);
+        assertThat(firstIncoming.getRowNumber()).isEqualTo(18);
+        assertThat(secondIncoming.getRowNumber()).isEqualTo(19);
+    }
+
+    @Test
+    void acceptsANewApplicantAfterEveryPreviousRowWasSoftDeleted() {
+        var incoming = applicant("HS01", "012345678901", 6);
+
+        assertThat(mergePolicy.appendApplicants(List.of(), List.of(incoming), 17))
+                .containsExactly(incoming);
+
+        assertThat(incoming.getRowNumber()).isEqualTo(18);
+        assertThat(incoming.getState()).isEqualTo(AdmissionApplicantStatus.VALID);
+    }
+
+    @Test
+    void keepsPhysicalSpreadsheetPositionsOnlyWhenThePlanHasNoStoredRows() {
+        var firstIncoming = applicant("HS01", "012345678901", 6);
+        var secondIncoming = applicant("HS02", "012345678902", 20);
+
+        mergePolicy.appendApplicants(List.of(), List.of(firstIncoming, secondIncoming), 0);
+
+        assertThat(firstIncoming.getRowNumber()).isEqualTo(6);
+        assertThat(secondIncoming.getRowNumber()).isEqualTo(20);
+    }
+
+    private AdmissionApplicant applicant(String applicationCode, String citizenId, int rowNumber) {
         return AdmissionApplicant.builder()
                 .applicationCode(applicationCode)
-                .citizenId("012345678901")
-                .fullName(fullName)
+                .citizenId(citizenId)
+                .fullName("Nguyễn Văn An")
                 .entranceScore(new BigDecimal("25.00"))
                 .rowNumber(rowNumber)
                 .build();

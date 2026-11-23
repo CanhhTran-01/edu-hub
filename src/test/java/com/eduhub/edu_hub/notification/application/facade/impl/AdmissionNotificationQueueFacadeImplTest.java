@@ -30,8 +30,14 @@ class AdmissionNotificationQueueFacadeImplTest {
     private final QueuedAdmissionNotificationRepository notifications =
             mock(QueuedAdmissionNotificationRepository.class);
     private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
-    private final AdmissionNotificationQueueFacadeImpl facade =
-            new AdmissionNotificationQueueFacadeImpl(notifications, events, CLOCK);
+    private final com.eduhub.edu_hub.people.application.facade.PeopleFacade.Admission people =
+            mock(com.eduhub.edu_hub.people.application.facade.PeopleFacade.Admission.class);
+    private final AdmissionNotificationQueueFacadeImpl facade = new AdmissionNotificationQueueFacadeImpl(
+            notifications,
+            events,
+            CLOCK,
+            com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData.configuredService(),
+            people);
 
     @BeforeEach
     void assignId() {
@@ -122,5 +128,129 @@ class AdmissionNotificationQueueFacadeImplTest {
                         new QueueAdmissionNotificationRequest(2L, 3L, "student@example.com", false)))
                 .isInstanceOf(IllegalStateException.class);
         verifyNoInteractions(events);
+    }
+
+    @Test
+    void countsRetryWaitingSeparatelyFromTerminalFailures() {
+        when(notifications.countDeliveryStates(List.of(2L)))
+                .thenReturn(List.of(
+                        deliveryCount(NotificationStatus.SENT, 0, 80),
+                        deliveryCount(NotificationStatus.PENDING, 0, 10),
+                        deliveryCount(NotificationStatus.FAILED, 1, 5),
+                        deliveryCount(NotificationStatus.FAILED, 4, 2),
+                        deliveryCount(NotificationStatus.SKIPPED, 0, 3)));
+        var progress = facade.getNotificationProgress(7L, List.of(2L), false, true);
+        assertThat(progress.totalNotifications()).isEqualTo(100);
+        assertThat(progress.retryWaitingCount()).isEqualTo(5);
+        assertThat(progress.permanentlyFailedCount()).isEqualTo(2);
+        assertThat(progress.completedCount()).isEqualTo(85);
+        assertThat(progress.completionPercentage()).isEqualByComparingTo("85");
+        assertThat(progress.isComplete()).isFalse();
+        verifyNoInteractions(events, people);
+    }
+
+    @Test
+    void finishesProcessingEvenWhenSomeNotificationsExhaustTheirRetries() {
+        when(notifications.countDeliveryStates(List.of(2L)))
+                .thenReturn(List.of(
+                        deliveryCount(NotificationStatus.SENT, 0, 3),
+                        deliveryCount(NotificationStatus.FAILED, 4, 2),
+                        deliveryCount(NotificationStatus.SKIPPED, 0, 1)));
+        var progress = facade.getNotificationProgress(7L, List.of(2L), false, true);
+        assertThat(progress.isComplete()).isTrue();
+        assertThat(progress.completionPercentage()).isEqualByComparingTo("100");
+        assertThat(progress.sentCount()).isEqualTo(3);
+        assertThat(progress.permanentlyFailedCount()).isEqualTo(2);
+    }
+
+    @Test
+    void cannotFinishWhileConfirmationCanStillCreateMoreNotifications() {
+        when(notifications.countDeliveryStates(List.of(2L)))
+                .thenReturn(List.of(deliveryCount(NotificationStatus.SENT, 0, 1)));
+        assertThat(facade.getNotificationProgress(7L, List.of(2L), true, false).isComplete())
+                .isFalse();
+    }
+
+    @Test
+    void distinguishesNotStartedFromACompletedConfirmationWithNoNotifications() {
+        assertThat(facade.getNotificationProgress(7L, List.of(), false, false).isComplete())
+                .isFalse();
+        var noEmails = facade.getNotificationProgress(7L, List.of(), false, true);
+        assertThat(noEmails.isComplete()).isTrue();
+        assertThat(noEmails.totalNotifications()).isZero();
+        assertThat(noEmails.completionPercentage()).isEqualByComparingTo("0");
+        verify(notifications, never()).countDeliveryStates(anyList());
+    }
+
+    @Test
+    void reportsPausedDispatchWithoutTreatingPendingMailAsComplete() {
+        var pausedFacade = new AdmissionNotificationQueueFacadeImpl(
+                notifications,
+                events,
+                CLOCK,
+                com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData.configuredService(java.util.Map.of(
+                        com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey
+                                .ADMISSION_NOTIFICATIONS_ENABLED,
+                        "false")),
+                people);
+        when(notifications.countDeliveryStates(List.of(2L)))
+                .thenReturn(List.of(deliveryCount(NotificationStatus.PENDING, 0, 1)));
+        var progress = pausedFacade.getNotificationProgress(7L, List.of(2L), false, true);
+        assertThat(progress.dispatchEnabled()).isFalse();
+        assertThat(progress.isComplete()).isFalse();
+        verifyNoInteractions(events);
+    }
+
+    @Test
+    void pagesDetailsAndExposesNextAttemptOnlyForNonTerminalMail() {
+        var notification = QueuedAdmissionNotification.builder()
+                .admissionId(2L)
+                .studentId(3L)
+                .state(NotificationStatus.FAILED)
+                .failureCount(1)
+                .nextAttemptAt(java.time.LocalDateTime.of(2026, 11, 24, 10, 0))
+                .build();
+        notification.setId(12L);
+        when(notifications.findAll(
+                        any(org.springframework.data.jpa.domain.Specification.class),
+                        any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(notification)));
+        when(people.findStudentsByIds(java.util.Set.of(3L)))
+                .thenReturn(List.of(com.eduhub.edu_hub.people.application.facade.dto.AdmissionStudentInfo.builder()
+                        .id(3L)
+                        .fullName("Nguyễn Văn An")
+                        .studentCode("CNTT080101")
+                        .build()));
+        var request = new com.eduhub.edu_hub.notification.api.dto.request.SearchAdmissionNotificationsRequest();
+        var response = facade.searchNotifications(List.of(2L), request);
+        assertThat(response.getContent()).singleElement().satisfies(detail -> {
+            assertThat(detail.fullName()).isEqualTo("Nguyễn Văn An");
+            assertThat(detail.deliveryState())
+                    .isEqualTo(com.eduhub.edu_hub.notification.domain.enums.NotificationDeliveryState.WAITING_RETRY);
+            assertThat(detail.nextAttemptAt()).isNotNull();
+        });
+        notification.setState(NotificationStatus.SENT);
+        assertThat(facade.searchNotifications(List.of(2L), request)
+                        .getContent()
+                        .getFirst()
+                        .nextAttemptAt())
+                .isNull();
+    }
+
+    private QueuedAdmissionNotificationRepository.DeliveryStateCount deliveryCount(
+            NotificationStatus state, int failureCount, long count) {
+        return new QueuedAdmissionNotificationRepository.DeliveryStateCount() {
+            public NotificationStatus getState() {
+                return state;
+            }
+
+            public int getFailureCount() {
+                return failureCount;
+            }
+
+            public long getNotificationCount() {
+                return count;
+            }
+        };
     }
 }
