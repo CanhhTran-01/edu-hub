@@ -196,6 +196,7 @@ public enum ErrorCode {
     KNOWLEDGE_SOURCE_STATE_INVALID(
             4608, "Nguồn tri thức chưa sẵn sàng hoặc không phù hợp với thao tác", HttpStatus.CONFLICT),
     CHAT_SESSION_CHANGED(4609, "Hội thoại đã có tin nhắn mới, vui lòng gửi lại câu hỏi", HttpStatus.CONFLICT),
+    KNOWLEDGE_SOURCE_FILE_NOT_FOUND(4610, "Nguồn tri thức không còn tệp gốc để tải", HttpStatus.NOT_FOUND),
 
     // Cấu hình tham số hệ thống
     SYSTEM_CONFIG_CHANGED(4701, "Cấu hình đã thay đổi, vui lòng tải lại", HttpStatus.CONFLICT),

@@ -1,6 +1,7 @@
 package com.eduhub.edu_hub.aiassistant.application.service;
 
 import com.eduhub.edu_hub.aiassistant.api.dto.request.*;
+import com.eduhub.edu_hub.aiassistant.api.dto.response.KnowledgeSourceDownloadResponse;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.KnowledgeSourceResponse;
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
 import com.eduhub.edu_hub.aiassistant.application.port.KnowledgeChunkPort;
@@ -20,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Quản trị nguồn; trạng thái PROCESSING lưu trong DB đồng thời là công việc chờ worker nhận sau commit. */
@@ -88,6 +90,39 @@ public class KnowledgeSourceService {
         return response(sourceRepository
                 .findByIdAndDeletedFalse(sourceId)
                 .orElseThrow(() -> new AiAssistantException(ErrorCode.KNOWLEDGE_SOURCE_NOT_FOUND)));
+    }
+
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public KnowledgeSourceDownloadResponse downloadSourceFile(Jwt principal, Long sourceId) {
+        accessService.requireAcademicAdmin(principal);
+        KnowledgeSource source = sourceRepository
+                .findByIdAndDeletedFalse(sourceId)
+                .orElseThrow(() -> new AiAssistantException(ErrorCode.KNOWLEDGE_SOURCE_NOT_FOUND));
+        byte[] fileBytes = sourceRepository.findOriginalFile(sourceId);
+        if (fileBytes == null || fileBytes.length == 0) {
+            throw new AiAssistantException(ErrorCode.KNOWLEDGE_SOURCE_FILE_NOT_FOUND);
+        }
+
+        // Trạng thái/ngày hiệu lực chỉ giới hạn RAG; quản trị vẫn tải được bản lỗi hoặc đã ngừng sử dụng.
+        // Bỏ đường dẫn và ký tự điều khiển trước khi dùng tên tệp cho Content-Disposition.
+        String filename = source.getOriginalFilename();
+        if (filename != null) {
+            filename = filename.replace('\\', '/');
+            filename = filename.substring(filename.lastIndexOf('/') + 1)
+                    .replaceAll("\\p{Cntrl}", "_")
+                    .trim();
+        }
+        if (filename == null || filename.isBlank() || filename.equals(".") || filename.equals("..")) {
+            filename = "knowledge-source-" + sourceId;
+        }
+        String lowercaseFilename = filename.toLowerCase(Locale.ROOT);
+        String contentType;
+        if (lowercaseFilename.endsWith(".pdf")) contentType = "application/pdf";
+        else if (lowercaseFilename.endsWith(".docx")) {
+            contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        } else if (lowercaseFilename.endsWith(".txt")) contentType = "text/plain;charset=UTF-8";
+        else contentType = "application/octet-stream";
+        return new KnowledgeSourceDownloadResponse(filename, contentType, fileBytes);
     }
 
     @Transactional

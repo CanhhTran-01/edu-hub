@@ -8,6 +8,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -22,6 +23,10 @@ public class RefreshToken extends BaseEntity {
 
     @Column(name = "token_hash", nullable = false, unique = true)
     private String tokenHash;
+
+    // Mỗi lần đăng nhập có một nhóm riêng; các token xoay kế tiếp giữ cùng nhóm và hạn phiên ban đầu.
+    @Column(name = "token_family_id", nullable = false)
+    private UUID tokenFamilyId = UUID.randomUUID();
 
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;

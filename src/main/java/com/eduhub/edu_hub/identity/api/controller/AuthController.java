@@ -3,12 +3,16 @@ package com.eduhub.edu_hub.identity.api.controller;
 import com.eduhub.edu_hub.identity.api.dto.request.ChangePasswordRequest;
 import com.eduhub.edu_hub.identity.api.dto.request.LoginRequest;
 import com.eduhub.edu_hub.identity.api.dto.request.LogoutRequest;
+import com.eduhub.edu_hub.identity.api.dto.request.RefreshTokenRequest;
 import com.eduhub.edu_hub.identity.api.dto.response.LoginResponse;
+import com.eduhub.edu_hub.identity.api.dto.response.RefreshTokenResponse;
 import com.eduhub.edu_hub.identity.application.service.AuthApplicationService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,6 +30,14 @@ public class AuthController {
     @PostMapping("/login")
     public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         return apiResponseFactory.success(authService.login(request));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<RefreshTokenResponse>> refreshTokens(
+            @Valid @RequestBody RefreshTokenRequest request) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(apiResponseFactory.success(authService.refreshTokens(request)));
     }
 
     @PostMapping("/logout")

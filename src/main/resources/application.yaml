@@ -6,6 +6,8 @@ jwt:
   refresh-token-lifetime: ${JWT_REFRESH_TOKEN_LIFETIME:7d}
 
 identity:
+  refresh-token-cleanup:
+    cron: ${REFRESH_TOKEN_CLEANUP_CRON:0 0 2 * * *}
   password:
     minimum-length: ${PASSWORD_MINIMUM_LENGTH:8}
     initial-password: ${INITIAL_ACCOUNT_PASSWORD:}

@@ -46,6 +46,10 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     @Query("select user from User user where user.id = :userId and user.deleted = false")
     Optional<User> findByIdForUpdate(@Param("userId") Long userId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select user from User user where user.id = :userId")
+    Optional<User> findByIdIncludingDeletedForUpdate(@Param("userId") Long userId);
+
     @EntityGraph(attributePaths = "role")
     Optional<User> findByIdAndDeletedFalse(Long userId);
 
