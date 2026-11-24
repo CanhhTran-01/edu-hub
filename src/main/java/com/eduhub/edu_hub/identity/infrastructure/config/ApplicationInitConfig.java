@@ -47,37 +47,7 @@ public class ApplicationInitConfig {
 
             try {
                 new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-
-                    // tạo role system admin để gán cho tài khoản init
-                    Role role = roleRepository
-                            .findByRoleNameAndDeletedFalse(RoleName.SYSTEM_ADMIN.name())
-                            .orElseGet(() -> {
-                                Role systemAdminRole = new Role();
-                                systemAdminRole.setRoleName(RoleName.SYSTEM_ADMIN.name());
-                                return roleRepository.save(systemAdminRole);
-                            });
-
-                    // Tạo lại tài khoản đã xóa mềm/vô hiệu hóa, tài khoản ACTIVE hoặc LOCKED vẫn được giữ nguyên.
-                    User existingAccount = userRepository
-                            .findByUsernameIncludingDeletedForUpdate(username)
-                            .orElse(null);
-                    if (existingAccount != null) {
-                        if (!existingAccount.isDeleted() && existingAccount.getStatus() != UserStatus.DISABLED) return;
-                        refreshTokenRepository.deleteAllByUser_Id(existingAccount.getId());
-                        userRepository.delete(existingAccount);
-                        // Xóa trước khi INSERT để giải phóng username; FK vẫn chặn xóa và rollback cả transaction.
-                        userRepository.flush();
-                    }
-
-                    // Tạo tài khoản với role system admin
-                    User user = new User();
-                    user.setUsername(username);
-                    user.setEmail(email.isBlank() ? null : email);
-                    user.setPasswordHash(passwordEncoder.encode(password));
-                    user.setRole(role);
-                    user.setStatus(UserStatus.ACTIVE);
-                    user.setFirstLogin(true);
-                    userRepository.save(user);
+                    createOrReplaceSystemAdmin(username, email, password);
                 });
             } catch (DataIntegrityViolationException exception) {
                 throw new IdentityConfigurationException(
@@ -85,5 +55,37 @@ public class ApplicationInitConfig {
                         exception);
             }
         };
+    }
+
+    private void createOrReplaceSystemAdmin(String username, String email, String password) {
+        // tạo role system admin để gán cho tài khoản init
+        Role role = roleRepository
+                .findByRoleNameAndDeletedFalse(RoleName.SYSTEM_ADMIN.name())
+                .orElseGet(() -> {
+                    Role systemAdminRole = new Role();
+                    systemAdminRole.setRoleName(RoleName.SYSTEM_ADMIN.name());
+                    return roleRepository.save(systemAdminRole);
+                });
+
+        // Tạo lại tài khoản đã xóa mềm/vô hiệu hóa, tài khoản ACTIVE hoặc LOCKED vẫn được giữ nguyên.
+        User existingAccount =
+                userRepository.findByUsernameIncludingDeletedForUpdate(username).orElse(null);
+        if (existingAccount != null) {
+            if (!existingAccount.isDeleted() && existingAccount.getStatus() != UserStatus.DISABLED) return;
+            refreshTokenRepository.deleteAllByUser_Id(existingAccount.getId());
+            userRepository.delete(existingAccount);
+            // Xóa trước khi INSERT để giải phóng username; FK vẫn chặn xóa và rollback cả transaction.
+            userRepository.flush();
+        }
+
+        // Tạo tài khoản với role system admin
+        User user = new User();
+        user.setUsername(username);
+        user.setEmail(email.isBlank() ? null : email);
+        user.setPasswordHash(passwordEncoder.encode(password));
+        user.setRole(role);
+        user.setStatus(UserStatus.ACTIVE);
+        user.setFirstLogin(true);
+        userRepository.save(user);
     }
 }

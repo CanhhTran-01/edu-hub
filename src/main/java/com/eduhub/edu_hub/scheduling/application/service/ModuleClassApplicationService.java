@@ -5,6 +5,7 @@ import static com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKe
 import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.curriculum.domain.model.Subject;
+import com.eduhub.edu_hub.enrollment.application.facade.dto.ModuleClassUsageResponse;
 import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.domain.model.Lecturer;
@@ -146,64 +147,11 @@ public class ModuleClassApplicationService {
 
         // truy vấn cả lớp hủy/soft delete để không bao giờ tái sử dụng STT đã cấp
         List<ModuleClass> historicalClasses = moduleClassRepository.findAllBySemester_IdOrderByIdAsc(semesterId);
-        var nonCancelledClassesBySubjectId =
-                countNonCancelledClassesBySubjectId(historicalClasses); // đêm số lớp chưa hủy theo môn, lưu vào map
+        requireAdditionalClassesConfirmed(request, historicalClasses, subjectsById);
 
-        var openingWarnings = new ArrayList<FieldErrorDetail>();
-        for (int i = 0; i < request.getSubjects().size(); i++) {
-            var subjectRequest = request.getSubjects().get(i);
-            long count = nonCancelledClassesBySubjectId.getOrDefault(subjectRequest.getSubjectId(), 0L);
-            if (count > 0 && !subjectRequest.isConfirmAdditionalClasses()) {
-                openingWarnings.add(new FieldErrorDetail(
-                        "subjects[" + i + "].subjectId",
-                        subjectsById.get(subjectRequest.getSubjectId()).getSubjectCode() + " đã có " + count
-                                + " lớp chưa hủy trong kỳ; gửi confirmAdditionalClasses=true để mở thêm"));
-            }
-        }
-
-        // gửi lại cảnh báo cho clients bấm xác nhận khi tạo thêm lớp học phần cho cùng 1 môn
-        if (!openingWarnings.isEmpty())
-            throw new ModuleClassOpeningException(ErrorCode.MODULE_CLASS_CONFIRMATION_REQUIRED, openingWarnings);
-
-        // Tìm số thứ tự lớn nhất hiện có của mỗi môn
-        Map<Long, Integer> lastSequencesBySubjectId = new HashMap<>();
-        historicalClasses.forEach(historicalClass -> lastSequencesBySubjectId.merge(
-                historicalClass.getSubject().getId(), historicalClass.getClassSequence(), Math::max));
-
-        var createdClasses = new ArrayList<ModuleClass>();
-        LocalDateTime createdAt = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
-        for (var subjectRequest : request.getSubjects()) {
-            // Facade đã kiểm tra và khóa môn; reference chỉ dùng để gán quan hệ, không thay thế validation.
-            var subjectReference = entityManager.getReference(Subject.class, subjectRequest.getSubjectId());
-            for (var classRequest : subjectRequest.getClasses()) {
-
-                // môn chưa có key thì đặt giá trị 1; đã có thì cộng 1 vào giá trị cũ. merge trả về giá trị mới.
-                int sequence = lastSequencesBySubjectId.merge(subjectRequest.getSubjectId(), 1, Integer::sum);
-
-                String moduleClassCode = ModuleClassPolicy.generateModuleClassCode(
-                        semesterId,
-                        subjectsById.get(subjectRequest.getSubjectId()).getSubjectCode(),
-                        sequence);
-
-                // tạo mới entity
-                var moduleClass = ModuleClass.builder()
-                        .semester(semester)
-                        .subject(subjectReference)
-                        .moduleClassCode(moduleClassCode)
-                        .classSequence(sequence)
-                        .maxCapacity(
-                                classRequest.getMaxCapacity() == null ? defaultCapacity : classRequest.getMaxCapacity())
-                        .currentSize(0)
-                        .status(ModuleClassStatus.UNSCHEDULED) // trạng thái sau khi tạo lớp
-                        .build();
-                moduleClass.setCreatedAt(createdAt);
-                moduleClass.setUpdatedAt(createdAt);
-
-                // TODO(IDENTITY_INTEGRATION): lấy actor từ principal, không nhận userId do client truyền.
-
-                createdClasses.add(moduleClass);
-            }
-        }
+        // Cấp mã từ toàn bộ lịch sử; mọi lớp mới vẫn thuộc transaction mở lô hiện tại.
+        var createdClasses =
+                buildModuleClasses(semesterId, semester, request, historicalClasses, subjectsById, defaultCapacity);
 
         // ép ghi ngay entity vào DB
         var savedClasses = moduleClassRepository.saveAllAndFlush(createdClasses);
@@ -253,28 +201,7 @@ public class ModuleClassApplicationService {
                 Set.of(moduleClass.getSubject().getId())));
         int oldCapacity = moduleClass.getMaxCapacity();
 
-        // Tăng sức chứa phải đồng bộ với luồng giảm capacity phòng: khóa phòng trước khi đối chiếu.
-        if (request.getMaxCapacity() > oldCapacity) {
-            var schedules = classScheduleRepository.findAll(
-                    ClassScheduleSpecification.notDeletedAndModuleClassIdIn(List.of(moduleClassId)), Sort.by("id"));
-            for (Long roomId : schedules.stream()
-                    .map(schedule -> schedule.getRoom().getId())
-                    .distinct()
-                    .sorted()
-                    .toList()) {
-                var room = roomRepository
-                        .findForUpdateByIdAndDeletedFalse(roomId)
-                        .orElseThrow(() -> new ModuleClassException(ErrorCode.ROOM_NOT_FOUND));
-                // Lịch đã tải Room vào persistence context trước lúc chờ khóa; phải đọc lại trạng thái mới nhất.
-                entityManager.refresh(room, LockModeType.PESSIMISTIC_WRITE);
-                if (room.getCapacity() < request.getMaxCapacity())
-                    throw new ModuleClassConflictException(
-                            ErrorCode.ROOM_CAPACITY_BELOW_CLASS,
-                            List.of(new FieldErrorDetail(
-                                    "maxCapacity",
-                                    "Phòng " + room.getRoomCode() + " chỉ có sức chứa " + room.getCapacity())));
-            }
-        }
+        requireScheduledRoomCapacity(moduleClassId, request.getMaxCapacity(), oldCapacity);
 
         // Chỉ thay đổi entity sau khi mọi điều kiện và dữ liệu trả về đã được kiểm tra.
         moduleClass.changeCapacity(request.getMaxCapacity());
@@ -311,32 +238,7 @@ public class ModuleClassApplicationService {
                             "currentSize", "Lớp hiện có " + moduleClass.getCurrentSize() + " sinh viên")));
         }
 
-        // kiểm tra dữ liệu đăng ký
-        var enrollmentUsage = moduleClassEnrollmentQueryService.summarizeModuleClassEnrollments(moduleClass.getId());
-
-        // dữ liệu bị khuyết
-        if (enrollmentUsage == null
-                || !enrollmentUsage.historyComplete()
-                || enrollmentUsage.enrollmentCount() < 0
-                || enrollmentUsage.studentCount() < 0
-                || enrollmentUsage.studentCount() > enrollmentUsage.enrollmentCount()
-                || (enrollmentUsage.enrollmentCount() > 0 && enrollmentUsage.studentCount() == 0)
-                || enrollmentUsage.dataSource() == null
-                || enrollmentUsage.dataSource().isBlank())
-            throw new ModuleClassException(ErrorCode.MODULE_CLASS_ENROLLMENT_DATA_UNAVAILABLE);
-
-        // đã có bản ghi đăng ký
-        if (enrollmentUsage.enrollmentCount() > 0) {
-            throw new ModuleClassConflictException(
-                    ErrorCode.MODULE_CLASS_HAS_ENROLLMENTS,
-                    List.of(
-                            new FieldErrorDetail(
-                                    "enrollmentCount",
-                                    "Lớp đã có " + enrollmentUsage.enrollmentCount()
-                                            + " bản ghi đăng ký, bao gồm đăng ký đã hủy/ẩn"),
-                            new FieldErrorDetail(
-                                    "studentCount", "Số sinh viên liên quan: " + enrollmentUsage.studentCount())));
-        }
+        var enrollmentUsage = requireUnusedEnrollmentHistory(moduleClass);
 
         // lấy dữ liệu học phần, giảng viên của lớp học phần, trạng thái
         var lecturerNamesById = loadLecturerNamesById(List.of(moduleClass));
@@ -533,5 +435,135 @@ public class ModuleClassApplicationService {
     private Map<Long, SubjectSimpleResponse> indexSubjectsById(List<SubjectSimpleResponse> subjectResponses) {
         return subjectResponses.stream()
                 .collect(Collectors.toMap(SubjectSimpleResponse::getId, subjectResponse -> subjectResponse));
+    }
+
+    private void requireAdditionalClassesConfirmed(
+            CreateModuleClassesRequest request,
+            List<ModuleClass> historicalClasses,
+            Map<Long, SubjectSimpleResponse> subjectsById) {
+        var nonCancelledClassesBySubjectId =
+                countNonCancelledClassesBySubjectId(historicalClasses); // đêm số lớp chưa hủy theo môn, lưu vào map
+
+        var openingWarnings = new ArrayList<FieldErrorDetail>();
+        for (int i = 0; i < request.getSubjects().size(); i++) {
+            var subjectRequest = request.getSubjects().get(i);
+            long count = nonCancelledClassesBySubjectId.getOrDefault(subjectRequest.getSubjectId(), 0L);
+            if (count > 0 && !subjectRequest.isConfirmAdditionalClasses()) {
+                openingWarnings.add(new FieldErrorDetail(
+                        "subjects[" + i + "].subjectId",
+                        subjectsById.get(subjectRequest.getSubjectId()).getSubjectCode() + " đã có " + count
+                                + " lớp chưa hủy trong kỳ; gửi confirmAdditionalClasses=true để mở thêm"));
+            }
+        }
+
+        // gửi lại cảnh báo cho clients bấm xác nhận khi tạo thêm lớp học phần cho cùng 1 môn
+        if (!openingWarnings.isEmpty())
+            throw new ModuleClassOpeningException(ErrorCode.MODULE_CLASS_CONFIRMATION_REQUIRED, openingWarnings);
+    }
+
+    private List<ModuleClass> buildModuleClasses(
+            Long semesterId,
+            Semester semester,
+            CreateModuleClassesRequest request,
+            List<ModuleClass> historicalClasses,
+            Map<Long, SubjectSimpleResponse> subjectsById,
+            int defaultCapacity) {
+        // Tìm số thứ tự lớn nhất hiện có của mỗi môn
+        Map<Long, Integer> lastSequencesBySubjectId = new HashMap<>();
+        historicalClasses.forEach(historicalClass -> lastSequencesBySubjectId.merge(
+                historicalClass.getSubject().getId(), historicalClass.getClassSequence(), Math::max));
+
+        var createdClasses = new ArrayList<ModuleClass>();
+        LocalDateTime createdAt = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
+        for (var subjectRequest : request.getSubjects()) {
+            // Facade đã kiểm tra và khóa môn; reference chỉ dùng để gán quan hệ, không thay thế validation.
+            var subjectReference = entityManager.getReference(Subject.class, subjectRequest.getSubjectId());
+            for (var classRequest : subjectRequest.getClasses()) {
+
+                // môn chưa có key thì đặt giá trị 1; đã có thì cộng 1 vào giá trị cũ. merge trả về giá trị mới.
+                int sequence = lastSequencesBySubjectId.merge(subjectRequest.getSubjectId(), 1, Integer::sum);
+
+                String moduleClassCode = ModuleClassPolicy.generateModuleClassCode(
+                        semesterId,
+                        subjectsById.get(subjectRequest.getSubjectId()).getSubjectCode(),
+                        sequence);
+
+                // tạo mới entity
+                var moduleClass = ModuleClass.builder()
+                        .semester(semester)
+                        .subject(subjectReference)
+                        .moduleClassCode(moduleClassCode)
+                        .classSequence(sequence)
+                        .maxCapacity(
+                                classRequest.getMaxCapacity() == null ? defaultCapacity : classRequest.getMaxCapacity())
+                        .currentSize(0)
+                        .status(ModuleClassStatus.UNSCHEDULED) // trạng thái sau khi tạo lớp
+                        .build();
+                moduleClass.setCreatedAt(createdAt);
+                moduleClass.setUpdatedAt(createdAt);
+
+                // TODO(IDENTITY_INTEGRATION): lấy actor từ principal, không nhận userId do client truyền.
+
+                createdClasses.add(moduleClass);
+            }
+        }
+
+        return createdClasses;
+    }
+
+    private void requireScheduledRoomCapacity(Long moduleClassId, int maxCapacity, int oldCapacity) {
+        // Tăng sức chứa phải đồng bộ với luồng giảm capacity phòng: khóa phòng trước khi đối chiếu.
+        if (maxCapacity > oldCapacity) {
+            var schedules = classScheduleRepository.findAll(
+                    ClassScheduleSpecification.notDeletedAndModuleClassIdIn(List.of(moduleClassId)), Sort.by("id"));
+            for (Long roomId : schedules.stream()
+                    .map(schedule -> schedule.getRoom().getId())
+                    .distinct()
+                    .sorted()
+                    .toList()) {
+                var room = roomRepository
+                        .findForUpdateByIdAndDeletedFalse(roomId)
+                        .orElseThrow(() -> new ModuleClassException(ErrorCode.ROOM_NOT_FOUND));
+                // Lịch đã tải Room vào persistence context trước lúc chờ khóa; phải đọc lại trạng thái mới nhất.
+                entityManager.refresh(room, LockModeType.PESSIMISTIC_WRITE);
+                if (room.getCapacity() < maxCapacity)
+                    throw new ModuleClassConflictException(
+                            ErrorCode.ROOM_CAPACITY_BELOW_CLASS,
+                            List.of(new FieldErrorDetail(
+                                    "maxCapacity",
+                                    "Phòng " + room.getRoomCode() + " chỉ có sức chứa " + room.getCapacity())));
+            }
+        }
+    }
+
+    private ModuleClassUsageResponse requireUnusedEnrollmentHistory(ModuleClass moduleClass) {
+        // kiểm tra dữ liệu đăng ký
+        var enrollmentUsage = moduleClassEnrollmentQueryService.summarizeModuleClassEnrollments(moduleClass.getId());
+
+        // dữ liệu bị khuyết
+        if (enrollmentUsage == null
+                || !enrollmentUsage.historyComplete()
+                || enrollmentUsage.enrollmentCount() < 0
+                || enrollmentUsage.studentCount() < 0
+                || enrollmentUsage.studentCount() > enrollmentUsage.enrollmentCount()
+                || (enrollmentUsage.enrollmentCount() > 0 && enrollmentUsage.studentCount() == 0)
+                || enrollmentUsage.dataSource() == null
+                || enrollmentUsage.dataSource().isBlank())
+            throw new ModuleClassException(ErrorCode.MODULE_CLASS_ENROLLMENT_DATA_UNAVAILABLE);
+
+        // đã có bản ghi đăng ký
+        if (enrollmentUsage.enrollmentCount() > 0) {
+            throw new ModuleClassConflictException(
+                    ErrorCode.MODULE_CLASS_HAS_ENROLLMENTS,
+                    List.of(
+                            new FieldErrorDetail(
+                                    "enrollmentCount",
+                                    "Lớp đã có " + enrollmentUsage.enrollmentCount()
+                                            + " bản ghi đăng ký, bao gồm đăng ký đã hủy/ẩn"),
+                            new FieldErrorDetail(
+                                    "studentCount", "Số sinh viên liên quan: " + enrollmentUsage.studentCount())));
+        }
+
+        return enrollmentUsage;
     }
 }

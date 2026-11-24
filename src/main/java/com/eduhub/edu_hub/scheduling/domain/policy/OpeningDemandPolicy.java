@@ -49,54 +49,8 @@ public class OpeningDemandPolicy {
                 .collect(Collectors.groupingBy(
                         LearningAttempt::studentId, Collectors.groupingBy(LearningAttempt::subjectCode)));
 
-        // bắt đầu tính toán
-        Map<Long, StudentDemandBySubject> demandsBySubjectId = new HashMap<>();
-        for (var student : planningSnapshot.students()) {
-
-            // Tính SV đang ở học kỳ thứ mấy của chương trình
-            // Ví dụ nhập học 2023, mở kỳ 1 năm 2026: 2*(2026-2024)+1 = 7 (kỳ thứ 7)
-            int currentSemester = 2 * (academicYear - student.admissionYear()) + semesterNumber;
-
-            // Bỏ qua SV không STUDYING hoặc currentSemester < 1 (chưa nhập học)
-            if (student.activityStatus() != ActivityStatus.STUDYING || currentSemester < 1) continue;
-
-            // Không tìm thấy chương trình của SV thì lỗi
-            var curriculumSubjects = subjectsByCurriculumCode.get(student.curriculumCode());
-            if (curriculumSubjects == null) throw new ModuleClassException(ErrorCode.PLANNING_DATA_UNAVAILABLE);
-
-            // với mỗi sinh viên, ta lấy ra lịch sử học gồm subject + list attempts
-            // "COMPLETED, REGISTER" thì bỏ qua, "ON_TIME, MISSED, RETAKE" cần xử lý
-            var subjectHistory = learningHistoryByStudentId.getOrDefault(student.id(), Map.of());
-            for (var planningSubject : curriculumSubjects) {
-
-                // Lấy attempts tương ứng
-                List<LearningAttempt> learningAttempts =
-                        subjectHistory.getOrDefault(planningSubject.subjectCode(), List.of());
-
-                // Đã đạt thì không thuộc nhu cầu bắt buộc
-                if (learningAttempts.stream()
-                        .anyMatch(attempt -> attempt.status() == LearningOutcome.COMPLETED
-                                || attempt.status() == LearningOutcome.REGISTERED)) continue;
-
-                // TODO: học cải thiện (với status COMPLETED) do enrollment xử lý sau.
-
-                // phân nhóm cho nhu cầu bắt buộc
-                OpeningDemandCategory demandCategory = null;
-                if (planningSubject.recommendSemester() == currentSemester)
-                    demandCategory = OpeningDemandCategory.ON_TIME;
-                else if (learningAttempts.stream().anyMatch(attempt -> attempt.status() == LearningOutcome.FAILED))
-                    demandCategory = OpeningDemandCategory.RETAKE;
-                else if (planningSubject.recommendSemester() < currentSemester && learningAttempts.isEmpty())
-                    demandCategory = OpeningDemandCategory.MISSED;
-
-                if (demandCategory != null)
-                    demandsBySubjectId
-                            .computeIfAbsent(
-                                    planningSubject.subjectId(), ignored -> new StudentDemandBySubject(planningSubject))
-                            .studentsById
-                            .putIfAbsent(student.id(), demandCategory);
-            }
-        }
+        var demandsBySubjectId = calculateStudentDemands(
+                planningSnapshot, academicYear, semesterNumber, subjectsByCurriculumCode, learningHistoryByStudentId);
 
         // trả lại dữ liệu đã xử lý
         return demandsBySubjectId.values().stream()
@@ -146,4 +100,62 @@ public class OpeningDemandPolicy {
             int missedStudentCount,
             int expectedStudentCount,
             int recommendedClassCount) {}
+
+    private Map<Long, StudentDemandBySubject> calculateStudentDemands(
+            AcademicPlanningSnapshot planningSnapshot,
+            int academicYear,
+            int semesterNumber,
+            Map<String, List<PlanningSubject>> subjectsByCurriculumCode,
+            Map<Long, Map<String, List<LearningAttempt>>> learningHistoryByStudentId) {
+        // bắt đầu tính toán
+        Map<Long, StudentDemandBySubject> demandsBySubjectId = new HashMap<>();
+        for (var student : planningSnapshot.students()) {
+
+            // Tính SV đang ở học kỳ thứ mấy của chương trình
+            // Ví dụ nhập học 2023, mở kỳ 1 năm 2026: 2*(2026-2024)+1 = 7 (kỳ thứ 7)
+            int currentSemester = 2 * (academicYear - student.admissionYear()) + semesterNumber;
+
+            // Bỏ qua SV không STUDYING hoặc currentSemester < 1 (chưa nhập học)
+            if (student.activityStatus() != ActivityStatus.STUDYING || currentSemester < 1) continue;
+
+            // Không tìm thấy chương trình của SV thì lỗi
+            var curriculumSubjects = subjectsByCurriculumCode.get(student.curriculumCode());
+            if (curriculumSubjects == null) throw new ModuleClassException(ErrorCode.PLANNING_DATA_UNAVAILABLE);
+
+            // với mỗi sinh viên, ta lấy ra lịch sử học gồm subject + list attempts
+            // "COMPLETED, REGISTER" thì bỏ qua, "ON_TIME, MISSED, RETAKE" cần xử lý
+            var subjectHistory = learningHistoryByStudentId.getOrDefault(student.id(), Map.of());
+            for (var planningSubject : curriculumSubjects) {
+
+                // Lấy attempts tương ứng
+                List<LearningAttempt> learningAttempts =
+                        subjectHistory.getOrDefault(planningSubject.subjectCode(), List.of());
+
+                // Đã đạt thì không thuộc nhu cầu bắt buộc
+                if (learningAttempts.stream()
+                        .anyMatch(attempt -> attempt.status() == LearningOutcome.COMPLETED
+                                || attempt.status() == LearningOutcome.REGISTERED)) continue;
+
+                // TODO: học cải thiện (với status COMPLETED) do enrollment xử lý sau.
+
+                // phân nhóm cho nhu cầu bắt buộc
+                OpeningDemandCategory demandCategory = null;
+                if (planningSubject.recommendSemester() == currentSemester)
+                    demandCategory = OpeningDemandCategory.ON_TIME;
+                else if (learningAttempts.stream().anyMatch(attempt -> attempt.status() == LearningOutcome.FAILED))
+                    demandCategory = OpeningDemandCategory.RETAKE;
+                else if (planningSubject.recommendSemester() < currentSemester && learningAttempts.isEmpty())
+                    demandCategory = OpeningDemandCategory.MISSED;
+
+                if (demandCategory != null)
+                    demandsBySubjectId
+                            .computeIfAbsent(
+                                    planningSubject.subjectId(), ignored -> new StudentDemandBySubject(planningSubject))
+                            .studentsById
+                            .putIfAbsent(student.id(), demandCategory);
+            }
+        }
+
+        return demandsBySubjectId;
+    }
 }

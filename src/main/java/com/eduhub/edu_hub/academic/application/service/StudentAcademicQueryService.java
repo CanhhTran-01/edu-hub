@@ -6,6 +6,7 @@ import com.eduhub.edu_hub.academic.application.exception.StudentAcademicExceptio
 import com.eduhub.edu_hub.academic.domain.policy.AcademicPerformancePolicy;
 import com.eduhub.edu_hub.academic.domain.policy.AcademicPerformancePolicy.GradedAttempt;
 import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectPrerequisitesResponse;
+import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.enrollment.api.dto.response.StudentLearningHistoryResponse;
 import com.eduhub.edu_hub.enrollment.api.dto.response.StudentLearningHistoryResponse.LearningRecordResponse;
@@ -104,49 +105,12 @@ public class StudentAcademicQueryService {
                 .filter(semester -> semesterId == null
                         ? coursesBySemester.containsKey(semester.getId())
                         : semesterId.equals(semester.getId()))
-                .map(semester -> {
-                    var courses = coursesBySemester.getOrDefault(semester.getId(), List.of());
-                    var grades = gradedAttempts(courses);
-                    // chỉ lọc lịch sử học tập tính đến học kỳ của semesterId, không lấy kì sau
-                    var historyThroughSemester = history.enrollments().stream()
-                            .filter(enrollment -> !semestersById
-                                    .get(enrollment.semesterId())
-                                    .getStartDate()
-                                    .isAfter(semester.getStartDate()))
-                            .toList();
-                    var latestGrades = AcademicPerformancePolicy.selectLatestAttemptsBySubject(
-                            gradedAttempts(historyThroughSemester));
-                    var academicCourses = courses.stream()
-                            .sorted(Comparator.comparing(LearningRecordResponse::subjectCode)
-                                    .thenComparing(LearningRecordResponse::enrollmentId))
-                            .map(enrollment -> {
-                                var prerequisites =
-                                        prerequisitesBySubject.getOrDefault(enrollment.subjectId(), List.of()).stream()
-                                                .map(subject -> new PrerequisiteResponse(
-                                                        subject,
-                                                        history.passedSubjectIds()
-                                                                        .contains(subject.getId())
-                                                                ? Boolean.TRUE
-                                                                : history.historyComplete() ? Boolean.FALSE : null))
-                                                .toList();
-                                Boolean prerequisitesMet = prerequisites.stream()
-                                                .allMatch(prerequisite -> Boolean.TRUE.equals(prerequisite.passed()))
-                                        ? Boolean.TRUE
-                                        : history.historyComplete() ? Boolean.FALSE : null;
-                                return new AcademicCourseResponse(enrollment, prerequisitesMet, prerequisites);
-                            })
-                            .toList();
-                    return new SemesterTranscriptResponse(
-                            semester,
-                            AcademicPerformancePolicy.calculateGpa(grades),
-                            history.historyComplete() ? AcademicPerformancePolicy.calculateGpa(latestGrades) : null,
-                            history.historyComplete()
-                                    ? AcademicPerformancePolicy.calculateAccumulatedCredits(latestGrades)
-                                    : null,
-                            registeredCredits(courses),
-                            grades.size(),
-                            academicCourses);
-                })
+                .map(semester -> toSemesterTranscript(
+                        semester,
+                        coursesBySemester.getOrDefault(semester.getId(), List.of()),
+                        history,
+                        semestersById,
+                        prerequisitesBySubject))
                 .toList();
         return new StudentTranscriptResponse(history.historyComplete(), history.scopeNotice(), groups);
     }
@@ -214,5 +178,54 @@ public class StudentAcademicQueryService {
                         enrollment.courseScore4(),
                         enrollment.status() == EnrollmentStatus.COMPLETED))
                 .toList();
+    }
+
+    private SemesterTranscriptResponse toSemesterTranscript(
+            SemesterResponse semester,
+            List<LearningRecordResponse> courses,
+            StudentLearningHistoryResponse history,
+            Map<Long, SemesterResponse> semestersById,
+            Map<Long, List<SubjectSimpleResponse>> prerequisitesBySubject) {
+        var grades = gradedAttempts(courses);
+        // chỉ lọc lịch sử học tập tính đến học kỳ của semesterId, không lấy kì sau
+        var historyThroughSemester = history.enrollments().stream()
+                .filter(enrollment -> !semestersById
+                        .get(enrollment.semesterId())
+                        .getStartDate()
+                        .isAfter(semester.getStartDate()))
+                .toList();
+        var latestGrades =
+                AcademicPerformancePolicy.selectLatestAttemptsBySubject(gradedAttempts(historyThroughSemester));
+        var academicCourses = courses.stream()
+                .sorted(Comparator.comparing(LearningRecordResponse::subjectCode)
+                        .thenComparing(LearningRecordResponse::enrollmentId))
+                .map(enrollment -> toAcademicCourse(enrollment, history, prerequisitesBySubject))
+                .toList();
+        return new SemesterTranscriptResponse(
+                semester,
+                AcademicPerformancePolicy.calculateGpa(grades),
+                history.historyComplete() ? AcademicPerformancePolicy.calculateGpa(latestGrades) : null,
+                history.historyComplete() ? AcademicPerformancePolicy.calculateAccumulatedCredits(latestGrades) : null,
+                registeredCredits(courses),
+                grades.size(),
+                academicCourses);
+    }
+
+    private AcademicCourseResponse toAcademicCourse(
+            LearningRecordResponse enrollment,
+            StudentLearningHistoryResponse history,
+            Map<Long, List<SubjectSimpleResponse>> prerequisitesBySubject) {
+        var prerequisites = prerequisitesBySubject.getOrDefault(enrollment.subjectId(), List.of()).stream()
+                .map(subject -> new PrerequisiteResponse(
+                        subject,
+                        history.passedSubjectIds().contains(subject.getId())
+                                ? Boolean.TRUE
+                                : history.historyComplete() ? Boolean.FALSE : null))
+                .toList();
+        Boolean prerequisitesMet =
+                prerequisites.stream().allMatch(prerequisite -> Boolean.TRUE.equals(prerequisite.passed()))
+                        ? Boolean.TRUE
+                        : history.historyComplete() ? Boolean.FALSE : null;
+        return new AcademicCourseResponse(enrollment, prerequisitesMet, prerequisites);
     }
 }

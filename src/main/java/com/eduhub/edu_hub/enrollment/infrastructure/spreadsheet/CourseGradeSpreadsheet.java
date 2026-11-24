@@ -36,26 +36,7 @@ public class CourseGradeSpreadsheet {
         try (var workbook = new XSSFWorkbook();
                 var output = new ByteArrayOutputStream()) {
             var sheet = workbook.createSheet("Điểm thi học phần");
-            sheet.createRow(0)
-                    .createCell(0)
-                    .setCellValue("NHẬP ĐIỂM THI HỌC PHẦN: có thể đổi thứ tự dòng; không để trống điểm của dòng nhập");
-            var classMetadata = sheet.createRow(1);
-            classMetadata.createCell(0).setCellValue("Mã lớp");
-            classMetadata.createCell(1).setCellValue(moduleClass.moduleClassCode());
-            var semesterMetadata = sheet.createRow(2);
-            semesterMetadata.createCell(0).setCellValue("Kỳ học");
-            semesterMetadata.createCell(1).setCellValue(moduleClass.semesterCode());
-            var header = sheet.createRow(HEADER_ROW_INDEX);
-            var headerStyle = workbook.createCellStyle();
-            var headerFont = workbook.createFont();
-            headerFont.setBold(true);
-            headerStyle.setFont(headerFont);
-            for (int columnIndex = 0; columnIndex < HEADERS.size(); columnIndex++) {
-                var cell = header.createCell(columnIndex);
-                cell.setCellValue(HEADERS.get(columnIndex));
-                cell.setCellStyle(headerStyle);
-                sheet.setColumnWidth(columnIndex, (columnIndex == 1 ? 35 : 25) * 256);
-            }
+            writeTemplateHeader(workbook, sheet, moduleClass);
             var identifierStyle = workbook.createCellStyle();
             identifierStyle.setDataFormat(workbook.createDataFormat().getFormat("@"));
             var scoreStyle = workbook.createCellStyle();
@@ -93,45 +74,9 @@ public class CourseGradeSpreadsheet {
             if (workbook.getNumberOfSheets() != 1)
                 throw invalidFile("file", "Tệp phải có đúng một sheet theo mẫu nhập điểm");
             var sheet = workbook.getSheetAt(0);
-            if (!"Mã lớp".equals(textCell(sheet.getRow(1), 0))
-                    || !moduleClass.moduleClassCode().equals(textCell(sheet.getRow(1), 1))
-                    || !"Kỳ học".equals(textCell(sheet.getRow(2), 0))
-                    || !moduleClass.semesterCode().equals(textCell(sheet.getRow(2), 1)))
-                throw invalidFile("file", "Mã lớp hoặc kỳ học không khớp lớp đang chọn (dòng 2–3)");
-            for (int columnIndex = 0; columnIndex < HEADERS.size(); columnIndex++) {
-                if (!HEADERS.get(columnIndex).equals(textCell(sheet.getRow(HEADER_ROW_INDEX), columnIndex)))
-                    throw invalidFile(
-                            "rows[5]", "Header dòng 5 phải là MSSV, Họ và tên, Điểm thi học phần theo đúng thứ tự");
-            }
-            if (sheet.getLastRowNum() - HEADER_ROW_INDEX > MAX_DATA_ROWS)
-                throw invalidFile("file", "Tệp vượt quá 1000 vị trí dòng dữ liệu");
-            for (var cell : sheet.getRow(HEADER_ROW_INDEX)) {
-                if (cell.getColumnIndex() >= HEADERS.size() && !isEmptyCell(cell))
-                    throw invalidFile("rows[5]", "Mẫu nhập chỉ nhận ba cột MSSV, Họ và tên, Điểm thi học phần");
-            }
-            List<ImportedCourseGrade> students = new ArrayList<>();
-            List<FieldErrorDetail> errors = new ArrayList<>();
-            for (int rowIndex = HEADER_ROW_INDEX + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
-                var studentRow = sheet.getRow(rowIndex);
-                if (isEmptyRow(studentRow)) continue;
-                int rowNumber = rowIndex + 1;
-                for (var cell : studentRow) {
-                    if (cell.getCellType() == CellType.FORMULA
-                            || cell.getCellType() == CellType.ERROR
-                            || (cell.getColumnIndex() >= HEADERS.size() && !isEmptyCell(cell)))
-                        errors.add(new FieldErrorDetail(
-                                "rows[" + rowNumber + "].columns",
-                                "Không nhận công thức, ô lỗi hoặc dữ liệu ngoài ba cột mẫu"));
-                }
-                String studentCode = textCell(studentRow, 0);
-                if (studentCode == null || studentCode.isBlank())
-                    errors.add(new FieldErrorDetail(
-                            "rows[" + rowNumber + "].studentCode", "MSSV bắt buộc là ô text không rỗng"));
-                BigDecimal finalExamScore = readScore(studentRow, rowNumber, errors);
-                students.add(new ImportedCourseGrade(rowNumber, studentCode, finalExamScore));
-            }
-            if (students.isEmpty()) throw invalidFile("file", "Tệp không có dòng điểm để nhập");
-            return new ImportedCourseGrades(List.copyOf(students), List.copyOf(errors));
+            validateSheetScopeAndColumns(sheet, moduleClass);
+            // Gom lỗi từng dòng để service đối chiếu toàn bộ lượt học trước khi ghi cả lô.
+            return readStudentRows(sheet);
         } catch (EnrollmentException exception) {
             throw exception;
         } catch (IOException | RuntimeException exception) {
@@ -177,5 +122,73 @@ public class CourseGradeSpreadsheet {
     private EnrollmentException invalidFile(String field, String message) {
         return new EnrollmentException(
                 ErrorCode.COURSE_GRADE_IMPORT_INVALID, List.of(new FieldErrorDetail(field, message)));
+    }
+
+    private void writeTemplateHeader(Workbook workbook, Sheet sheet, ModuleClassGradingResponse moduleClass) {
+        sheet.createRow(0)
+                .createCell(0)
+                .setCellValue("NHẬP ĐIỂM THI HỌC PHẦN: có thể đổi thứ tự dòng; không để trống điểm của dòng nhập");
+        var classMetadata = sheet.createRow(1);
+        classMetadata.createCell(0).setCellValue("Mã lớp");
+        classMetadata.createCell(1).setCellValue(moduleClass.moduleClassCode());
+        var semesterMetadata = sheet.createRow(2);
+        semesterMetadata.createCell(0).setCellValue("Kỳ học");
+        semesterMetadata.createCell(1).setCellValue(moduleClass.semesterCode());
+        var header = sheet.createRow(HEADER_ROW_INDEX);
+        var headerStyle = workbook.createCellStyle();
+        var headerFont = workbook.createFont();
+        headerFont.setBold(true);
+        headerStyle.setFont(headerFont);
+        for (int columnIndex = 0; columnIndex < HEADERS.size(); columnIndex++) {
+            var cell = header.createCell(columnIndex);
+            cell.setCellValue(HEADERS.get(columnIndex));
+            cell.setCellStyle(headerStyle);
+            sheet.setColumnWidth(columnIndex, (columnIndex == 1 ? 35 : 25) * 256);
+        }
+    }
+
+    private void validateSheetScopeAndColumns(Sheet sheet, ModuleClassGradingResponse moduleClass) {
+        if (!"Mã lớp".equals(textCell(sheet.getRow(1), 0))
+                || !moduleClass.moduleClassCode().equals(textCell(sheet.getRow(1), 1))
+                || !"Kỳ học".equals(textCell(sheet.getRow(2), 0))
+                || !moduleClass.semesterCode().equals(textCell(sheet.getRow(2), 1)))
+            throw invalidFile("file", "Mã lớp hoặc kỳ học không khớp lớp đang chọn (dòng 2–3)");
+        for (int columnIndex = 0; columnIndex < HEADERS.size(); columnIndex++) {
+            if (!HEADERS.get(columnIndex).equals(textCell(sheet.getRow(HEADER_ROW_INDEX), columnIndex)))
+                throw invalidFile(
+                        "rows[5]", "Header dòng 5 phải là MSSV, Họ và tên, Điểm thi học phần theo đúng thứ tự");
+        }
+        if (sheet.getLastRowNum() - HEADER_ROW_INDEX > MAX_DATA_ROWS)
+            throw invalidFile("file", "Tệp vượt quá 1000 vị trí dòng dữ liệu");
+        for (var cell : sheet.getRow(HEADER_ROW_INDEX)) {
+            if (cell.getColumnIndex() >= HEADERS.size() && !isEmptyCell(cell))
+                throw invalidFile("rows[5]", "Mẫu nhập chỉ nhận ba cột MSSV, Họ và tên, Điểm thi học phần");
+        }
+    }
+
+    private ImportedCourseGrades readStudentRows(Sheet sheet) {
+        List<ImportedCourseGrade> students = new ArrayList<>();
+        List<FieldErrorDetail> errors = new ArrayList<>();
+        for (int rowIndex = HEADER_ROW_INDEX + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+            var studentRow = sheet.getRow(rowIndex);
+            if (isEmptyRow(studentRow)) continue;
+            int rowNumber = rowIndex + 1;
+            for (var cell : studentRow) {
+                if (cell.getCellType() == CellType.FORMULA
+                        || cell.getCellType() == CellType.ERROR
+                        || (cell.getColumnIndex() >= HEADERS.size() && !isEmptyCell(cell)))
+                    errors.add(new FieldErrorDetail(
+                            "rows[" + rowNumber + "].columns",
+                            "Không nhận công thức, ô lỗi hoặc dữ liệu ngoài ba cột mẫu"));
+            }
+            String studentCode = textCell(studentRow, 0);
+            if (studentCode == null || studentCode.isBlank())
+                errors.add(new FieldErrorDetail(
+                        "rows[" + rowNumber + "].studentCode", "MSSV bắt buộc là ô text không rỗng"));
+            BigDecimal finalExamScore = readScore(studentRow, rowNumber, errors);
+            students.add(new ImportedCourseGrade(rowNumber, studentCode, finalExamScore));
+        }
+        if (students.isEmpty()) throw invalidFile("file", "Tệp không có dòng điểm để nhập");
+        return new ImportedCourseGrades(List.copyOf(students), List.copyOf(errors));
     }
 }

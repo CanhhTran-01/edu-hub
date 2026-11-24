@@ -168,24 +168,7 @@ public class AdmissionNotificationQueueFacadeImpl implements NotificationFacade.
                 : peopleAdmissionFacade.findStudentsByIds(studentIds).stream()
                         .collect(Collectors.toMap(AdmissionStudentInfo::getId, student -> student));
         var details = notificationPage.getContent().stream()
-                .map(notification -> {
-                    var student = studentsById.get(notification.getStudentId());
-                    var deliveryState = NotificationRetryPolicy.classifyDeliveryState(
-                            notification.getState(), notification.getFailureCount());
-                    boolean hasNextAttempt = deliveryState == NotificationDeliveryState.PENDING
-                            || deliveryState == NotificationDeliveryState.WAITING_RETRY;
-                    return new AdmissionNotificationDetailResponse(
-                            notification.getId(),
-                            notification.getAdmissionId(),
-                            notification.getStudentId(),
-                            student == null ? null : student.getFullName(),
-                            student == null ? null : student.getStudentCode(),
-                            deliveryState,
-                            notification.getFailureCount(),
-                            hasNextAttempt ? notification.getNextAttemptAt() : null,
-                            notification.getLastError(),
-                            notification.getUpdatedAt());
-                })
+                .map(notification -> toNotificationDetail(notification, studentsById))
                 .toList();
         return PageResponse.<AdmissionNotificationDetailResponse>builder()
                 .content(details)
@@ -195,5 +178,26 @@ public class AdmissionNotificationQueueFacadeImpl implements NotificationFacade.
                 .totalPages(notificationPage.getTotalPages())
                 .isLast(notificationPage.isLast())
                 .build();
+    }
+
+    private AdmissionNotificationDetailResponse toNotificationDetail(
+            QueuedAdmissionNotification notification, Map<Long, AdmissionStudentInfo> studentsById) {
+        // Chỉ bản ghi còn chờ mới có lần gửi kế tiếp; trạng thái hiển thị không sửa trạng thái lưu DB.
+        var student = studentsById.get(notification.getStudentId());
+        var deliveryState =
+                NotificationRetryPolicy.classifyDeliveryState(notification.getState(), notification.getFailureCount());
+        boolean hasNextAttempt = deliveryState == NotificationDeliveryState.PENDING
+                || deliveryState == NotificationDeliveryState.WAITING_RETRY;
+        return new AdmissionNotificationDetailResponse(
+                notification.getId(),
+                notification.getAdmissionId(),
+                notification.getStudentId(),
+                student == null ? null : student.getFullName(),
+                student == null ? null : student.getStudentCode(),
+                deliveryState,
+                notification.getFailureCount(),
+                hasNextAttempt ? notification.getNextAttemptAt() : null,
+                notification.getLastError(),
+                notification.getUpdatedAt());
     }
 }

@@ -121,82 +121,10 @@ public class SemesterApplicationService {
             throw new SemesterException(ErrorCode.SEMESTER_ENDED);
         }
 
-        // chuẩn hóa tên
-        String semesterName = SemesterPolicy.normalizeSemesterName(request.getSemesterName());
+        String semesterName = validateSemesterUpdateRequest(semesterId, request);
 
-        // validate nghiệp vụ cho ngày
-        SemesterPolicy.validateDates(
-                request.getStartDate(),
-                request.getEndDate(),
-                request.getRegistrationStart(),
-                request.getRegistrationEnd());
-
-        // check trùng tên
-        if (semesterRepository.existsBySemesterNameAndIdNot(semesterName, semesterId)) {
-            throw new SemesterException(ErrorCode.DUPLICATE_SEMESTER_NAME);
-        }
-
-        // check khoảng thời gian chồng lấn
-        checkOverlaps(
-                request.getStartDate(),
-                request.getEndDate(),
-                request.getRegistrationStart(),
-                request.getRegistrationEnd(),
-                semesterId);
-
-        // TODO: cần làm rõ tại đây, cho cập nhật khoảng date hay không ? chắc là không
-        // check ngày thay đổi
-        boolean datesChanged = !semester.getStartDate().equals(request.getStartDate())
-                || !semester.getEndDate().equals(request.getEndDate());
-
-        // TODO: đổi ngày đăng kí thì sao ? - ở use-case mở đăng ký
-
-        boolean registrationDatesChanged = !semester.getRegistrationStart().equals(request.getRegistrationStart())
-                || !semester.getRegistrationEnd().equals(request.getRegistrationEnd());
-        if (registrationDatesChanged
-                && moduleClassRepository.existsBySemester_IdAndStatusInAndDeletedFalse(
-                        semesterId,
-                        List.of(ModuleClassStatus.OPEN, ModuleClassStatus.CLOSED, ModuleClassStatus.COMPLETED)))
-            throw new SemesterException(ErrorCode.REGISTRATION_PERIOD_IN_USE);
-
-        // TODO(REGISTRATION_EXTENSION): Gia hạn/mở lại phải có use-case riêng để đồng bộ ngày đăng ký,
-        //  trạng thái CLOSED và điều kiện danh sách; đổi ngày đơn thuần không tự mở lại lớp.
-
-        // date chưa bị thay đổi, phải được xác nhận từ client, kì chưa có lớp hoặc có nhưng đã hủy thì mới update được
-        if (datesChanged
-                && !request.isConfirmDateChange()
-                && moduleClassRepository.existsBySemester_IdAndStatusNot(semesterId, ModuleClassStatus.CANCELLED)) {
-            throw new SemesterException(ErrorCode.SEMESTER_DATE_CHANGE_CONFIRMATION_REQUIRED);
-        }
-
-        // Xác nhận đổi ngày không được bỏ qua lịch đã áp dụng hoặc làm sai tuần bắt đầu đợt.
-        if (datesChanged) {
-            var classIds = moduleClassRepository.findAllBySemester_IdOrderByIdAsc(semesterId).stream()
-                    .filter(moduleClass ->
-                            !moduleClass.isDeleted() && moduleClass.getStatus() != ModuleClassStatus.CANCELLED)
-                    .map(ModuleClass::getId)
-                    .toList();
-            if (!classIds.isEmpty()) {
-                var schedules = classScheduleRepository.findAll(
-                        ClassScheduleSpecification.notDeletedAndModuleClassIdIn(classIds), Sort.by("id"));
-                boolean outsideDates = schedules.stream()
-                        .flatMap(schedule ->
-                                TimetablePolicy.occurrenceDates(TimetableSnapshotService.toExistingSession(schedule))
-                                        .stream())
-                        .anyMatch(date -> date.isBefore(request.getStartDate()) || date.isAfter(request.getEndDate()));
-                if (outsideDates) throw new SemesterException(ErrorCode.TIMETABLE_SCHEDULE_IN_USE);
-                var appliedPlan =
-                        timetablePlanRepository.findFirstBySemesterIdAndStateAndDeletedFalseOrderByAppliedAtDesc(
-                                semesterId, TimetablePlanState.APPLIED);
-                if (!schedules.isEmpty() && appliedPlan.isPresent()) {
-                    var allocation =
-                            timetablePlanCodec.read(appliedPlan.get().getAllocationJson(), TimetableAllocation.class);
-                    if (!TimetablePolicy.firstTeachingMonday(request.getStartDate())
-                            .equals(allocation.phaseOneStart()))
-                        throw new SemesterException(ErrorCode.TIMETABLE_SCHEDULE_IN_USE);
-                }
-            }
-        }
+        // Kiểm tra mọi ảnh hưởng trước khi sửa instance kỳ học đang được quản lý.
+        requireDateChangesAllowed(semesterId, semester, request);
 
         // cập nhật field
         semester.setSemesterName(semesterName);
@@ -282,5 +210,88 @@ public class SemesterApplicationService {
                 semester.getEndDate(),
                 semester.getRegistrationStart(),
                 semester.getRegistrationEnd());
+    }
+
+    private String validateSemesterUpdateRequest(Long semesterId, UpdateSemesterRequest request) {
+        // chuẩn hóa tên
+        String semesterName = SemesterPolicy.normalizeSemesterName(request.getSemesterName());
+
+        // validate nghiệp vụ cho ngày
+        SemesterPolicy.validateDates(
+                request.getStartDate(),
+                request.getEndDate(),
+                request.getRegistrationStart(),
+                request.getRegistrationEnd());
+
+        // check trùng tên
+        if (semesterRepository.existsBySemesterNameAndIdNot(semesterName, semesterId)) {
+            throw new SemesterException(ErrorCode.DUPLICATE_SEMESTER_NAME);
+        }
+
+        // check khoảng thời gian chồng lấn
+        checkOverlaps(
+                request.getStartDate(),
+                request.getEndDate(),
+                request.getRegistrationStart(),
+                request.getRegistrationEnd(),
+                semesterId);
+
+        return semesterName;
+    }
+
+    private void requireDateChangesAllowed(Long semesterId, Semester semester, UpdateSemesterRequest request) {
+        // TODO: cần làm rõ tại đây, cho cập nhật khoảng date hay không ? chắc là không
+        // check ngày thay đổi
+        boolean datesChanged = !semester.getStartDate().equals(request.getStartDate())
+                || !semester.getEndDate().equals(request.getEndDate());
+
+        // TODO: đổi ngày đăng kí thì sao ? - ở use-case mở đăng ký
+
+        boolean registrationDatesChanged = !semester.getRegistrationStart().equals(request.getRegistrationStart())
+                || !semester.getRegistrationEnd().equals(request.getRegistrationEnd());
+        if (registrationDatesChanged
+                && moduleClassRepository.existsBySemester_IdAndStatusInAndDeletedFalse(
+                        semesterId,
+                        List.of(ModuleClassStatus.OPEN, ModuleClassStatus.CLOSED, ModuleClassStatus.COMPLETED)))
+            throw new SemesterException(ErrorCode.REGISTRATION_PERIOD_IN_USE);
+
+        // TODO(REGISTRATION_EXTENSION): Gia hạn/mở lại phải có use-case riêng để đồng bộ ngày đăng ký,
+        //  trạng thái CLOSED và điều kiện danh sách; đổi ngày đơn thuần không tự mở lại lớp.
+
+        // date chưa bị thay đổi, phải được xác nhận từ client, kì chưa có lớp hoặc có nhưng đã hủy thì mới update được
+        if (datesChanged
+                && !request.isConfirmDateChange()
+                && moduleClassRepository.existsBySemester_IdAndStatusNot(semesterId, ModuleClassStatus.CANCELLED)) {
+            throw new SemesterException(ErrorCode.SEMESTER_DATE_CHANGE_CONFIRMATION_REQUIRED);
+        }
+
+        if (datesChanged) requireOfficialSchedulesFitDates(semesterId, request);
+    }
+
+    private void requireOfficialSchedulesFitDates(Long semesterId, UpdateSemesterRequest request) {
+        // Xác nhận đổi ngày không được bỏ qua lịch đã áp dụng hoặc làm sai tuần bắt đầu đợt.
+        var classIds = moduleClassRepository.findAllBySemester_IdOrderByIdAsc(semesterId).stream()
+                .filter(moduleClass ->
+                        !moduleClass.isDeleted() && moduleClass.getStatus() != ModuleClassStatus.CANCELLED)
+                .map(ModuleClass::getId)
+                .toList();
+        if (!classIds.isEmpty()) {
+            var schedules = classScheduleRepository.findAll(
+                    ClassScheduleSpecification.notDeletedAndModuleClassIdIn(classIds), Sort.by("id"));
+            boolean outsideDates = schedules.stream()
+                    .flatMap(schedule ->
+                            TimetablePolicy.occurrenceDates(TimetableSnapshotService.toExistingSession(schedule))
+                                    .stream())
+                    .anyMatch(date -> date.isBefore(request.getStartDate()) || date.isAfter(request.getEndDate()));
+            if (outsideDates) throw new SemesterException(ErrorCode.TIMETABLE_SCHEDULE_IN_USE);
+            var appliedPlan = timetablePlanRepository.findFirstBySemesterIdAndStateAndDeletedFalseOrderByAppliedAtDesc(
+                    semesterId, TimetablePlanState.APPLIED);
+            if (!schedules.isEmpty() && appliedPlan.isPresent()) {
+                var allocation =
+                        timetablePlanCodec.read(appliedPlan.get().getAllocationJson(), TimetableAllocation.class);
+                if (!TimetablePolicy.firstTeachingMonday(request.getStartDate()).equals(allocation.phaseOneStart()))
+                    throw new SemesterException(ErrorCode.TIMETABLE_SCHEDULE_IN_USE);
+            }
+        }
     }
 }

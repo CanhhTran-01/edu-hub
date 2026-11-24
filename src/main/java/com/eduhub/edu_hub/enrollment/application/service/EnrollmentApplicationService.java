@@ -125,40 +125,8 @@ public class EnrollmentApplicationService {
                         && enrollment.getStatus() == EnrollmentStatus.REGISTERED)
                 .findFirst();
         if (existing.isPresent()) return registrationResponse(existing.get(), student, history, creditConfiguration);
-        if (!curriculumSubjectIds(student).contains(moduleClass.getSubjectId()))
-            throw new EnrollmentException(ErrorCode.ENROLLMENT_SUBJECT_NOT_IN_CURRICULUM);
-
-        EnrollmentRegistrationPolicy.requireSubjectAvailable(moduleClass.getSubjectId(), history);
-        var subject = curriculumRegistration
-                .requireRegistrationSubjects(Set.of(moduleClass.getSubjectId()))
-                .getFirst();
-        var missing = missingPrerequisites(subject, EnrollmentRegistrationPolicy.passedSubjectIds(history));
-        if (!missing.isEmpty()) {
-            throw new EnrollmentException(
-                    ErrorCode.PREREQUISITE_NOT_MET,
-                    missing.stream()
-                            .map(prerequisite -> new FieldErrorDetail(
-                                    "prerequisites[" + prerequisite.getId() + "]",
-                                    "Chưa đạt " + prerequisite.getSubjectCode() + " - "
-                                            + prerequisite.getSubjectName()))
-                            .toList());
-        }
-
-        var registeredClassIds = history.stream()
-                .filter(enrollment -> !enrollment.isDeleted() && enrollment.getStatus() == EnrollmentStatus.REGISTERED)
-                .map(Enrollment::getModuleClassId)
-                .collect(Collectors.toSet());
-        var conflicts = schedulingFacade.findScheduleConflicts(moduleClass.getId(), registeredClassIds);
-        if (!conflicts.isEmpty())
-            throw new EnrollmentException(
-                    ErrorCode.ENROLLMENT_SCHEDULE_CONFLICT,
-                    conflicts.stream()
-                            .map(conflict -> new FieldErrorDetail(
-                                    "moduleClassId",
-                                    "Trùng lớp "
-                                            + conflict.moduleClassCode() + " ngày " + conflict.date() + ", tiết "
-                                            + conflict.lessonOrderStart() + "–" + conflict.lessonOrderEnd()))
-                            .toList());
+        var subject = requireAvailableSubject(student, moduleClass, history);
+        requireConflictFreeSchedule(moduleClass, history);
 
         int registeredCredits = EnrollmentRegistrationPolicy.registeredCredits(history, semesterId);
         EnrollmentRegistrationPolicy.requireWithinCreditLimit(
@@ -166,27 +134,7 @@ public class EnrollmentApplicationService {
         if (moduleClass.getCurrentSize() >= moduleClass.getMaxCapacity())
             throw new EnrollmentException(ErrorCode.CAPACITY_FULL);
 
-        var semesterMatcher = SEMESTER_CODE.matcher(semester.getSemesterCode());
-        if (!semesterMatcher.matches()) throw new EnrollmentException(ErrorCode.ENROLLMENT_DATA_INCOMPLETE);
-
-        var registeredAt = LocalDateTime.now(clock);
-        var enrollment = Enrollment.builder()
-                .studentId(student.studentId())
-                .moduleClassId(moduleClass.getId())
-                .subjectId(subject.getId())
-                .semesterId(semesterId)
-                .subjectCode(subject.getSubjectCode())
-                .subjectName(subject.getSubjectName())
-                .moduleClassCode(moduleClass.getModuleClassCode())
-                .academicYearStart(Integer.parseInt(semesterMatcher.group(2)))
-                .semesterNumber(Integer.parseInt(semesterMatcher.group(1)))
-                .credits(subject.getCredits())
-                .registeredAt(registeredAt)
-                .status(EnrollmentStatus.REGISTERED)
-                .build();
-        // Mốc đăng ký là giờ Việt Nam; metadata audit được lưu độc lập theo UTC.
-        enrollment.setCreatedAt(currentAuditTimestamp());
-        enrollment.setUpdatedAt(enrollment.getCreatedAt());
+        var enrollment = createEnrollment(student, moduleClass, semester, semesterId, subject);
 
         // Hai thao tác tham gia cùng transaction; lỗi unique/commit hoàn tác cả lượt đăng ký lẫn chỗ đã giữ.
         schedulingFacade.reserveSeat(moduleClass.getId());
@@ -370,5 +318,82 @@ public class EnrollmentApplicationService {
 
     private LocalDateTime currentAuditTimestamp() {
         return LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
+    }
+
+    private SubjectResponse requireAvailableSubject(
+            EnrollmentStudentResponse student, ModuleClassResponse moduleClass, List<Enrollment> history) {
+        if (!curriculumSubjectIds(student).contains(moduleClass.getSubjectId()))
+            throw new EnrollmentException(ErrorCode.ENROLLMENT_SUBJECT_NOT_IN_CURRICULUM);
+
+        EnrollmentRegistrationPolicy.requireSubjectAvailable(moduleClass.getSubjectId(), history);
+        var subject = curriculumRegistration
+                .requireRegistrationSubjects(Set.of(moduleClass.getSubjectId()))
+                .getFirst();
+        requirePrerequisites(subject, history);
+        return subject;
+    }
+
+    private void requirePrerequisites(SubjectResponse subject, List<Enrollment> history) {
+        // Chỉ kết quả đã đạt mới thỏa tiên quyết; lượt đang học không được dùng thay kết quả.
+        var missing = missingPrerequisites(subject, EnrollmentRegistrationPolicy.passedSubjectIds(history));
+        if (!missing.isEmpty()) {
+            throw new EnrollmentException(
+                    ErrorCode.PREREQUISITE_NOT_MET,
+                    missing.stream()
+                            .map(prerequisite -> new FieldErrorDetail(
+                                    "prerequisites[" + prerequisite.getId() + "]",
+                                    "Chưa đạt " + prerequisite.getSubjectCode() + " - "
+                                            + prerequisite.getSubjectName()))
+                            .toList());
+        }
+    }
+
+    private void requireConflictFreeSchedule(ModuleClassResponse moduleClass, List<Enrollment> history) {
+        var registeredClassIds = history.stream()
+                .filter(enrollment -> !enrollment.isDeleted() && enrollment.getStatus() == EnrollmentStatus.REGISTERED)
+                .map(Enrollment::getModuleClassId)
+                .collect(Collectors.toSet());
+        var conflicts = schedulingFacade.findScheduleConflicts(moduleClass.getId(), registeredClassIds);
+        if (!conflicts.isEmpty())
+            throw new EnrollmentException(
+                    ErrorCode.ENROLLMENT_SCHEDULE_CONFLICT,
+                    conflicts.stream()
+                            .map(conflict -> new FieldErrorDetail(
+                                    "moduleClassId",
+                                    "Trùng lớp "
+                                            + conflict.moduleClassCode() + " ngày " + conflict.date() + ", tiết "
+                                            + conflict.lessonOrderStart() + "–" + conflict.lessonOrderEnd()))
+                            .toList());
+    }
+
+    private Enrollment createEnrollment(
+            EnrollmentStudentResponse student,
+            ModuleClassResponse moduleClass,
+            SemesterResponse semester,
+            Long semesterId,
+            SubjectResponse subject) {
+        var semesterMatcher = SEMESTER_CODE.matcher(semester.getSemesterCode());
+        if (!semesterMatcher.matches()) throw new EnrollmentException(ErrorCode.ENROLLMENT_DATA_INCOMPLETE);
+
+        var registeredAt = LocalDateTime.now(clock);
+        var enrollment = Enrollment.builder()
+                .studentId(student.studentId())
+                .moduleClassId(moduleClass.getId())
+                .subjectId(subject.getId())
+                .semesterId(semesterId)
+                .subjectCode(subject.getSubjectCode())
+                .subjectName(subject.getSubjectName())
+                .moduleClassCode(moduleClass.getModuleClassCode())
+                .academicYearStart(Integer.parseInt(semesterMatcher.group(2)))
+                .semesterNumber(Integer.parseInt(semesterMatcher.group(1)))
+                .credits(subject.getCredits())
+                .registeredAt(registeredAt)
+                .status(EnrollmentStatus.REGISTERED)
+                .build();
+        // Mốc đăng ký là giờ Việt Nam; metadata audit được lưu độc lập theo UTC.
+        enrollment.setCreatedAt(currentAuditTimestamp());
+        enrollment.setUpdatedAt(enrollment.getCreatedAt());
+
+        return enrollment;
     }
 }

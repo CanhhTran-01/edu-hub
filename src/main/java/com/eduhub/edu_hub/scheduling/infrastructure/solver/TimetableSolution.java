@@ -62,31 +62,7 @@ public class TimetableSolution {
         var classesById =
                 classes.stream().collect(Collectors.toMap(ClassAssignment::getModuleClassId, Function.identity()));
 
-        // Danh sách buổi học kết quả (đã đổi sang ngày thực)
-        List<TimetableAllocation.SessionPlacement> placements = new ArrayList<>();
-
-        for (var session : sessions) {
-            // Lớp của buổi này, dùng để lấy môn và giảng viên
-            var classAssignment = classesById.get(session.getModuleClassId());
-
-            // Mốc bắt đầu của đợt: môn đợt 1 tính từ firstMonday, còn lại tính từ phaseTwoStart
-            LocalDate phaseStart =
-                    phasesBySubjectId.get(classAssignment.getSubjectId()) == 1 ? firstMonday : phaseTwoStart;
-            RelativeSlot slot = session.getSlot();
-
-            // Ngày thực = mốc đợt + số tuần + số ngày lệch; null nếu chưa có mốc hoặc chưa gán slot
-            LocalDate date = phaseStart == null || slot == null
-                    ? null
-                    : phaseStart.plusWeeks(slot.weekOffset()).plusDays(slot.dayOffset());
-
-            placements.add(new TimetableAllocation.SessionPlacement(
-                    session.getModuleClassId(),
-                    session.getSessionIndex(),
-                    classAssignment.getLecturerId(), // giảng viên lấy từ cấp lớp
-                    session.getRoomId(),
-                    date,
-                    slot == null ? 0 : slot.shift())); // chưa gán slot thì ca = 0
-        }
+        var placements = createSessionPlacements(firstMonday, phaseTwoStart, phasesBySubjectId, classesById);
 
         // Ngày kết thúc đợt 1:
         // - Có đợt 2       : lùi 15 ngày từ ngày bắt đầu đợt 2 (khoảng đệm phục vụ thi KTHP đợt 1)
@@ -207,5 +183,39 @@ public class TimetableSolution {
 
         @PlanningPin
         private boolean pinned;
+    }
+
+    private List<TimetableAllocation.SessionPlacement> createSessionPlacements(
+            LocalDate firstMonday,
+            LocalDate phaseTwoStart,
+            Map<Long, Integer> phasesBySubjectId,
+            Map<Long, ClassAssignment> classesById) {
+        // Danh sách buổi học kết quả (đã đổi sang ngày thực)
+        List<TimetableAllocation.SessionPlacement> placements = new ArrayList<>();
+
+        for (var session : sessions) {
+            // Lớp của buổi này, dùng để lấy môn và giảng viên
+            var classAssignment = classesById.get(session.getModuleClassId());
+
+            // Mốc bắt đầu của đợt: môn đợt 1 tính từ firstMonday, còn lại tính từ phaseTwoStart
+            LocalDate phaseStart =
+                    phasesBySubjectId.get(classAssignment.getSubjectId()) == 1 ? firstMonday : phaseTwoStart;
+            RelativeSlot slot = session.getSlot();
+
+            // Ngày thực = mốc đợt + số tuần + số ngày lệch; null nếu chưa có mốc hoặc chưa gán slot
+            LocalDate date = phaseStart == null || slot == null
+                    ? null
+                    : phaseStart.plusWeeks(slot.weekOffset()).plusDays(slot.dayOffset());
+
+            placements.add(new TimetableAllocation.SessionPlacement(
+                    session.getModuleClassId(),
+                    session.getSessionIndex(),
+                    classAssignment.getLecturerId(), // giảng viên lấy từ cấp lớp
+                    session.getRoomId(),
+                    date,
+                    slot == null ? 0 : slot.shift())); // chưa gán slot thì ca = 0
+        }
+
+        return placements;
     }
 }

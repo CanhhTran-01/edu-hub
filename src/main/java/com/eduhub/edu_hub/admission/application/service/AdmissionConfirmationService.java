@@ -188,6 +188,17 @@ public class AdmissionConfirmationService {
             AdmissionPlanPolicy.incrementRevision(plan);
             log.info("Finished admission confirmation: planId={}, state={}", planId, plan.getState());
         }
+        return toConfirmationResponse(planId, plan, planApplicants);
+    }
+
+    private <T> T executeInTransaction(Supplier<T> operation) {
+        return Objects.requireNonNull(transactionTemplate.execute(status -> operation.get()));
+    }
+
+    private record ConfirmationBatch(String confirmationToken, List<Long> applicantIds) {}
+
+    private AdmissionConfirmationResponse toConfirmationResponse(
+            Long planId, AdmissionPlan plan, List<AdmissionApplicant> planApplicants) {
         return AdmissionConfirmationResponse.builder()
                 .planId(planId)
                 .revision(plan.getRevision())
@@ -204,10 +215,4 @@ public class AdmissionConfirmationService {
                 .applicants(planQueryService.buildApplicantResponses(planApplicants))
                 .build();
     }
-
-    private <T> T executeInTransaction(Supplier<T> operation) {
-        return Objects.requireNonNull(transactionTemplate.execute(status -> operation.get()));
-    }
-
-    private record ConfirmationBatch(String confirmationToken, List<Long> applicantIds) {}
 }

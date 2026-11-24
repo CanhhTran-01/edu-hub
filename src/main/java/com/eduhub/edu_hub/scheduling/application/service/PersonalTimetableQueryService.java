@@ -86,22 +86,8 @@ public class PersonalTimetableQueryService {
             Semester semester, LocalDate weekStartDate, Specification<ModuleClass> scope) {
         // Phạm vi được áp dụng ngay tại query; tập đăng ký rỗng không được biến thành toàn kỳ.
         var classes = moduleClassRepository.findAll(scope, Sort.by("id"));
-        var subjectsById = classes.isEmpty()
-                ? Map.<Long, SubjectSimpleResponse>of()
-                : curriculumFacade
-                        .findSubjectsByIds(classes.stream()
-                                .map(moduleClass -> moduleClass.getSubject().getId())
-                                .collect(Collectors.toSet()))
-                        .stream()
-                        .collect(Collectors.toMap(SubjectSimpleResponse::getId, subject -> subject));
-        var lecturerIds = classes.stream()
-                .filter(moduleClass -> moduleClass.getLecturer() != null)
-                .map(moduleClass -> moduleClass.getLecturer().getId())
-                .collect(Collectors.toSet());
-        var lecturerNamesById = lecturerIds.isEmpty()
-                ? Map.<Long, String>of()
-                : lecturerFacade.findLecturersByIds(lecturerIds).stream()
-                        .collect(Collectors.toMap(LecturerResponse::getId, LecturerResponse::getFullName));
+        var subjectsById = loadSubjectsById(classes);
+        var lecturerNamesById = loadLecturerNamesById(classes);
         var schedulesByClassId = classScheduleQueryService.findSchedulesByClassIds(
                 classes.stream().map(ModuleClass::getId).toList());
         var sessions = new ArrayList<WeeklySessionResponse>();
@@ -115,44 +101,14 @@ public class PersonalTimetableQueryService {
             if (schedules.isEmpty())
                 unscheduledClasses.add(
                         ModuleClassResponseMapper.toSimpleResponse(moduleClass, subjectsById, lecturerNamesById));
-            var subject = subjectsById.get(moduleClass.getSubject().getId());
-            Long lecturerId = moduleClass.getLecturer() == null
-                    ? null
-                    : moduleClass.getLecturer().getId();
-            for (var schedule : schedules) {
-                var recurringSession = new ExistingSession(
-                        schedule.getId(),
-                        moduleClass.getId(),
-                        lecturerId,
-                        schedule.getRoomId(),
-                        schedule.getDayOfWeek(),
-                        schedule.getLessonOrderStart(),
-                        schedule.getLessonOrderEnd(),
-                        schedule.getStartDate(),
-                        schedule.getEndDate());
-                for (var date : TimetablePolicy.occurrenceDatesBetween(recurringSession, fromDate, toDate)) {
-                    sessions.add(new WeeklySessionResponse(
-                            schedule.getId(),
-                            moduleClass.getId(),
-                            moduleClass.getModuleClassCode(),
-                            moduleClass.getSubject().getId(),
-                            subject == null ? null : subject.getSubjectCode(),
-                            subject == null ? null : subject.getSubjectName(),
-                            lecturerId,
-                            lecturerId == null ? null : lecturerNamesById.get(lecturerId),
-                            date,
-                            schedule.getDayOfWeek(),
-                            schedule.getLessonOrderStart(),
-                            schedule.getLessonOrderEnd(),
-                            schedule.getShift(),
-                            schedule.getStartTime(),
-                            schedule.getEndTime(),
-                            schedule.getRoomId(),
-                            schedule.getRoomCode(),
-                            schedule.getBuildingCode(),
-                            schedule.getRoomNumber()));
-                }
-            }
+            addClassSessions(
+                    moduleClass,
+                    schedules,
+                    subjectsById.get(moduleClass.getSubject().getId()),
+                    lecturerNamesById,
+                    fromDate,
+                    toDate,
+                    sessions);
         }
         sessions.sort(Comparator.comparing(WeeklySessionResponse::date)
                 .thenComparingInt(WeeklySessionResponse::lessonOrderStart)
@@ -190,5 +146,86 @@ public class PersonalTimetableQueryService {
                 || request.getWeekStartDate().plusDays(6).isBefore(semester.getStartDate()))
             throw new TimetableException(ErrorCode.VALIDATION_ERROR);
         return semester;
+    }
+
+    private Map<Long, SubjectSimpleResponse> loadSubjectsById(List<ModuleClass> classes) {
+        var subjectsById = classes.isEmpty()
+                ? Map.<Long, SubjectSimpleResponse>of()
+                : curriculumFacade
+                        .findSubjectsByIds(classes.stream()
+                                .map(moduleClass -> moduleClass.getSubject().getId())
+                                .collect(Collectors.toSet()))
+                        .stream()
+                        .collect(Collectors.toMap(SubjectSimpleResponse::getId, subject -> subject));
+        return subjectsById;
+    }
+
+    private Map<Long, String> loadLecturerNamesById(List<ModuleClass> classes) {
+        var lecturerIds = classes.stream()
+                .filter(moduleClass -> moduleClass.getLecturer() != null)
+                .map(moduleClass -> moduleClass.getLecturer().getId())
+                .collect(Collectors.toSet());
+        var lecturerNamesById = lecturerIds.isEmpty()
+                ? Map.<Long, String>of()
+                : lecturerFacade.findLecturersByIds(lecturerIds).stream()
+                        .collect(Collectors.toMap(LecturerResponse::getId, LecturerResponse::getFullName));
+        return lecturerNamesById;
+    }
+
+    private void addClassSessions(
+            ModuleClass moduleClass,
+            List<ClassScheduleResponse> schedules,
+            SubjectSimpleResponse subject,
+            Map<Long, String> lecturerNamesById,
+            LocalDate fromDate,
+            LocalDate toDate,
+            List<WeeklySessionResponse> sessions) {
+        Long lecturerId = moduleClass.getLecturer() == null
+                ? null
+                : moduleClass.getLecturer().getId();
+        for (var schedule : schedules) {
+            var recurringSession = new ExistingSession(
+                    schedule.getId(),
+                    moduleClass.getId(),
+                    lecturerId,
+                    schedule.getRoomId(),
+                    schedule.getDayOfWeek(),
+                    schedule.getLessonOrderStart(),
+                    schedule.getLessonOrderEnd(),
+                    schedule.getStartDate(),
+                    schedule.getEndDate());
+            for (var date : TimetablePolicy.occurrenceDatesBetween(recurringSession, fromDate, toDate)) {
+                sessions.add(toWeeklySession(moduleClass, subject, lecturerId, lecturerNamesById, schedule, date));
+            }
+        }
+    }
+
+    private WeeklySessionResponse toWeeklySession(
+            ModuleClass moduleClass,
+            SubjectSimpleResponse subject,
+            Long lecturerId,
+            Map<Long, String> lecturerNamesById,
+            ClassScheduleResponse schedule,
+            LocalDate date) {
+        return new WeeklySessionResponse(
+                schedule.getId(),
+                moduleClass.getId(),
+                moduleClass.getModuleClassCode(),
+                moduleClass.getSubject().getId(),
+                subject == null ? null : subject.getSubjectCode(),
+                subject == null ? null : subject.getSubjectName(),
+                lecturerId,
+                lecturerId == null ? null : lecturerNamesById.get(lecturerId),
+                date,
+                schedule.getDayOfWeek(),
+                schedule.getLessonOrderStart(),
+                schedule.getLessonOrderEnd(),
+                schedule.getShift(),
+                schedule.getStartTime(),
+                schedule.getEndTime(),
+                schedule.getRoomId(),
+                schedule.getRoomCode(),
+                schedule.getBuildingCode(),
+                schedule.getRoomNumber());
     }
 }

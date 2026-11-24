@@ -52,6 +52,27 @@ class TimetableSnapshotServiceTest {
     }
 
     @Test
+    void reportsAllClassAndCalendarErrorsBeforeReadingSchedules() {
+        var moduleClass = moduleClass();
+        semester.setEndDate(LocalDate.of(2027, 8, 8));
+        when(curriculum.requireOpenableSubjects(Set.of(1L)))
+                .thenReturn(List.of(SubjectSimpleResponse.builder()
+                        .id(1L)
+                        .subjectCode("CS1")
+                        .totalTeachingPeriods(45)
+                        .build()));
+
+        assertThatThrownBy(() -> service.loadProblem(semester, List.of(moduleClass), Set.of()))
+                .isInstanceOfSatisfying(TimetableException.class, exception -> {
+                    assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.TIMETABLE_INVALID_INPUT);
+                    assertThat(exception.getErrors())
+                            .extracting(error -> error.getField())
+                            .containsExactly("subjects[1]", "subjects[1]", "moduleClasses[100]", "startDate");
+                });
+        verifyNoInteractions(schedules, plans);
+    }
+
+    @Test
     void readsActualCandidatesAndRoomsWithoutStudentHistoryDependency() {
         var moduleClass = moduleClass();
         when(curriculum.requireOpenableSubjects(Set.of(1L)))

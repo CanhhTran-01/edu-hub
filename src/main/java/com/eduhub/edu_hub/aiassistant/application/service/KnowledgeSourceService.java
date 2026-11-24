@@ -58,22 +58,8 @@ public class KnowledgeSourceService {
                 throw new AiAssistantException(ErrorCode.KNOWLEDGE_SOURCE_STATE_INVALID);
             }
         }
-        KnowledgeSource source = sourceRepository.saveAndFlush(KnowledgeSource.builder()
-                .uploadedBy(actorId)
-                .prevSourceId(request.getPrevSourceId())
-                .title(request.getTitle().trim())
-                .documentType(request.getDocumentType().trim())
-                .originalFilename(Objects.requireNonNull(request.getFile().getOriginalFilename())
-                        .trim())
-                .fileHash(fileHash)
-                .uploadedAt(LocalDateTime.now(clock))
-                .effectiveDate(request.getEffectiveDate())
-                .expiryDate(request.getExpiryDate())
-                .status(KnowledgeSourceStatus.PROCESSING)
-                .embeddingModel(properties.getEmbeddingModel())
-                .embeddingModelVersion(properties.getEmbeddingModelVersion())
-                .build());
-        sourceRepository.storeOriginalFile(source.getId(), originalFile);
+        // PROCESSING và tệp gốc cùng transaction; worker chỉ nhìn thấy nguồn sau commit.
+        KnowledgeSource source = saveProcessingSource(actorId, request, fileHash, originalFile);
         // TODO(AUDIT_LOG): Lưu kết quả sau commit khi có audit; không lưu hash hoặc nội dung tệp vào log.
         log.info("Yêu cầu nạp nguồn tri thức: actorId={}, sourceId={}", actorId, source.getId());
         return response(source);
@@ -244,5 +230,26 @@ public class KnowledgeSourceService {
                 source.getEmbeddingModel(),
                 source.getEmbeddingModelVersion(),
                 chunkPort.countChunks(source.getId()));
+    }
+
+    private KnowledgeSource saveProcessingSource(
+            Long actorId, UploadKnowledgeSourceRequest request, String fileHash, byte[] originalFile) {
+        KnowledgeSource source = sourceRepository.saveAndFlush(KnowledgeSource.builder()
+                .uploadedBy(actorId)
+                .prevSourceId(request.getPrevSourceId())
+                .title(request.getTitle().trim())
+                .documentType(request.getDocumentType().trim())
+                .originalFilename(Objects.requireNonNull(request.getFile().getOriginalFilename())
+                        .trim())
+                .fileHash(fileHash)
+                .uploadedAt(LocalDateTime.now(clock))
+                .effectiveDate(request.getEffectiveDate())
+                .expiryDate(request.getExpiryDate())
+                .status(KnowledgeSourceStatus.PROCESSING)
+                .embeddingModel(properties.getEmbeddingModel())
+                .embeddingModelVersion(properties.getEmbeddingModelVersion())
+                .build());
+        sourceRepository.storeOriginalFile(source.getId(), originalFile);
+        return source;
     }
 }

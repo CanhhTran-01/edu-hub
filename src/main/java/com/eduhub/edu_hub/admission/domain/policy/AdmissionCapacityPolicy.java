@@ -36,53 +36,25 @@ public class AdmissionCapacityPolicy {
         // Case 1: Không cần suất dự phòng, ví dụ 140 / 40 = 3.5 --> 4 lớp tối thiểu
         int minClassesWithoutReserve = divideRoundUp(totalStudents, maxCapacity);
         if (minClassesWithoutReserve <= maxClassesAtMinimumCapacity) {
-            for (int classCount = minClassesWithoutReserve; classCount <= maxClassesAtMinimumCapacity; classCount++) {
-                scenarios.add(buildScenario(
-                        totalStudents,
-                        classCount,
-                        minCapacity,
-                        maxCapacity,
-                        reserveCapacity,
-                        suitableRoomCount,
-                        classCount == minClassesWithoutReserve));
-            }
-            return List.copyOf(scenarios);
-        }
-
-        // Case 2: Cho phép sử dụng suất dự phòng, ví dụ 140 / (40+15) = 2.54 --> 3 lớp tối thiểu
-        int minClassesWithReserve = divideRoundUp(totalStudents, maxCapacity + reserveCapacity);
-        if (minClassesWithReserve <= maxClassesAtMinimumCapacity) {
-            for (int classCount = minClassesWithReserve; classCount <= maxClassesAtMinimumCapacity; classCount++) {
-                scenarios.add(buildScenario(
-                        totalStudents,
-                        classCount,
-                        minCapacity,
-                        maxCapacity,
-                        reserveCapacity,
-                        suitableRoomCount,
-                        classCount == minClassesWithReserve));
-            }
-            // phương án tham khảo ngoài giới hạn upper
-            if (minClassesWithoutReserve <= 99)
-                scenarios.add(buildScenario(
-                        totalStudents,
-                        minClassesWithoutReserve,
-                        minCapacity,
-                        maxCapacity,
-                        reserveCapacity,
-                        suitableRoomCount,
-                        false));
-        } else {
-            scenarios.add(buildScenario(
+            scenarios.addAll(buildClassCountScenarios(
                     totalStudents,
-                    minClassesWithReserve,
+                    minClassesWithoutReserve,
+                    maxClassesAtMinimumCapacity,
                     minCapacity,
                     maxCapacity,
                     reserveCapacity,
-                    suitableRoomCount,
-                    true));
+                    suitableRoomCount));
+            return List.copyOf(scenarios);
         }
-        return List.copyOf(scenarios);
+
+        return buildReserveScenarios(
+                totalStudents,
+                minClassesWithoutReserve,
+                maxClassesAtMinimumCapacity,
+                minCapacity,
+                maxCapacity,
+                reserveCapacity,
+                suitableRoomCount);
     }
 
     public ClassDivisionScenario buildScenario(
@@ -204,24 +176,92 @@ public class AdmissionCapacityPolicy {
                 int maximumPopulation =
                         upperSizes.stream().mapToInt(Integer::intValue).sum();
                 if (totalStudents < minimumPopulation || totalStudents > maximumPopulation) continue;
-                // Bổ sung vào lớp ít người nhất trong các cận cho phép; không di chuyển người ENROLLED.
-                List<Integer> targetSizes = new ArrayList<>(lowerSizes);
-                for (int remainingStudents = totalStudents - minimumPopulation;
-                        remainingStudents > 0;
-                        remainingStudents--) {
-                    int selectedClassIndex = -1;
-                    for (int classIndex = 0; classIndex < classCount; classIndex++) {
-                        if (targetSizes.get(classIndex) < upperSizes.get(classIndex)
-                                && (selectedClassIndex < 0
-                                        || targetSizes.get(classIndex) < targetSizes.get(selectedClassIndex))) {
-                            selectedClassIndex = classIndex;
-                        }
-                    }
-                    targetSizes.set(selectedClassIndex, targetSizes.get(selectedClassIndex) + 1);
-                }
-                return List.copyOf(targetSizes);
+                return fillRemainingSeats(totalStudents, minimumPopulation, lowerSizes, upperSizes);
             }
         }
         return List.of();
+    }
+
+    private List<ClassDivisionScenario> buildClassCountScenarios(
+            int totalStudents,
+            int minimumClassCount,
+            int maximumClassCount,
+            int minCapacity,
+            int maxCapacity,
+            int reserveCapacity,
+            long suitableRoomCount) {
+        List<ClassDivisionScenario> scenarios = new ArrayList<>();
+        for (int classCount = minimumClassCount; classCount <= maximumClassCount; classCount++) {
+            scenarios.add(buildScenario(
+                    totalStudents,
+                    classCount,
+                    minCapacity,
+                    maxCapacity,
+                    reserveCapacity,
+                    suitableRoomCount,
+                    classCount == minimumClassCount));
+        }
+        return scenarios;
+    }
+
+    private List<Integer> fillRemainingSeats(
+            int totalStudents, int minimumPopulation, List<Integer> lowerSizes, List<Integer> upperSizes) {
+        // Bổ sung vào lớp ít người nhất trong các cận cho phép; không di chuyển người ENROLLED.
+        List<Integer> targetSizes = new ArrayList<>(lowerSizes);
+        for (int remainingStudents = totalStudents - minimumPopulation; remainingStudents > 0; remainingStudents--) {
+            int selectedClassIndex = -1;
+            for (int classIndex = 0; classIndex < lowerSizes.size(); classIndex++) {
+                if (targetSizes.get(classIndex) < upperSizes.get(classIndex)
+                        && (selectedClassIndex < 0
+                                || targetSizes.get(classIndex) < targetSizes.get(selectedClassIndex))) {
+                    selectedClassIndex = classIndex;
+                }
+            }
+            targetSizes.set(selectedClassIndex, targetSizes.get(selectedClassIndex) + 1);
+        }
+        return List.copyOf(targetSizes);
+    }
+
+    private List<ClassDivisionScenario> buildReserveScenarios(
+            int totalStudents,
+            int minClassesWithoutReserve,
+            int maxClassesAtMinimumCapacity,
+            int minCapacity,
+            int maxCapacity,
+            int reserveCapacity,
+            long suitableRoomCount) {
+        List<ClassDivisionScenario> scenarios = new ArrayList<>();
+        // Case 2: Cho phép sử dụng suất dự phòng, ví dụ 140 / (40+15) = 2.54 --> 3 lớp tối thiểu
+        int minClassesWithReserve = divideRoundUp(totalStudents, maxCapacity + reserveCapacity);
+        if (minClassesWithReserve <= maxClassesAtMinimumCapacity) {
+            scenarios.addAll(buildClassCountScenarios(
+                    totalStudents,
+                    minClassesWithReserve,
+                    maxClassesAtMinimumCapacity,
+                    minCapacity,
+                    maxCapacity,
+                    reserveCapacity,
+                    suitableRoomCount));
+            // phương án tham khảo ngoài giới hạn upper
+            if (minClassesWithoutReserve <= 99)
+                scenarios.add(buildScenario(
+                        totalStudents,
+                        minClassesWithoutReserve,
+                        minCapacity,
+                        maxCapacity,
+                        reserveCapacity,
+                        suitableRoomCount,
+                        false));
+        } else {
+            scenarios.add(buildScenario(
+                    totalStudents,
+                    minClassesWithReserve,
+                    minCapacity,
+                    maxCapacity,
+                    reserveCapacity,
+                    suitableRoomCount,
+                    true));
+        }
+        return List.copyOf(scenarios);
     }
 }

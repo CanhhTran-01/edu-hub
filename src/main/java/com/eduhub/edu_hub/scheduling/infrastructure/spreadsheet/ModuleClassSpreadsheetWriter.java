@@ -26,84 +26,15 @@ public class ModuleClassSpreadsheetWriter {
         try (var workbook = new XSSFWorkbook();
                 var outputStream = new ByteArrayOutputStream()) {
             var sheet = workbook.createSheet("Danh sách sinh viên");
-            var moduleClass = roster.moduleClass();
-            var metadataStyle = workbook.createCellStyle();
-            metadataStyle.setWrapText(true);
-            writeMetadata(sheet, 0, columns.size(), "DANH SÁCH SINH VIÊN LỚP HỌC PHẦN", metadataStyle);
-            writeMetadata(sheet, 1, columns.size(), "Kỳ học: " + moduleClass.getSemesterCode(), metadataStyle);
-            writeMetadata(sheet, 2, columns.size(), "Lớp học phần: " + moduleClass.getModuleClassCode(), metadataStyle);
-            writeMetadata(
-                    sheet,
-                    3,
-                    columns.size(),
-                    "Học phần: " + displayText(moduleClass.getSubjectCode()) + " - "
-                            + displayText(moduleClass.getSubjectName()),
-                    metadataStyle);
-            writeMetadata(
-                    sheet,
-                    4,
-                    columns.size(),
-                    "Giảng viên: " + displayText(moduleClass.getLecturerName()),
-                    metadataStyle);
-            writeMetadata(
-                    sheet,
-                    5,
-                    columns.size(),
-                    "Số sinh viên: " + roster.students().size(),
-                    metadataStyle);
-            writeMetadata(
-                    sheet,
-                    6,
-                    columns.size(),
-                    "Thời điểm xuất: " + EXPORT_TIME_FORMAT.format(exportedAt),
-                    metadataStyle);
-
-            var headerStyle = workbook.createCellStyle();
-            var headerFont = workbook.createFont();
-            headerFont.setBold(true);
-            headerStyle.setFont(headerFont);
-            headerStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
-            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            var metadataStyle = writeRosterMetadata(workbook, sheet, roster, columns.size(), exportedAt);
             var identifierStyle = workbook.createCellStyle();
             identifierStyle.setDataFormat(workbook.createDataFormat().getFormat("@"));
             var scoreStyle = workbook.createCellStyle();
             scoreStyle.setDataFormat(workbook.createDataFormat().getFormat("0.###"));
 
-            var header = sheet.createRow(HEADER_ROW_INDEX);
-            for (int columnIndex = 0; columnIndex < columns.size(); columnIndex++) {
-                var column = columns.get(columnIndex);
-                var headerCell = header.createCell(columnIndex);
-                headerCell.setCellValue(getColumnLabel(column));
-                headerCell.setCellStyle(headerStyle);
-                sheet.setColumnWidth(
-                        columnIndex,
-                        (column == ModuleClassExportColumn.FULL_NAME || column == ModuleClassExportColumn.NOTE
-                                        ? 34
-                                        : 22)
-                                * 256);
-            }
-
-            for (int studentIndex = 0; studentIndex < roster.students().size(); studentIndex++) {
-                var student = roster.students().get(studentIndex);
-                var studentRow = sheet.createRow(HEADER_ROW_INDEX + 1 + studentIndex);
-                for (int columnIndex = 0; columnIndex < columns.size(); columnIndex++) {
-                    var cell = studentRow.createCell(columnIndex);
-                    switch (columns.get(columnIndex)) {
-                        case STUDENT_CODE -> {
-                            cell.setCellStyle(identifierStyle);
-                            cell.setCellValue(student.studentCode());
-                        }
-                        case FULL_NAME -> cell.setCellValue(student.fullName());
-                        case COMPONENT_SCORE_1 -> writeScore(cell, student.componentScore1(), scoreStyle);
-                        case COMPONENT_SCORE_2 -> writeScore(cell, student.componentScore2(), scoreStyle);
-                        case PROCESS_SCORE -> writeScore(cell, student.processScore(), scoreStyle);
-                        case NOTE -> {
-                            if (student.note() == null || student.note().isEmpty()) cell.setBlank();
-                            else cell.setCellValue(student.note());
-                        }
-                    }
-                }
-            }
+            writeColumnHeaders(workbook, sheet, columns);
+            // Giữ đúng thứ tự cột đã chọn và kiểu ô; điểm null phải tiếp tục là ô trống.
+            writeStudentRows(sheet, roster, columns, identifierStyle, scoreStyle);
             if (roster.students().isEmpty())
                 writeMetadata(sheet, HEADER_ROW_INDEX + 2, columns.size(), "Chưa có sinh viên đăng ký", metadataStyle);
 
@@ -149,5 +80,82 @@ public class ModuleClassSpreadsheetWriter {
             case PROCESS_SCORE -> "Điểm quá trình";
             case NOTE -> "Ghi chú";
         };
+    }
+
+    private CellStyle writeRosterMetadata(
+            Workbook workbook,
+            Sheet sheet,
+            ModuleClassRosterResponse roster,
+            int columnCount,
+            ZonedDateTime exportedAt) {
+        var moduleClass = roster.moduleClass();
+        var metadataStyle = workbook.createCellStyle();
+        metadataStyle.setWrapText(true);
+        writeMetadata(sheet, 0, columnCount, "DANH SÁCH SINH VIÊN LỚP HỌC PHẦN", metadataStyle);
+        writeMetadata(sheet, 1, columnCount, "Kỳ học: " + moduleClass.getSemesterCode(), metadataStyle);
+        writeMetadata(sheet, 2, columnCount, "Lớp học phần: " + moduleClass.getModuleClassCode(), metadataStyle);
+        writeMetadata(
+                sheet,
+                3,
+                columnCount,
+                "Học phần: " + displayText(moduleClass.getSubjectCode()) + " - "
+                        + displayText(moduleClass.getSubjectName()),
+                metadataStyle);
+        writeMetadata(
+                sheet, 4, columnCount, "Giảng viên: " + displayText(moduleClass.getLecturerName()), metadataStyle);
+        writeMetadata(
+                sheet, 5, columnCount, "Số sinh viên: " + roster.students().size(), metadataStyle);
+        writeMetadata(sheet, 6, columnCount, "Thời điểm xuất: " + EXPORT_TIME_FORMAT.format(exportedAt), metadataStyle);
+
+        return metadataStyle;
+    }
+
+    private void writeColumnHeaders(Workbook workbook, Sheet sheet, List<ModuleClassExportColumn> columns) {
+        var headerStyle = workbook.createCellStyle();
+        var headerFont = workbook.createFont();
+        headerFont.setBold(true);
+        headerStyle.setFont(headerFont);
+        headerStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+        headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        var header = sheet.createRow(HEADER_ROW_INDEX);
+        for (int columnIndex = 0; columnIndex < columns.size(); columnIndex++) {
+            var column = columns.get(columnIndex);
+            var headerCell = header.createCell(columnIndex);
+            headerCell.setCellValue(getColumnLabel(column));
+            headerCell.setCellStyle(headerStyle);
+            sheet.setColumnWidth(
+                    columnIndex,
+                    (column == ModuleClassExportColumn.FULL_NAME || column == ModuleClassExportColumn.NOTE ? 34 : 22)
+                            * 256);
+        }
+    }
+
+    private void writeStudentRows(
+            Sheet sheet,
+            ModuleClassRosterResponse roster,
+            List<ModuleClassExportColumn> columns,
+            CellStyle identifierStyle,
+            CellStyle scoreStyle) {
+        for (int studentIndex = 0; studentIndex < roster.students().size(); studentIndex++) {
+            var student = roster.students().get(studentIndex);
+            var studentRow = sheet.createRow(HEADER_ROW_INDEX + 1 + studentIndex);
+            for (int columnIndex = 0; columnIndex < columns.size(); columnIndex++) {
+                var cell = studentRow.createCell(columnIndex);
+                switch (columns.get(columnIndex)) {
+                    case STUDENT_CODE -> {
+                        cell.setCellStyle(identifierStyle);
+                        cell.setCellValue(student.studentCode());
+                    }
+                    case FULL_NAME -> cell.setCellValue(student.fullName());
+                    case COMPONENT_SCORE_1 -> writeScore(cell, student.componentScore1(), scoreStyle);
+                    case COMPONENT_SCORE_2 -> writeScore(cell, student.componentScore2(), scoreStyle);
+                    case PROCESS_SCORE -> writeScore(cell, student.processScore(), scoreStyle);
+                    case NOTE -> {
+                        if (student.note() == null || student.note().isEmpty()) cell.setBlank();
+                        else cell.setCellValue(student.note());
+                    }
+                }
+            }
+        }
     }
 }

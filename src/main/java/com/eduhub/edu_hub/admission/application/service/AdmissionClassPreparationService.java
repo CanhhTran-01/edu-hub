@@ -51,6 +51,41 @@ public class AdmissionClassPreparationService {
         // Khóa khóa học để tuần tự hóa cấp tên lớp giữa các plan và các lần upload cùng phạm vi.
         peopleAdmissionFacade.lockCohort(plan.getCohortId());
         var classesInScope = peopleAdmissionFacade.findClasses(plan.getMajorId(), plan.getCohortId());
+        // Giữ nguyên lớp đã có người nhập học; chỉ điều chỉnh phần liên kết của các lớp trống.
+        var selectedClasses = retainRequiredPlanClasses(
+                plan, plannedClasses, occupiedClasses, enrolledCountsByClassId, targetSizes.size());
+        int nextPosition = plannedClasses.stream()
+                        .mapToInt(AdmissionPlanClass::getPosition)
+                        .max()
+                        .orElse(0)
+                + 1;
+
+        int nextClassSequence = calculateNextClassSequence(classesInScope);
+        nextPosition = reuseAvailableClasses(plan, classesInScope, selectedClasses, targetSizes.size(), nextPosition);
+        createMissingClasses(plan, selectedClasses, targetSizes.size(), nextPosition, nextClassSequence);
+        configureSelectedClasses(plan, selectedClasses, enrolledCountsByClassId, targetSizes);
+        planClassRepository.saveAll(selectedClasses);
+        planClassRepository.flush();
+        plan.setSelectedClassCount(selectedClasses.size());
+        // TODO(AUDIT_LOG): Ghi kịch bản tự chọn và lớp tạo/dùng lại sau commit; ngoại lệ được chấp nhận lúc xác nhận.
+        return selectedClasses;
+    }
+
+    private boolean isAvailableForAdmission(AdmissionClassInfo administrativeClass) {
+        return !administrativeClass.isDeleted()
+                && administrativeClass.getTrainingType() == TrainingType.CHINH_QUY
+                && administrativeClass.getClassSequence() != null
+                && administrativeClass.getLastStudentSequence() == 0
+                && administrativeClass.getCurrentSize() == 0
+                && !planClassRepository.existsByAdministrativeClassId(administrativeClass.getId());
+    }
+
+    private List<AdmissionPlanClass> retainRequiredPlanClasses(
+            AdmissionPlan plan,
+            List<AdmissionPlanClass> plannedClasses,
+            List<AdmissionPlanClass> occupiedClasses,
+            Map<Long, Long> enrolledCountsByClassId,
+            int targetClassCount) {
         List<AdmissionPlanClass> selectedClasses = new ArrayList<>(occupiedClasses);
         for (var plannedClass : plannedClasses) {
             AdmissionClassInfo lockedClass = peopleAdmissionFacade.lockClass(plannedClass.getAdministrativeClassId());
@@ -63,19 +98,17 @@ public class AdmissionClassPreparationService {
                     || lockedClass.getReserveCapacity() != plan.getReserveCapacity()) {
                 throw new AdmissionPlanException(ErrorCode.ADMISSION_DATA_CHANGED);
             }
-            if (enrolledCount == 0 && selectedClasses.size() < targetSizes.size()) selectedClasses.add(plannedClass);
+            if (enrolledCount == 0 && selectedClasses.size() < targetClassCount) selectedClasses.add(plannedClass);
         }
         // Chỉ bỏ liên kết các lớp trống không còn cần; giữ lớp thật và bộ đếm định danh trong People.
         planClassRepository.deleteAll(plannedClasses.stream()
                 .filter(plannedClass -> !selectedClasses.contains(plannedClass))
                 .toList());
         planClassRepository.flush();
-        int nextPosition = plannedClasses.stream()
-                        .mapToInt(AdmissionPlanClass::getPosition)
-                        .max()
-                        .orElse(0)
-                + 1;
+        return selectedClasses;
+    }
 
+    private int calculateNextClassSequence(List<AdmissionClassInfo> classesInScope) {
         // Tính cả lớp đã xóa/tên lớp cũ để không cấp lại số thứ tự đã sử dụng.
         int nextClassSequence = classesInScope.stream()
                         .map(AdmissionClassInfo::getClassSequence)
@@ -84,8 +117,17 @@ public class AdmissionClassPreparationService {
                         .max()
                         .orElse(0)
                 + 1;
+        return nextClassSequence;
+    }
+
+    private int reuseAvailableClasses(
+            AdmissionPlan plan,
+            List<AdmissionClassInfo> classesInScope,
+            List<AdmissionPlanClass> selectedClasses,
+            int targetClassCount,
+            int nextPosition) {
         for (AdmissionClassInfo candidateClass : classesInScope) {
-            if (selectedClasses.size() == targetSizes.size()) break;
+            if (selectedClasses.size() == targetClassCount) break;
             if (!isAvailableForAdmission(candidateClass)) continue;
             var lockedClass = peopleAdmissionFacade.lockClass(candidateClass.getId());
             if (lockedClass.getCurrentSize() == 0
@@ -98,7 +140,16 @@ public class AdmissionClassPreparationService {
                         .build());
             }
         }
-        while (selectedClasses.size() < targetSizes.size()) {
+        return nextPosition;
+    }
+
+    private void createMissingClasses(
+            AdmissionPlan plan,
+            List<AdmissionPlanClass> selectedClasses,
+            int targetClassCount,
+            int nextPosition,
+            int nextClassSequence) {
+        while (selectedClasses.size() < targetClassCount) {
             if (nextClassSequence > 99) throw new AdmissionPlanException(ErrorCode.INVALID_STUDENT_CODE_CLASS);
             var createdClass = peopleAdmissionFacade.createClass(AdmissionClassRequest.builder()
                     .majorId(plan.getMajorId())
@@ -114,6 +165,13 @@ public class AdmissionClassPreparationService {
                     .position(nextPosition++)
                     .build());
         }
+    }
+
+    private void configureSelectedClasses(
+            AdmissionPlan plan,
+            List<AdmissionPlanClass> selectedClasses,
+            Map<Long, Long> enrolledCountsByClassId,
+            List<Integer> targetSizes) {
         for (int classIndex = 0; classIndex < selectedClasses.size(); classIndex++) {
             var plannedClass = selectedClasses.get(classIndex);
             if (!enrolledCountsByClassId.containsKey(plannedClass.getAdministrativeClassId())) {
@@ -125,19 +183,5 @@ public class AdmissionClassPreparationService {
             }
             plannedClass.setTargetSize(targetSizes.get(classIndex));
         }
-        planClassRepository.saveAll(selectedClasses);
-        planClassRepository.flush();
-        plan.setSelectedClassCount(selectedClasses.size());
-        // TODO(AUDIT_LOG): Ghi kịch bản tự chọn và lớp tạo/dùng lại sau commit; ngoại lệ được chấp nhận lúc xác nhận.
-        return selectedClasses;
-    }
-
-    private boolean isAvailableForAdmission(AdmissionClassInfo administrativeClass) {
-        return !administrativeClass.isDeleted()
-                && administrativeClass.getTrainingType() == TrainingType.CHINH_QUY
-                && administrativeClass.getClassSequence() != null
-                && administrativeClass.getLastStudentSequence() == 0
-                && administrativeClass.getCurrentSize() == 0
-                && !planClassRepository.existsByAdministrativeClassId(administrativeClass.getId());
     }
 }

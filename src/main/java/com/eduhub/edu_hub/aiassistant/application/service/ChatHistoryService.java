@@ -141,29 +141,13 @@ public class ChatHistoryService {
             List<RetrievedChunk> citedChunks) {
         Long userId = accessService.requireStudent(principal).getId();
         var now = LocalDateTime.now(clock);
-        ChatSession session;
-        if (context.sessionId() == null) {
-            int titleEnd = question.offsetByCodePoints(0, Math.min(120, question.codePointCount(0, question.length())));
-            session = sessionRepository.save(new ChatSession(userId, question.substring(0, titleEnd), now));
-        } else {
-            session = sessionRepository
-                    .findOwnedForUpdate(context.sessionId(), userId)
-                    .orElseThrow(() -> deniedSession(userId));
-            var currentMessages =
-                    messageRepository.findBySessionIdAndSessionUserIdAndSessionDeletedFalseAndDeletedFalseOrderByIdDesc(
-                            session.getId(), userId, PageRequest.of(0, 1));
-            Long currentLastMessageId = currentMessages.isEmpty()
-                    ? null
-                    : currentMessages.getFirst().getId();
-            if (!Objects.equals(currentLastMessageId, context.lastMessageId())) {
-                throw new AiAssistantException(ErrorCode.CHAT_SESSION_CHANGED);
-            }
-        }
+        var session = lockOrCreateSession(userId, context, question, now);
 
         String content = proposedContent;
         List<RetrievedChunk> referencesToSave = citedChunks;
         List<Long> citedChunkIds =
                 citedChunks.stream().map(RetrievedChunk::chunkId).toList();
+        // Nguồn có thể bị vô hiệu hóa trong lúc gọi AI; kiểm tra lại ngay trước khi ghi lịch sử.
         if (!chunkPort
                 .lockAvailableChunkIds(citedChunkIds, LocalDate.now(clock))
                 .containsAll(citedChunkIds)) {
@@ -187,16 +171,7 @@ public class ChatHistoryService {
                 .content(content)
                 .intent(intent)
                 .citations(referencesToSave.stream()
-                        .map(chunk -> CitationResponse.builder()
-                                .referenceCode("K" + chunk.chunkId())
-                                .chunkId(chunk.chunkId())
-                                .sourceId(chunk.sourceId())
-                                .sourceTitle(chunk.sourceTitle())
-                                .sectionTitle(chunk.sectionTitle())
-                                .pageNumber(chunk.pageNumber())
-                                .snippet(chunk.content())
-                                .sourceAvailable(true)
-                                .build())
+                        .map(this::retrievedCitationResponse)
                         .toList())
                 .build();
     }
@@ -242,4 +217,42 @@ public class ChatHistoryService {
     }
 
     public record ConversationContext(Long sessionId, Long lastMessageId, List<ConversationMessage> messages) {}
+
+    private ChatSession lockOrCreateSession(
+            Long userId, ConversationContext context, String question, LocalDateTime now) {
+        // Kiểm tra mốc tin nhắn dưới khóa trước khi lưu, tránh ghép câu trả lời vào lịch sử đã thay đổi.
+        ChatSession session;
+        if (context.sessionId() == null) {
+            int titleEnd = question.offsetByCodePoints(0, Math.min(120, question.codePointCount(0, question.length())));
+            session = sessionRepository.save(new ChatSession(userId, question.substring(0, titleEnd), now));
+        } else {
+            session = sessionRepository
+                    .findOwnedForUpdate(context.sessionId(), userId)
+                    .orElseThrow(() -> deniedSession(userId));
+            var currentMessages =
+                    messageRepository.findBySessionIdAndSessionUserIdAndSessionDeletedFalseAndDeletedFalseOrderByIdDesc(
+                            session.getId(), userId, PageRequest.of(0, 1));
+            Long currentLastMessageId = currentMessages.isEmpty()
+                    ? null
+                    : currentMessages.getFirst().getId();
+            if (!Objects.equals(currentLastMessageId, context.lastMessageId())) {
+                throw new AiAssistantException(ErrorCode.CHAT_SESSION_CHANGED);
+            }
+        }
+
+        return session;
+    }
+
+    private CitationResponse retrievedCitationResponse(RetrievedChunk chunk) {
+        return CitationResponse.builder()
+                .referenceCode("K" + chunk.chunkId())
+                .chunkId(chunk.chunkId())
+                .sourceId(chunk.sourceId())
+                .sourceTitle(chunk.sourceTitle())
+                .sectionTitle(chunk.sectionTitle())
+                .pageNumber(chunk.pageNumber())
+                .snippet(chunk.content())
+                .sourceAvailable(true)
+                .build();
+    }
 }

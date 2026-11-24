@@ -12,6 +12,7 @@ import com.eduhub.edu_hub.people.api.mapper.LecturerResponseMapper;
 import com.eduhub.edu_hub.people.application.exception.ProfileCreationException;
 import com.eduhub.edu_hub.people.domain.enums.AccountNotificationStatus;
 import com.eduhub.edu_hub.people.domain.enums.LecturerStatus;
+import com.eduhub.edu_hub.people.domain.model.Faculty;
 import com.eduhub.edu_hub.people.domain.model.Lecturer;
 import com.eduhub.edu_hub.people.domain.model.LecturerTeachingSubject;
 import com.eduhub.edu_hub.people.domain.policy.ProfileCreationPolicy;
@@ -114,17 +115,7 @@ public class LecturerCreationService {
         Long userId = identityFacade.createLecturerAccountWithoutNotification(
                 new CreateLecturerAccountRequest(lecturerCode, email));
 
-        Lecturer lecturer = Lecturer.builder()
-                .lecturerCode(lecturerCode)
-                .userId(userId)
-                .faculty(faculty)
-                .fullName(fullName)
-                .citizenId(citizenId)
-                .dateOfBirth(request.getDateOfBirth())
-                .phone(request.getPhone() == null ? null : request.getPhone().trim())
-                .recruitmentYear(request.getRecruitmentYear())
-                .status(LecturerStatus.ACTIVE)
-                .build();
+        Lecturer lecturer = buildLecturer(request, faculty, userId, lecturerCode, fullName, citizenId);
         Lecturer savedLecturer = lecturerRepository.saveAndFlush(lecturer);
         lecturerTeachingSubjectRepository.saveAll(teachingSubjectIds.stream()
                 .sorted()
@@ -174,4 +165,25 @@ public class LecturerCreationService {
     }
 
     private record CreatedLecturer(LecturerResponse lecturer, Long userId, List<String> warnings, String reason) {}
+
+    private Lecturer buildLecturer(
+            CreateLecturerRequest request,
+            Faculty faculty,
+            Long userId,
+            String lecturerCode,
+            String fullName,
+            String citizenId) {
+        Lecturer lecturer = Lecturer.builder()
+                .lecturerCode(lecturerCode)
+                .userId(userId)
+                .faculty(faculty)
+                .fullName(fullName)
+                .citizenId(citizenId)
+                .dateOfBirth(request.getDateOfBirth())
+                .phone(request.getPhone() == null ? null : request.getPhone().trim())
+                .recruitmentYear(request.getRecruitmentYear())
+                .status(LecturerStatus.ACTIVE)
+                .build();
+        return lecturer;
+    }
 }

@@ -78,26 +78,9 @@ public class LecturerAdminUpdateService {
                 ? findCurrentTeachingSubjects(existingTeachingLinks)
                 : curriculumTeachingSubjects.requireActiveTeachingSubjects(teachingSubjectIds);
 
-        // Khóa Lecturer đã giữ ở trên: không gỡ năng lực đang được dùng bởi lớp chưa hoàn tất.
-        if (teachingSubjectIds != null
-                && !teachingSubjectIds.containsAll(teachingAssignments.findRequiredTeachingSubjectIds(lecturerId)))
-            throw new LecturerProfileException(
-                    ErrorCode.LECTURER_TEACHING_ASSIGNMENT_IN_USE,
-                    "teachingSubjectIds",
-                    "Giảng viên còn lớp chưa hoàn tất cần môn bị gỡ; hãy điều chỉnh phân công trước");
+        requireTeachingSubjectsCoverAssignments(lecturerId, teachingSubjectIds);
 
-        // Email có giá trị mới được ghi vào User trong transaction hiện tại; lỗi phải rollback cả hồ sơ/môn.
-        // Bỏ field/null giữ nguyên, chuỗi trắng đã được DTO giữ thành "" để yêu cầu xóa email.
-        if (request.getEmail() != null) identityFacade.updateAccountEmail(lecturer.getUserId(), request.getEmail());
-
-        // Sửa đúng instance đang quản lý, không dựng lại Lecturer để tránh mất mã/khoa/trạng thái/liên kết User.
-        if (fullName != null) lecturer.setFullName(fullName);
-        if (request.getDateOfBirth() != null) lecturer.setDateOfBirth(request.getDateOfBirth());
-        if (phone != null) lecturer.setPhone(phone);
-        if (citizenId != null) lecturer.setCitizenId(citizenId);
-
-        lecturerRepository.save(lecturer);
-
+        applyLecturerProfileChanges(lecturer, request, fullName, phone, citizenId);
         if (teachingSubjectIds != null)
             updateTeachingSubjectLinks(lecturerId, existingTeachingLinks, teachingSubjectIds);
 
@@ -170,5 +153,30 @@ public class LecturerAdminUpdateService {
             }
         }
         if (!changedTeachingLinks.isEmpty()) lecturerTeachingSubjectRepository.saveAll(changedTeachingLinks);
+    }
+
+    private void applyLecturerProfileChanges(
+            Lecturer lecturer, UpdateLecturerProfileRequest request, String fullName, String phone, String citizenId) {
+        // Email có giá trị mới được ghi vào User trong transaction hiện tại; lỗi phải rollback cả hồ sơ/môn.
+        // Bỏ field/null giữ nguyên, chuỗi trắng đã được DTO giữ thành "" để yêu cầu xóa email.
+        if (request.getEmail() != null) identityFacade.updateAccountEmail(lecturer.getUserId(), request.getEmail());
+
+        // Sửa đúng instance đang quản lý, không dựng lại Lecturer để tránh mất mã/khoa/trạng thái/liên kết User.
+        if (fullName != null) lecturer.setFullName(fullName);
+        if (request.getDateOfBirth() != null) lecturer.setDateOfBirth(request.getDateOfBirth());
+        if (phone != null) lecturer.setPhone(phone);
+        if (citizenId != null) lecturer.setCitizenId(citizenId);
+
+        lecturerRepository.save(lecturer);
+    }
+
+    private void requireTeachingSubjectsCoverAssignments(Long lecturerId, Set<Long> teachingSubjectIds) {
+        // Khóa Lecturer đã giữ ở trên: không gỡ năng lực đang được dùng bởi lớp chưa hoàn tất.
+        if (teachingSubjectIds != null
+                && !teachingSubjectIds.containsAll(teachingAssignments.findRequiredTeachingSubjectIds(lecturerId)))
+            throw new LecturerProfileException(
+                    ErrorCode.LECTURER_TEACHING_ASSIGNMENT_IN_USE,
+                    "teachingSubjectIds",
+                    "Giảng viên còn lớp chưa hoàn tất cần môn bị gỡ; hãy điều chỉnh phân công trước");
     }
 }

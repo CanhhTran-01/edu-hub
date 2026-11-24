@@ -4,6 +4,8 @@ import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.scheduling.application.specification.ClassScheduleSpecification;
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
+import com.eduhub.edu_hub.scheduling.domain.model.ModuleClass;
+import com.eduhub.edu_hub.scheduling.domain.model.Semester;
 import com.eduhub.edu_hub.scheduling.domain.model.TimetableProblem;
 import com.eduhub.edu_hub.scheduling.domain.policy.ModuleClassLifecyclePolicy;
 import com.eduhub.edu_hub.scheduling.domain.repository.*;
@@ -48,9 +50,8 @@ public class ModuleClassLifecycleService {
                 .collect(Collectors.toMap(SubjectSimpleResponse::getId, Function.identity()));
         var schedulesByClassId = scheduleRepository
                 .findAll(
-                        ClassScheduleSpecification.notDeletedAndModuleClassIdIn(classes.stream()
-                                .map(com.eduhub.edu_hub.scheduling.domain.model.ModuleClass::getId)
-                                .toList()),
+                        ClassScheduleSpecification.notDeletedAndModuleClassIdIn(
+                                classes.stream().map(ModuleClass::getId).toList()),
                         Sort.by("id"))
                 .stream()
                 .map(TimetableSnapshotService::toExistingSession)
@@ -58,29 +59,11 @@ public class ModuleClassLifecycleService {
 
         int changedCount = 0; // số lớp đã đổi trạng thái trong lần quét này
         for (var moduleClass : classes) {
-            moduleClassRepository
-                    .findForUpdateByIdAndDeletedFalse(moduleClass.getId())
-                    .orElseThrow();
-            var subject = subjectsById.get(moduleClass.getSubject().getId());
-            var previousStatus = moduleClass.getStatus(); // lưu trạng thái cũ để log
-            var nextStatus = ModuleClassLifecyclePolicy.determineNextStatus(
-                    previousStatus,
-                    semester.getRegistrationEnd(),
-                    LocalDate.now(clock),
-                    subject == null ? null : subject.getTotalTeachingPeriods(),
-                    schedulesByClassId.getOrDefault(moduleClass.getId(), List.of()),
-                    moduleClass.getLecturer() != null);
-            if (nextStatus != previousStatus) {
-                if (previousStatus == ModuleClassStatus.OPEN) moduleClass.closeRegistration();
-                if (nextStatus == ModuleClassStatus.COMPLETED) moduleClass.completeTeaching();
-                moduleClass.setUpdatedAt(LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
-                changedCount++;
-                log.debug(
-                        "Chuyển trạng thái lớp: moduleClassId={}, {} -> {}",
-                        moduleClass.getId(),
-                        previousStatus,
-                        nextStatus);
-            }
+            if (synchronizeClassStatus(
+                    semester,
+                    moduleClass,
+                    subjectsById.get(moduleClass.getSubject().getId()),
+                    schedulesByClassId.getOrDefault(moduleClass.getId(), List.of()))) changedCount++;
         }
 
         if (changedCount > 0) {
@@ -91,5 +74,35 @@ public class ModuleClassLifecycleService {
                     classes.size(),
                     changedCount);
         }
+    }
+
+    private boolean synchronizeClassStatus(
+            Semester semester,
+            ModuleClass moduleClass,
+            SubjectSimpleResponse subject,
+            List<TimetableProblem.ExistingSession> schedules) {
+        moduleClassRepository
+                .findForUpdateByIdAndDeletedFalse(moduleClass.getId())
+                .orElseThrow();
+        var previousStatus = moduleClass.getStatus(); // lưu trạng thái cũ để log
+        var nextStatus = ModuleClassLifecyclePolicy.determineNextStatus(
+                previousStatus,
+                semester.getRegistrationEnd(),
+                LocalDate.now(clock),
+                subject == null ? null : subject.getTotalTeachingPeriods(),
+                schedules,
+                moduleClass.getLecturer() != null);
+        if (nextStatus != previousStatus) {
+            if (previousStatus == ModuleClassStatus.OPEN) moduleClass.closeRegistration();
+            if (nextStatus == ModuleClassStatus.COMPLETED) moduleClass.completeTeaching();
+            moduleClass.setUpdatedAt(LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
+            log.debug(
+                    "Chuyển trạng thái lớp: moduleClassId={}, {} -> {}",
+                    moduleClass.getId(),
+                    previousStatus,
+                    nextStatus);
+            return true;
+        }
+        return false;
     }
 }

@@ -143,22 +143,13 @@ public class AdmissionPlanQueryService {
                 warnings.add("Lớp " + administrativeClass.getClassName() + " dưới tối thiểu");
             if (projectedClassSize > plan.getMaxCapacity())
                 warnings.add("Lớp " + administrativeClass.getClassName() + " dùng dự phòng");
-            classResponses.add(AdmissionClassPreviewResponse.builder()
-                    .id(administrativeClass.getId())
-                    .className(administrativeClass.getClassName())
-                    .targetSize(plannedClass.getTargetSize())
-                    .assignedSize(assignedApplicants.size())
-                    .currentSize((int) administrativeClass.getCurrentSize())
-                    .minimum(plan.getMinCapacity())
-                    .maximum(plan.getMaxCapacity())
-                    .reserve(plan.getReserveCapacity())
-                    .reserveUsed(Math.max(0, projectedClassSize - plan.getMaxCapacity()))
-                    .averageScore(
-                            classAverageScore == null ? null : classAverageScore.setScale(2, RoundingMode.HALF_UP))
-                    .applicantIds(assignedApplicants.stream()
-                            .map(AdmissionApplicant::getId)
-                            .toList())
-                    .build());
+            classResponses.add(toClassPreview(
+                    plan,
+                    plannedClass,
+                    administrativeClass,
+                    assignedApplicants,
+                    projectedClassSize,
+                    classAverageScore));
         }
         return new ClassPreviewSummary(classResponses, classAverageScores, warnings);
     }
@@ -245,4 +236,28 @@ public class AdmissionPlanQueryService {
             List<AdmissionClassPreviewResponse> classResponses,
             List<BigDecimal> classAverageScores,
             List<String> warnings) {}
+
+    private AdmissionClassPreviewResponse toClassPreview(
+            AdmissionPlan plan,
+            AdmissionPlanClass plannedClass,
+            AdmissionClassInfo administrativeClass,
+            List<AdmissionApplicant> assignedApplicants,
+            int projectedClassSize,
+            BigDecimal classAverageScore) {
+        return AdmissionClassPreviewResponse.builder()
+                .id(administrativeClass.getId())
+                .className(administrativeClass.getClassName())
+                .targetSize(plannedClass.getTargetSize())
+                .assignedSize(assignedApplicants.size())
+                .currentSize((int) administrativeClass.getCurrentSize())
+                .minimum(plan.getMinCapacity())
+                .maximum(plan.getMaxCapacity())
+                .reserve(plan.getReserveCapacity())
+                .reserveUsed(Math.max(0, projectedClassSize - plan.getMaxCapacity()))
+                .averageScore(classAverageScore == null ? null : classAverageScore.setScale(2, RoundingMode.HALF_UP))
+                .applicantIds(assignedApplicants.stream()
+                        .map(AdmissionApplicant::getId)
+                        .toList())
+                .build();
+    }
 }

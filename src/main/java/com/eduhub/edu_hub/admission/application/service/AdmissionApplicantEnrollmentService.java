@@ -2,6 +2,8 @@ package com.eduhub.edu_hub.admission.application.service;
 
 import com.eduhub.edu_hub.admission.application.exception.AdmissionEnrollmentException;
 import com.eduhub.edu_hub.admission.domain.enums.AdmissionApplicantStatus;
+import com.eduhub.edu_hub.admission.domain.model.AdmissionApplicant;
+import com.eduhub.edu_hub.admission.domain.model.AdmissionPlan;
 import com.eduhub.edu_hub.admission.domain.model.StudentAdmission;
 import com.eduhub.edu_hub.admission.domain.policy.AdmissionIdentityPolicy;
 import com.eduhub.edu_hub.admission.domain.repository.AdmissionApplicantRepository;
@@ -45,7 +47,29 @@ public class AdmissionApplicantEnrollmentService {
             confirmationLease.extendConfirmationLease(plan);
             return;
         }
-        var studentRegistration = peopleAdmissionFacade.registerStudent(AdmissionStudentRegistration.builder()
+        // People cấp hoặc dùng lại sinh viên/tài khoản trong transaction xác nhận của chính hồ sơ này.
+        var studentRegistration = peopleAdmissionFacade.registerStudent(toStudentRegistration(applicant));
+        Long studentId = studentRegistration.student().getId();
+        if (studentRegistration.accountLocked())
+            applicant.setWarningMessage("Tài khoản cũ đang khóa/ngừng hoạt động; giữ nguyên trạng thái");
+        var admission = saveStudentAdmission(plan, applicant, studentId);
+        notificationQueue.enqueueAdmissionNotification(QueueAdmissionNotificationRequest.builder()
+                .admissionId(admission.getId())
+                .studentId(studentId)
+                .recipient(applicant.getEmail())
+                .reEnrollment(studentRegistration.reused())
+                .build());
+        applicant.setStudentId(studentId);
+        applicant.setReuseAccount(studentRegistration.reused());
+        applicant.setState(AdmissionApplicantStatus.ENROLLED);
+        applicant.setErrorMessage(null);
+        confirmationLease.extendConfirmationLease(plan);
+        // TODO(AUDIT_LOG): Ghi kết quả từng hồ sơ và việc dùng lại danh tính sau khi commit.
+        // Hàng đợi thuộc notification nhưng tham gia cùng transaction; listener chỉ gửi sau commit.
+    }
+
+    private AdmissionStudentRegistration toStudentRegistration(AdmissionApplicant applicant) {
+        return AdmissionStudentRegistration.builder()
                 .classId(applicant.getAdministrativeClassId())
                 .citizenId(applicant.getCitizenId())
                 .fullName(applicant.getFullName())
@@ -54,10 +78,10 @@ public class AdmissionApplicantEnrollmentService {
                 .email(applicant.getEmail())
                 .phone(applicant.getPhone())
                 .entranceScore(applicant.getEntranceScore())
-                .build());
-        Long studentId = studentRegistration.student().getId();
-        if (studentRegistration.accountLocked())
-            applicant.setWarningMessage("Tài khoản cũ đang khóa/ngừng hoạt động; giữ nguyên trạng thái");
+                .build();
+    }
+
+    private StudentAdmission saveStudentAdmission(AdmissionPlan plan, AdmissionApplicant applicant, Long studentId) {
         var admission = StudentAdmission.builder()
                 .applicationCode(applicant.getApplicationCode())
                 .studentId(studentId)
@@ -72,18 +96,6 @@ public class AdmissionApplicantEnrollmentService {
                 .entranceScore(applicant.getEntranceScore())
                 .build();
         studentAdmissionRepository.saveAndFlush(admission);
-        notificationQueue.enqueueAdmissionNotification(QueueAdmissionNotificationRequest.builder()
-                .admissionId(admission.getId())
-                .studentId(studentId)
-                .recipient(applicant.getEmail())
-                .reEnrollment(studentRegistration.reused())
-                .build());
-        applicant.setStudentId(studentId);
-        applicant.setReuseAccount(studentRegistration.reused());
-        applicant.setState(AdmissionApplicantStatus.ENROLLED);
-        applicant.setErrorMessage(null);
-        confirmationLease.extendConfirmationLease(plan);
-        // TODO(AUDIT_LOG): Ghi kết quả từng hồ sơ và việc dùng lại danh tính sau khi commit.
-        // Hàng đợi thuộc notification nhưng tham gia cùng transaction; listener chỉ gửi sau commit.
+        return admission;
     }
 }

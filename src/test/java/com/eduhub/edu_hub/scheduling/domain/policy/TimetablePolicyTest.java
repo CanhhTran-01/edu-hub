@@ -100,6 +100,51 @@ class TimetablePolicyTest {
     }
 
     @Test
+    void preservesPenaltyTotalsAndDiagnosticOrderWhenManySessionsShareResources() {
+        var problem = TimetableTestData.problem(1, 2, 6);
+        var allocation = TimetableTestData.allocation(problem);
+        var sessions = allocation.sessions().stream()
+                .map(session -> new TimetableAllocation.SessionPlacement(
+                        session.moduleClassId(), session.sessionIndex(), 201L, 501L, allocation.phaseOneStart(), 1))
+                .toList();
+        var conflictingAllocation = replaceSessions(allocation, sessions);
+
+        // Bốn buổi cùng tài nguyên tạo mức phạt tích lũy; bật chẩn đoán không được làm đổi điểm.
+        var explained = TimetablePolicy.assess(problem, conflictingAllocation, true);
+        var unexplained = TimetablePolicy.assess(problem, conflictingAllocation, false);
+
+        assertThat(explained.hardPenalty()).isEqualTo(14);
+        assertThat(explained.softPenalty()).isEqualTo(4);
+        assertThat(explained.violations())
+                .containsExactly(
+                        "Trùng phòng ngày 2027-08-09",
+                        "Trùng giảng viên ngày 2027-08-09",
+                        "Một lớp chỉ học một ca/ngày: MC_1_0",
+                        "Một lớp chỉ học một ca/ngày: MC_1_1");
+        assertThat(unexplained.hardPenalty()).isEqualTo(explained.hardPenalty());
+        assertThat(unexplained.softPenalty()).isEqualTo(explained.softPenalty());
+        assertThat(unexplained.violations()).isEmpty();
+    }
+
+    @Test
+    void countsUndatedSessionsWithoutChargingMissingSessionOrResourceConflicts() {
+        var problem = TimetableTestData.problem(1, 1, 6);
+        var allocation = TimetableTestData.allocation(problem);
+        var sessions = new ArrayList<>(allocation.sessions());
+        var firstSession = sessions.getFirst();
+        sessions.set(
+                0,
+                new TimetableAllocation.SessionPlacement(
+                        firstSession.moduleClassId(), firstSession.sessionIndex(), 201L, 501L, null, 1));
+
+        var assessment = TimetablePolicy.assess(problem, replaceSessions(allocation, sessions), true);
+
+        assertThat(assessment.hardPenalty()).isEqualTo(1);
+        assertThat(assessment.softPenalty()).isEqualTo(1);
+        assertThat(assessment.violations()).containsExactly("Chưa phân công đủ ngày, phòng hoặc giảng viên: MC_1_0");
+    }
+
+    @Test
     void rejectsMissingMiddleWeekAndSingleSessionBeforeFinalWeek() {
         var problem = TimetableTestData.problem(1, 1, 18);
         var allocation = TimetableTestData.allocation(problem);

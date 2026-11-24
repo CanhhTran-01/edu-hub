@@ -38,33 +38,7 @@ public class AdmissionApplicantClassificationService {
         Map<String, StudentAdmission> existingAdmissionsByApplicationCode = new HashMap<>();
         Map<String, List<AdmissionStudentInfo>> existingStudentsByCitizenId = new HashMap<>();
 
-        for (int offset = 0; offset < validApplicants.size(); offset += IDENTITY_LOOKUP_BATCH_SIZE) {
-            // Tra DB theo lô 500 để không vượt quá giới hạn tham số của PostgreSQL
-            List<AdmissionApplicant> applicantBatch = validApplicants.subList(
-                    offset, Math.min(offset + IDENTITY_LOOKUP_BATCH_SIZE, validApplicants.size()));
-
-            // Lưu trước các StudentAdmission theo mã hồ sơ để truy vấn, tránh N+1 query
-            // dùng để xem hồ sơ này đã được import trước đó chưa ?
-            studentAdmissionRepository
-                    .findByApplicationCodeIn(applicantBatch.stream()
-                            .map(AdmissionApplicant::getApplicationCode)
-                            .distinct()
-                            .toList())
-                    .forEach(existingAdmission -> existingAdmissionsByApplicationCode.put(
-                            existingAdmission.getApplicationCode(), existingAdmission));
-
-            //  Lưu trước các StudentAdmission theo CCCD để truy vấn, tránh N+1 query
-            // dùng để biết người này đã có trong hệ thống chưa ?
-            // NOTE: Nhánh này đọc Student qua facade People; StudentAdmission được tra theo mã hồ sơ ở trên.
-            peopleAdmissionFacade
-                    .findStudentsByCitizenIds(applicantBatch.stream()
-                            .map(AdmissionApplicant::getCitizenId)
-                            .distinct()
-                            .toList())
-                    .forEach(existingStudent -> existingStudentsByCitizenId
-                            .computeIfAbsent(existingStudent.getCitizenId(), citizenId -> new ArrayList<>())
-                            .add(existingStudent));
-        }
+        loadExistingIdentities(validApplicants, existingAdmissionsByApplicationCode, existingStudentsByCitizenId);
 
         // phân loại validRows thành: mới, đã tồn tại (EXISTING), hoặc xung đột (CONFLICT)
         Map<String, AdmissionApplicant> firstApplicantByApplicationCode = new HashMap<>();
@@ -124,5 +98,38 @@ public class AdmissionApplicantClassificationService {
             AdmissionApplicant applicant, AdmissionApplicantStatus status, String errorMessage) {
         applicant.setState(status);
         applicant.setErrorMessage(errorMessage);
+    }
+
+    private void loadExistingIdentities(
+            List<AdmissionApplicant> validApplicants,
+            Map<String, StudentAdmission> existingAdmissionsByApplicationCode,
+            Map<String, List<AdmissionStudentInfo>> existingStudentsByCitizenId) {
+        for (int offset = 0; offset < validApplicants.size(); offset += IDENTITY_LOOKUP_BATCH_SIZE) {
+            // Tra DB theo lô 500 để không vượt quá giới hạn tham số của PostgreSQL
+            List<AdmissionApplicant> applicantBatch = validApplicants.subList(
+                    offset, Math.min(offset + IDENTITY_LOOKUP_BATCH_SIZE, validApplicants.size()));
+
+            // Lưu trước các StudentAdmission theo mã hồ sơ để truy vấn, tránh N+1 query
+            // dùng để xem hồ sơ này đã được import trước đó chưa ?
+            studentAdmissionRepository
+                    .findByApplicationCodeIn(applicantBatch.stream()
+                            .map(AdmissionApplicant::getApplicationCode)
+                            .distinct()
+                            .toList())
+                    .forEach(existingAdmission -> existingAdmissionsByApplicationCode.put(
+                            existingAdmission.getApplicationCode(), existingAdmission));
+
+            //  Lưu trước các StudentAdmission theo CCCD để truy vấn, tránh N+1 query
+            // dùng để biết người này đã có trong hệ thống chưa ?
+            // NOTE: Nhánh này đọc Student qua facade People; StudentAdmission được tra theo mã hồ sơ ở trên.
+            peopleAdmissionFacade
+                    .findStudentsByCitizenIds(applicantBatch.stream()
+                            .map(AdmissionApplicant::getCitizenId)
+                            .distinct()
+                            .toList())
+                    .forEach(existingStudent -> existingStudentsByCitizenId
+                            .computeIfAbsent(existingStudent.getCitizenId(), citizenId -> new ArrayList<>())
+                            .add(existingStudent));
+        }
     }
 }

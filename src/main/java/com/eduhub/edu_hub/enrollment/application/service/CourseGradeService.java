@@ -140,34 +140,7 @@ public class CourseGradeService {
                         ErrorCode.COURSE_GRADE_IMPORT_INVALID,
                         List.of(new FieldErrorDetail("file", "Lớp hoặc kỳ đã thay đổi khi đọc tệp; hãy tải lại mẫu")));
             var roster = loadRoster(moduleClassId);
-            Map<String, List<Enrollment>> enrollmentsByStudentCode = roster.enrollments().stream()
-                    .collect(Collectors.groupingBy(enrollment ->
-                            roster.profilesById().get(enrollment.getStudentId()).studentCode()));
-            var currentBusinessTime = LocalDateTime.now(clock);
-            List<FieldErrorDetail> errors = new ArrayList<>(imported.errors());
-            Set<String> requestedStudentCodes = new HashSet<>();
-            Map<Enrollment, BigDecimal> requestedScores = new LinkedHashMap<>();
-            // Kiểm tra mọi dòng trước khi sửa entity; thứ tự file không quyết định lượt học được cập nhật.
-            for (var importedStudent : imported.students()) {
-                String prefix = "rows[" + importedStudent.rowNumber() + "].";
-                String studentCode = importedStudent.studentCode();
-                if (studentCode == null || studentCode.isBlank()) continue;
-                if (!requestedStudentCodes.add(studentCode))
-                    errors.add(new FieldErrorDetail(prefix + "studentCode", "MSSV bị lặp trong tệp"));
-                var matches = enrollmentsByStudentCode.getOrDefault(studentCode, List.of());
-                if (matches.size() != 1) {
-                    errors.add(new FieldErrorDetail(
-                            prefix + "studentCode",
-                            matches.isEmpty()
-                                    ? "MSSV không có lượt học còn hiệu lực trong lớp đang chọn"
-                                    : "MSSV khớp nhiều lượt học; cần đối soát dữ liệu, không tự chọn lần học"));
-                    continue;
-                }
-                var enrollment = matches.getFirst();
-                validateChange(enrollment, importedStudent.finalExamScore(), prefix, currentBusinessTime, errors);
-                requestedScores.put(enrollment, importedStudent.finalExamScore());
-            }
-            if (!errors.isEmpty()) throw new EnrollmentException(ErrorCode.COURSE_GRADE_IMPORT_INVALID, errors);
+            var requestedScores = collectImportedScores(roster, imported);
             var gradeScale = requireConfiguredGradeScale();
             var changes = requestedScores.entrySet().stream()
                     .map(entry -> new GradeChange(
@@ -359,5 +332,38 @@ public class CourseGradeService {
         if (identifier == null || identifier <= 0)
             throw new EnrollmentException(
                     ErrorCode.VALIDATION_ERROR, List.of(new FieldErrorDetail(field, "ID phải là số nguyên dương")));
+    }
+
+    private Map<Enrollment, BigDecimal> collectImportedScores(
+            GradeRoster roster, CourseGradeSpreadsheet.ImportedCourseGrades imported) {
+        Map<String, List<Enrollment>> enrollmentsByStudentCode = roster.enrollments().stream()
+                .collect(Collectors.groupingBy(enrollment ->
+                        roster.profilesById().get(enrollment.getStudentId()).studentCode()));
+        var currentBusinessTime = LocalDateTime.now(clock);
+        List<FieldErrorDetail> errors = new ArrayList<>(imported.errors());
+        Set<String> requestedStudentCodes = new HashSet<>();
+        Map<Enrollment, BigDecimal> requestedScores = new LinkedHashMap<>();
+        // Kiểm tra mọi dòng trước khi sửa entity; thứ tự file không quyết định lượt học được cập nhật.
+        for (var importedStudent : imported.students()) {
+            String prefix = "rows[" + importedStudent.rowNumber() + "].";
+            String studentCode = importedStudent.studentCode();
+            if (studentCode == null || studentCode.isBlank()) continue;
+            if (!requestedStudentCodes.add(studentCode))
+                errors.add(new FieldErrorDetail(prefix + "studentCode", "MSSV bị lặp trong tệp"));
+            var matches = enrollmentsByStudentCode.getOrDefault(studentCode, List.of());
+            if (matches.size() != 1) {
+                errors.add(new FieldErrorDetail(
+                        prefix + "studentCode",
+                        matches.isEmpty()
+                                ? "MSSV không có lượt học còn hiệu lực trong lớp đang chọn"
+                                : "MSSV khớp nhiều lượt học; cần đối soát dữ liệu, không tự chọn lần học"));
+                continue;
+            }
+            var enrollment = matches.getFirst();
+            validateChange(enrollment, importedStudent.finalExamScore(), prefix, currentBusinessTime, errors);
+            requestedScores.put(enrollment, importedStudent.finalExamScore());
+        }
+        if (!errors.isEmpty()) throw new EnrollmentException(ErrorCode.COURSE_GRADE_IMPORT_INVALID, errors);
+        return requestedScores;
     }
 }

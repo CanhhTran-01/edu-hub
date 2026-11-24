@@ -122,18 +122,7 @@ public class StudentCreationService {
         Long userId = identityFacade.createStudentAccountWithoutNotification(
                 new CreateStudentAccountRequest(studentCode, email));
 
-        Student student = Student.builder()
-                .userId(userId)
-                .administrativeClass(administrativeClass)
-                .studentCode(studentCode)
-                .fullName(fullName)
-                .dateOfBirth(request.getDateOfBirth())
-                .gender(request.getGender() == null ? null : request.getGender().trim())
-                .phone(request.getPhone() == null ? null : request.getPhone().trim())
-                .citizenId(citizenId)
-                .entranceScore(request.getEntranceScore())
-                .activityStatus(ActivityStatus.STUDYING)
-                .build();
+        Student student = buildStudent(request, administrativeClass, userId, studentCode, fullName, citizenId);
 
         Student savedStudent = studentRepository.save(student);
 
@@ -158,5 +147,28 @@ public class StudentCreationService {
                     exception.getClass().getSimpleName());
             return new AccountNotificationResponse(createdStudent.userId(), false, "EMAIL_SEND_FAILED");
         }
+    }
+
+    private Student buildStudent(
+            CreateStudentRequest request,
+            AdministrativeClass administrativeClass,
+            Long userId,
+            String studentCode,
+            String fullName,
+            String citizenId) {
+        Student student = Student.builder()
+                .userId(userId)
+                .administrativeClass(administrativeClass)
+                .studentCode(studentCode)
+                .fullName(fullName)
+                .dateOfBirth(request.getDateOfBirth())
+                .gender(request.getGender() == null ? null : request.getGender().trim())
+                .phone(request.getPhone() == null ? null : request.getPhone().trim())
+                .citizenId(citizenId)
+                .entranceScore(request.getEntranceScore())
+                .activityStatus(ActivityStatus.STUDYING)
+                .build();
+
+        return student;
     }
 }

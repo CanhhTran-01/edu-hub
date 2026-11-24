@@ -49,50 +49,14 @@ public class ModuleClassPublicationService {
         var semester = lockSemester(semesterId);
         var selectedClasses = lockSelectedClasses(semesterId, request, ModuleClassStatus.SCHEDULED);
 
-        List<FieldErrorDetail> errors = new ArrayList<>();
-        for (var moduleClass : selectedClasses) {
-            if (moduleClass.getStatus() != ModuleClassStatus.SCHEDULED
-                    && moduleClass.getStatus() != ModuleClassStatus.OPEN)
-                errors.add(classError(moduleClass.getId(), "Chỉ công bố lớp đã xếp lịch"));
-
-            if (moduleClass.getStatus() == ModuleClassStatus.SCHEDULED && moduleClass.getCurrentSize() != 0)
-                errors.add(classError(moduleClass.getId(), "Lớp chưa công bố phải có sĩ số bằng 0"));
-
-            if (moduleClass.getLecturer() == null)
-                errors.add(classError(moduleClass.getId(), "Lớp chưa có giảng viên"));
-        }
-        rejectErrors(errors);
+        requirePublishableClasses(selectedClasses);
 
         var unpublishedClasses = selectedClasses.stream()
                 .filter(moduleClass -> moduleClass.getStatus() == ModuleClassStatus.SCHEDULED)
                 .toList();
         if (!unpublishedClasses.isEmpty()) {
-            // Giữ cùng thứ tự tài nguyên với apply: kỳ → lớp → giảng viên → môn → phòng.
-            peopleFacade.lockLecturersForTimetabling(unpublishedClasses.stream()
-                    .map(moduleClass -> moduleClass.getLecturer().getId())
-                    .collect(Collectors.toCollection(TreeSet::new)));
-
-            curriculumFacade.requireOpenableSubjects(unpublishedClasses.stream()
-                    .map(moduleClass -> moduleClass.getSubject().getId())
-                    .collect(Collectors.toSet()));
-
-            var classIds = unpublishedClasses.stream().map(ModuleClass::getId).toList();
-            var schedules =
-                    scheduleRepository.findAll(ClassScheduleSpecification.notDeletedAndModuleClassIdIn(classIds));
-            var sortedRoomIds = schedules.stream()
-                    .map(schedule -> schedule.getRoom().getId())
-                    .distinct()
-                    .sorted()
-                    .toList();
-            for (Long roomId : sortedRoomIds) {
-                var room = roomRepository
-                        .findForUpdateByIdAndDeletedFalse(roomId)
-                        .orElseThrow(() -> new RoomException(ErrorCode.ROOM_NOT_FOUND));
-
-                // Ép nạp lại room từ DB sau khi giữ khóa, tránh dùng bản cache cũ trong persistence context.
-                entityManager.refresh(room, LockModeType.PESSIMISTIC_WRITE);
-            }
-
+            lockPublicationResources(unpublishedClasses);
+            List<FieldErrorDetail> errors = new ArrayList<>();
             var problem = timetableSnapshotService.loadProblem(semester, unpublishedClasses, Set.of());
             TimetablePolicy.findOfficialScheduleViolations(problem)
                     .forEach((classId, violations) ->
@@ -226,5 +190,48 @@ public class ModuleClassPublicationService {
 
     private LocalDateTime now() {
         return LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
+    }
+
+    private void requirePublishableClasses(List<ModuleClass> selectedClasses) {
+        List<FieldErrorDetail> errors = new ArrayList<>();
+        for (var moduleClass : selectedClasses) {
+            if (moduleClass.getStatus() != ModuleClassStatus.SCHEDULED
+                    && moduleClass.getStatus() != ModuleClassStatus.OPEN)
+                errors.add(classError(moduleClass.getId(), "Chỉ công bố lớp đã xếp lịch"));
+
+            if (moduleClass.getStatus() == ModuleClassStatus.SCHEDULED && moduleClass.getCurrentSize() != 0)
+                errors.add(classError(moduleClass.getId(), "Lớp chưa công bố phải có sĩ số bằng 0"));
+
+            if (moduleClass.getLecturer() == null)
+                errors.add(classError(moduleClass.getId(), "Lớp chưa có giảng viên"));
+        }
+        rejectErrors(errors);
+    }
+
+    private void lockPublicationResources(List<ModuleClass> unpublishedClasses) {
+        // Giữ cùng thứ tự tài nguyên với apply: kỳ → lớp → giảng viên → môn → phòng.
+        peopleFacade.lockLecturersForTimetabling(unpublishedClasses.stream()
+                .map(moduleClass -> moduleClass.getLecturer().getId())
+                .collect(Collectors.toCollection(TreeSet::new)));
+
+        curriculumFacade.requireOpenableSubjects(unpublishedClasses.stream()
+                .map(moduleClass -> moduleClass.getSubject().getId())
+                .collect(Collectors.toSet()));
+
+        var classIds = unpublishedClasses.stream().map(ModuleClass::getId).toList();
+        var schedules = scheduleRepository.findAll(ClassScheduleSpecification.notDeletedAndModuleClassIdIn(classIds));
+        var sortedRoomIds = schedules.stream()
+                .map(schedule -> schedule.getRoom().getId())
+                .distinct()
+                .sorted()
+                .toList();
+        for (Long roomId : sortedRoomIds) {
+            var room = roomRepository
+                    .findForUpdateByIdAndDeletedFalse(roomId)
+                    .orElseThrow(() -> new RoomException(ErrorCode.ROOM_NOT_FOUND));
+
+            // Ép nạp lại room từ DB sau khi giữ khóa, tránh dùng bản cache cũ trong persistence context.
+            entityManager.refresh(room, LockModeType.PESSIMISTIC_WRITE);
+        }
     }
 }

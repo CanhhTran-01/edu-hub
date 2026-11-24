@@ -44,28 +44,7 @@ public final class TimetablePlanResponseMapper {
                         subject.subjectId(), subjectCodesById.get(subject.subjectId()), subject.phase()))
                 .toList();
         var sessions = allocation.sessions().stream()
-                .map(session -> {
-                    var teachingShift =
-                            TeachingShift.findByShiftNumber(session.shift()).orElse(null);
-                    return new TimetableAllocationResponse.SessionResponse(
-                            session.moduleClassId(),
-                            classesById.get(session.moduleClassId()).moduleClassCode(),
-                            session.sessionIndex(),
-                            session.lecturerId(),
-                            session.lecturerId() == null || !lecturersById.containsKey(session.lecturerId())
-                                    ? null
-                                    : lecturersById.get(session.lecturerId()).fullName(),
-                            session.roomId(),
-                            session.roomId() == null || !roomsById.containsKey(session.roomId())
-                                    ? null
-                                    : roomsById.get(session.roomId()).roomCode(),
-                            session.date(),
-                            session.shift(),
-                            (session.shift() - 1) * 3 + 1,
-                            session.shift() * 3,
-                            teachingShift == null ? null : teachingShift.getStartTime(),
-                            teachingShift == null ? null : teachingShift.getEndTime());
-                })
+                .map(session -> toSessionResponse(session, classesById, roomsById, lecturersById))
                 .toList();
         var phaseTwoSubjects = allocation.subjects().stream()
                 .filter(subject -> subject.phase() == 2)
@@ -85,5 +64,31 @@ public final class TimetablePlanResponseMapper {
                 phaseTwoEnd,
                 subjects,
                 sessions);
+    }
+
+    private static TimetableAllocationResponse.SessionResponse toSessionResponse(
+            TimetableAllocation.SessionPlacement session,
+            Map<Long, TimetableProblem.ClassRequirement> classesById,
+            Map<Long, TimetableProblem.RoomAvailability> roomsById,
+            Map<Long, TimetableProblem.LecturerAvailability> lecturersById) {
+        var teachingShift = TeachingShift.findByShiftNumber(session.shift()).orElse(null);
+        return new TimetableAllocationResponse.SessionResponse(
+                session.moduleClassId(),
+                classesById.get(session.moduleClassId()).moduleClassCode(),
+                session.sessionIndex(),
+                session.lecturerId(),
+                session.lecturerId() == null || !lecturersById.containsKey(session.lecturerId())
+                        ? null
+                        : lecturersById.get(session.lecturerId()).fullName(),
+                session.roomId(),
+                session.roomId() == null || !roomsById.containsKey(session.roomId())
+                        ? null
+                        : roomsById.get(session.roomId()).roomCode(),
+                session.date(),
+                session.shift(),
+                (session.shift() - 1) * 3 + 1,
+                session.shift() * 3,
+                teachingShift == null ? null : teachingShift.getStartTime(),
+                teachingShift == null ? null : teachingShift.getEndTime());
     }
 }

@@ -56,8 +56,7 @@ class AdmissionControllerTest {
     void setup() {
         when(planning.getDefaultCapacityConfiguration()).thenReturn(new AdmissionCapacityResponse(40, 50, 15));
         mvc = MockMvcBuilders.standaloneSetup(
-                        new AdmissionController(
-                                apiResponseFactory, planning, mock(AdmissionConfirmationService.class)),
+                        new AdmissionController(apiResponseFactory, planning, mock(AdmissionConfirmationService.class)),
                         new AdmissionPlanAdjustmentController(
                                 apiResponseFactory, admissionImportService, correctionService, allocationService),
                         new AdmissionNotificationController(apiResponseFactory, notificationQueryService))

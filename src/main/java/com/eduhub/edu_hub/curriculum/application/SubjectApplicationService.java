@@ -194,23 +194,7 @@ public class SubjectApplicationService {
             throw new SubjectException(ErrorCode.SUBJECT_NOT_ACTIVE);
         }
 
-        // lôi các môn tiên quyết cần lập do request gửi về ra
-        Set<Long> requestedIds = new LinkedHashSet<>(request.getPrerequisiteSubjectIds());
-
-        // checking các môn tiên quyết cần lập
-        if (requestedIds.contains(id)) {
-            // không cho phép 1 môn làm tiên quyết của chính mình
-            throw new SubjectException(ErrorCode.PREREQUISITE_SELF_REFERENCE);
-        }
-        for (Long prerequisiteId : requestedIds) {
-            Subject prerequisite = subjectsById.get(prerequisiteId);
-            if (prerequisite == null) {
-                throw new SubjectException(ErrorCode.SUBJECT_NOT_FOUND);
-            }
-            if (prerequisite.getStatus() != SubjectStatus.ACTIVE) {
-                throw new SubjectException(ErrorCode.PREREQUISITE_NOT_ACTIVE);
-            }
-        }
+        Set<Long> requestedIds = requirePrerequisiteSubjects(id, request, subjectsById);
 
         // lấy toàn bộ bản ghi tiên quyết check chu trình
         List<SubjectPrerequisite> links = subjectPrerequisiteRepository.findAllByDeletedFalse();
@@ -219,63 +203,7 @@ public class SubjectApplicationService {
         // DS môn học, toàn bộ bản ghi tiên quyết trong database, môn cần lập tiên quyết, ds môn tiên quyết
         checkPrerequisiteCycle(subjectsById, links, id, requestedIds);
 
-        // Sửa Entity sau khi toàn bộ danh sách và đồ thị đã hợp lệ.
-        LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
-
-        Set<Long> keptIds = new HashSet<>(); // các môn tiên quyết đã có liên kết hợp lệ sau khi xử lý
-        List<String> added = new ArrayList<>(); // các môn các liên kết mới thêm, phục vụ log
-        List<String> removed = new ArrayList<>(); // các môn của các liên kết bị gỡ, phục vụ log
-        List<SubjectPrerequisite> changedLinks = new ArrayList<>(); // tất cả liên kết cần ghi xuống DB
-
-        // loop xử lý "liên kết cũ nào bị gỡ (xóa mềm) và liên kết nào được giữ"
-        for (SubjectPrerequisite link : links) {
-            // bỏ qua bản ghi bị xóa mềm và bản ghi không phải môn cần thiết lập tiên quyết
-            if (link.isDeleted() || !link.getSubject().getId().equals(id)) {
-                continue;
-            }
-
-            // Lấy ID của môn tiên quyết mà liên kết cũ này đang trỏ tới
-            Long prerequisiteId = link.getPrerequisiteSubject().getId();
-
-            // môn tiên quyết này không còn nằm trong request, tức client muốn gỡ nó
-            // ID đã có sẵn trong keptIds chưa, tức liên kết này là bản trùng, bị gỡ.
-            if (!requestedIds.contains(prerequisiteId) || !keptIds.add(prerequisiteId)) {
-                link.setDeleted(true);
-                link.setUpdatedAt(now);
-                changedLinks.add(link);
-                removed.add(link.getPrerequisiteSubject().getSubjectName());
-            }
-        }
-
-        // loop xử lý: "thêm liên kết mới, chưa có thì tạo mới, có rồi thì bỏ qua"
-        for (Long prerequisiteId : requestedIds) {
-
-            // keptIds.add trả về false khi ID đã có trong keptIds
-            if (!keptIds.add(prerequisiteId)) {
-                continue;
-            }
-
-            // thêm mới liên kết
-            Subject prerequisite = subjectsById.get(prerequisiteId);
-            SubjectPrerequisite link = SubjectPrerequisite.builder()
-                    .subject(subject)
-                    .prerequisiteSubject(prerequisite)
-                    .build();
-            link.setCreatedAt(now);
-            link.setUpdatedAt(now);
-
-            // lưu lại
-            changedLinks.add(link);
-            added.add(prerequisite.getSubjectCode());
-        }
-
-        // ghi xuống DB
-        subject.setUpdatedAt(now);
-        subjectPrerequisiteRepository.saveAll(changedLinks);
-        Subject saved = subjectRepository.save(subject);
-        log.info("Lưu tiên quyết: subjectId={}, added={}, removed={}, requested={}", id, added, removed, requestedIds);
-
-        return toResponse(saved);
+        return replacePrerequisiteLinks(id, subject, subjectsById, requestedIds, links);
     }
 
     private void checkPrerequisiteCycle(
@@ -481,5 +409,93 @@ public class SubjectApplicationService {
                 .credits(subject.getCredits())
                 .totalTeachingPeriods(subject.getTotalTeachingPeriods())
                 .build();
+    }
+
+    private Set<Long> requirePrerequisiteSubjects(
+            Long id, SetPrerequisiteRequest request, Map<Long, Subject> subjectsById) {
+        // lôi các môn tiên quyết cần lập do request gửi về ra
+        Set<Long> requestedIds = new LinkedHashSet<>(request.getPrerequisiteSubjectIds());
+
+        // checking các môn tiên quyết cần lập
+        if (requestedIds.contains(id)) {
+            // không cho phép 1 môn làm tiên quyết của chính mình
+            throw new SubjectException(ErrorCode.PREREQUISITE_SELF_REFERENCE);
+        }
+        for (Long prerequisiteId : requestedIds) {
+            Subject prerequisite = subjectsById.get(prerequisiteId);
+            if (prerequisite == null) {
+                throw new SubjectException(ErrorCode.SUBJECT_NOT_FOUND);
+            }
+            if (prerequisite.getStatus() != SubjectStatus.ACTIVE) {
+                throw new SubjectException(ErrorCode.PREREQUISITE_NOT_ACTIVE);
+            }
+        }
+
+        return requestedIds;
+    }
+
+    private SubjectResponse replacePrerequisiteLinks(
+            Long id,
+            Subject subject,
+            Map<Long, Subject> subjectsById,
+            Set<Long> requestedIds,
+            List<SubjectPrerequisite> links) {
+        // Sửa Entity sau khi toàn bộ danh sách và đồ thị đã hợp lệ.
+        LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
+
+        Set<Long> keptIds = new HashSet<>(); // các môn tiên quyết đã có liên kết hợp lệ sau khi xử lý
+        List<String> added = new ArrayList<>(); // các môn các liên kết mới thêm, phục vụ log
+        List<String> removed = new ArrayList<>(); // các môn của các liên kết bị gỡ, phục vụ log
+        List<SubjectPrerequisite> changedLinks = new ArrayList<>(); // tất cả liên kết cần ghi xuống DB
+
+        // loop xử lý "liên kết cũ nào bị gỡ (xóa mềm) và liên kết nào được giữ"
+        for (SubjectPrerequisite link : links) {
+            // bỏ qua bản ghi bị xóa mềm và bản ghi không phải môn cần thiết lập tiên quyết
+            if (link.isDeleted() || !link.getSubject().getId().equals(id)) {
+                continue;
+            }
+
+            // Lấy ID của môn tiên quyết mà liên kết cũ này đang trỏ tới
+            Long prerequisiteId = link.getPrerequisiteSubject().getId();
+
+            // môn tiên quyết này không còn nằm trong request, tức client muốn gỡ nó
+            // ID đã có sẵn trong keptIds chưa, tức liên kết này là bản trùng, bị gỡ.
+            if (!requestedIds.contains(prerequisiteId) || !keptIds.add(prerequisiteId)) {
+                link.setDeleted(true);
+                link.setUpdatedAt(now);
+                changedLinks.add(link);
+                removed.add(link.getPrerequisiteSubject().getSubjectName());
+            }
+        }
+
+        // loop xử lý: "thêm liên kết mới, chưa có thì tạo mới, có rồi thì bỏ qua"
+        for (Long prerequisiteId : requestedIds) {
+
+            // keptIds.add trả về false khi ID đã có trong keptIds
+            if (!keptIds.add(prerequisiteId)) {
+                continue;
+            }
+
+            // thêm mới liên kết
+            Subject prerequisite = subjectsById.get(prerequisiteId);
+            SubjectPrerequisite link = SubjectPrerequisite.builder()
+                    .subject(subject)
+                    .prerequisiteSubject(prerequisite)
+                    .build();
+            link.setCreatedAt(now);
+            link.setUpdatedAt(now);
+
+            // lưu lại
+            changedLinks.add(link);
+            added.add(prerequisite.getSubjectCode());
+        }
+
+        // ghi xuống DB
+        subject.setUpdatedAt(now);
+        subjectPrerequisiteRepository.saveAll(changedLinks);
+        Subject saved = subjectRepository.save(subject);
+        log.info("Lưu tiên quyết: subjectId={}, added={}, removed={}, requested={}", id, added, removed, requestedIds);
+
+        return toResponse(saved);
     }
 }

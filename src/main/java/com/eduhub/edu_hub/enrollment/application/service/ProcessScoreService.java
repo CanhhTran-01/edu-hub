@@ -1,6 +1,7 @@
 package com.eduhub.edu_hub.enrollment.application.service;
 
 import com.eduhub.edu_hub.enrollment.api.dto.request.ImportProcessScoresRequest;
+import com.eduhub.edu_hub.enrollment.api.dto.request.UpdateProcessScoreRequest;
 import com.eduhub.edu_hub.enrollment.api.dto.request.UpdateProcessScoresRequest;
 import com.eduhub.edu_hub.enrollment.api.dto.response.ModuleClassStudentResponse;
 import com.eduhub.edu_hub.enrollment.api.dto.response.ProcessScoreRosterResponse;
@@ -94,48 +95,7 @@ public class ProcessScoreService {
             var roster = loadRoster(moduleClassId);
             roster.toStudentResponses();
 
-            var enrollmentsById =
-                    roster.enrollments().stream().collect(Collectors.toMap(Enrollment::getId, Function.identity()));
-            List<FieldErrorDetail> errors = new ArrayList<>();
-            List<ProcessScoreChange> changes = new ArrayList<>();
-            Set<Long> requestedEnrollmentIds = new HashSet<>();
-
-            // Kiểm tra toàn bộ yêu cầu trước khi chạm vào entity đang quản lý, kể cả khi một dòng đã sai.
-            for (int studentIndex = 0; studentIndex < request.getStudents().size(); studentIndex++) {
-                var studentRequest = request.getStudents().get(studentIndex);
-                String prefix = "students[" + studentIndex + "]";
-                if (studentRequest == null) {
-                    errors.add(new FieldErrorDetail(prefix, "Dòng cập nhật không được null"));
-                    continue;
-                }
-                Long enrollmentId = studentRequest.getEnrollmentId();
-                var enrollment = enrollmentsById.get(enrollmentId);
-                if (enrollmentId == null || enrollmentId <= 0 || enrollment == null)
-                    errors.add(new FieldErrorDetail(
-                            prefix + ".enrollmentId", "Lượt học không thuộc danh sách REGISTERED của lớp"));
-                if (enrollmentId != null && !requestedEnrollmentIds.add(enrollmentId))
-                    errors.add(
-                            new FieldErrorDetail(prefix + ".enrollmentId", "Một lượt học chỉ được xuất hiện một lần"));
-                validateValues(
-                        studentRequest.getComponentScore1(),
-                        studentRequest.getComponentScore2(),
-                        studentRequest.getNote(),
-                        prefix,
-                        errors);
-                if (enrollment != null)
-                    changes.add(new ProcessScoreChange(
-                            enrollment,
-                            studentRequest.hasComponentScore1()
-                                    ? studentRequest.getComponentScore1()
-                                    : enrollment.getComponentScore1(),
-                            studentRequest.hasComponentScore2()
-                                    ? studentRequest.getComponentScore2()
-                                    : enrollment.getComponentScore2(),
-                            studentRequest.hasNote()
-                                    ? ProcessScorePolicy.normalizeNote(studentRequest.getNote())
-                                    : enrollment.getNote()));
-            }
-            if (!errors.isEmpty()) throw new EnrollmentException(ErrorCode.INVALID_SCORE, errors);
+            var changes = collectRequestedChanges(request, roster);
             applyChanges(changes);
             return new ProcessScoreRosterResponse(moduleClass, roster.toStudentResponses());
         });
@@ -150,40 +110,7 @@ public class ProcessScoreService {
             var actor = requireLecturer(principal);
             var moduleClass = requireAssignedClass(actor, moduleClassId, true);
             var roster = loadRoster(moduleClassId);
-            var studentsByCode = roster.toStudentResponses().stream()
-                    .collect(Collectors.toMap(ModuleClassStudentResponse::studentCode, Function.identity()));
-            var enrollmentsById =
-                    roster.enrollments().stream().collect(Collectors.toMap(Enrollment::getId, Function.identity()));
-            List<FieldErrorDetail> errors = new ArrayList<>(imported.errors());
-            List<ProcessScoreChange> changes = new ArrayList<>();
-            Set<String> requestedStudentCodes = new HashSet<>();
-            for (var importedStudent : imported.students()) {
-                String prefix = "rows[" + importedStudent.rowNumber() + "]";
-                var student = studentsByCode.get(importedStudent.studentCode());
-                if (importedStudent.studentCode() != null && student == null)
-                    errors.add(new FieldErrorDetail(
-                            prefix + ".studentCode", "MSSV không thuộc danh sách REGISTERED của lớp"));
-                if (importedStudent.studentCode() != null && !requestedStudentCodes.add(importedStudent.studentCode()))
-                    errors.add(new FieldErrorDetail(prefix + ".studentCode", "MSSV bị lặp trong tệp"));
-                validateValues(
-                        importedStudent.componentScore1(),
-                        importedStudent.componentScore2(),
-                        importedStudent.note(),
-                        prefix,
-                        errors);
-                if (student != null) {
-                    var enrollment = enrollmentsById.get(student.enrollmentId());
-                    changes.add(new ProcessScoreChange(
-                            enrollment,
-                            importedStudent.componentScore1(),
-                            importedStudent.componentScore2(),
-                            importedStudent.note() == null
-                                            || importedStudent.note().isBlank()
-                                    ? enrollment.getNote()
-                                    : ProcessScorePolicy.normalizeNote(importedStudent.note())));
-                }
-            }
-            if (!errors.isEmpty()) throw new EnrollmentException(ErrorCode.PROCESS_SCORE_IMPORT_INVALID, errors);
+            var changes = collectImportedChanges(imported, roster);
             applyChanges(changes);
             return new ProcessScoreRosterResponse(moduleClass, roster.toStudentResponses());
         });
@@ -267,5 +194,93 @@ public class ProcessScoreService {
 
     private EnrollmentException invalidScores(String field, String message) {
         return new EnrollmentException(ErrorCode.INVALID_SCORE, List.of(new FieldErrorDetail(field, message)));
+    }
+
+    private List<ProcessScoreChange> collectRequestedChanges(UpdateProcessScoresRequest request, GradingRoster roster) {
+        var enrollmentsById =
+                roster.enrollments().stream().collect(Collectors.toMap(Enrollment::getId, Function.identity()));
+        List<FieldErrorDetail> errors = new ArrayList<>();
+        List<ProcessScoreChange> changes = new ArrayList<>();
+        Set<Long> requestedEnrollmentIds = new HashSet<>();
+
+        // Kiểm tra toàn bộ yêu cầu trước khi chạm vào entity đang quản lý, kể cả khi một dòng đã sai.
+        for (int studentIndex = 0; studentIndex < request.getStudents().size(); studentIndex++) {
+            var studentRequest = request.getStudents().get(studentIndex);
+            String prefix = "students[" + studentIndex + "]";
+            if (studentRequest == null) {
+                errors.add(new FieldErrorDetail(prefix, "Dòng cập nhật không được null"));
+                continue;
+            }
+            Long enrollmentId = studentRequest.getEnrollmentId();
+            var enrollment = enrollmentsById.get(enrollmentId);
+            if (enrollmentId == null || enrollmentId <= 0 || enrollment == null)
+                errors.add(new FieldErrorDetail(
+                        prefix + ".enrollmentId", "Lượt học không thuộc danh sách REGISTERED của lớp"));
+            if (enrollmentId != null && !requestedEnrollmentIds.add(enrollmentId))
+                errors.add(new FieldErrorDetail(prefix + ".enrollmentId", "Một lượt học chỉ được xuất hiện một lần"));
+            validateValues(
+                    studentRequest.getComponentScore1(),
+                    studentRequest.getComponentScore2(),
+                    studentRequest.getNote(),
+                    prefix,
+                    errors);
+            if (enrollment != null) changes.add(toRequestedChange(enrollment, studentRequest));
+        }
+        if (!errors.isEmpty()) throw new EnrollmentException(ErrorCode.INVALID_SCORE, errors);
+        return changes;
+    }
+
+    private List<ProcessScoreChange> collectImportedChanges(
+            ProcessScoreSpreadsheet.ImportedProcessScores imported, GradingRoster roster) {
+        // Ghép với điểm cũ sau khi đã khóa lớp; ghi chú trống trong file luôn giữ nguyên ghi chú đã lưu.
+        var studentsByCode = roster.toStudentResponses().stream()
+                .collect(Collectors.toMap(ModuleClassStudentResponse::studentCode, Function.identity()));
+        var enrollmentsById =
+                roster.enrollments().stream().collect(Collectors.toMap(Enrollment::getId, Function.identity()));
+        List<FieldErrorDetail> errors = new ArrayList<>(imported.errors());
+        List<ProcessScoreChange> changes = new ArrayList<>();
+        Set<String> requestedStudentCodes = new HashSet<>();
+        for (var importedStudent : imported.students()) {
+            String prefix = "rows[" + importedStudent.rowNumber() + "]";
+            var student = studentsByCode.get(importedStudent.studentCode());
+            if (importedStudent.studentCode() != null && student == null)
+                errors.add(
+                        new FieldErrorDetail(prefix + ".studentCode", "MSSV không thuộc danh sách REGISTERED của lớp"));
+            if (importedStudent.studentCode() != null && !requestedStudentCodes.add(importedStudent.studentCode()))
+                errors.add(new FieldErrorDetail(prefix + ".studentCode", "MSSV bị lặp trong tệp"));
+            validateValues(
+                    importedStudent.componentScore1(),
+                    importedStudent.componentScore2(),
+                    importedStudent.note(),
+                    prefix,
+                    errors);
+            if (student != null) {
+                var enrollment = enrollmentsById.get(student.enrollmentId());
+                changes.add(new ProcessScoreChange(
+                        enrollment,
+                        importedStudent.componentScore1(),
+                        importedStudent.componentScore2(),
+                        importedStudent.note() == null || importedStudent.note().isBlank()
+                                ? enrollment.getNote()
+                                : ProcessScorePolicy.normalizeNote(importedStudent.note())));
+            }
+        }
+        if (!errors.isEmpty()) throw new EnrollmentException(ErrorCode.PROCESS_SCORE_IMPORT_INVALID, errors);
+        return changes;
+    }
+
+    private ProcessScoreChange toRequestedChange(Enrollment enrollment, UpdateProcessScoreRequest studentRequest) {
+        // Bỏ field giữ giá trị cũ, null chỉ xóa field có cờ hiện diện; không gộp hai trường hợp này.
+        return new ProcessScoreChange(
+                enrollment,
+                studentRequest.hasComponentScore1()
+                        ? studentRequest.getComponentScore1()
+                        : enrollment.getComponentScore1(),
+                studentRequest.hasComponentScore2()
+                        ? studentRequest.getComponentScore2()
+                        : enrollment.getComponentScore2(),
+                studentRequest.hasNote()
+                        ? ProcessScorePolicy.normalizeNote(studentRequest.getNote())
+                        : enrollment.getNote());
     }
 }

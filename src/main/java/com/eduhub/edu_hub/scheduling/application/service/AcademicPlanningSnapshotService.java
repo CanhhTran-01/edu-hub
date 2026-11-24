@@ -2,7 +2,9 @@ package com.eduhub.edu_hub.scheduling.application.service;
 
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
+import com.eduhub.edu_hub.enrollment.api.dto.response.EnrollmentScopeResponse;
 import com.eduhub.edu_hub.enrollment.application.EnrollmentFacade;
+import com.eduhub.edu_hub.enrollment.application.facade.dto.LearningHistoryResponse;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.application.facade.dto.StudentPlanningResponse;
 import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassException;
@@ -57,6 +59,37 @@ public class AcademicPlanningSnapshotService {
 
         // TODO(ENROLLMENT_LEGACY_HISTORY): Chuyển và đối soát lịch sử khóa cũ trước khi mở rộng phạm vi thống kê.
 
+        var curriculumCodesByAssignment = loadCurriculumCodesByAssignment(students);
+
+        var planningStudents = toPlanningStudents(students, curriculumCodesByAssignment);
+
+        // lấy lịch sử học của sinh viên
+        var learningHistory = enrollmentFacade.findLearningHistory(
+                students.stream().map(StudentPlanningResponse::id).collect(Collectors.toSet()));
+        if (learningHistory == null || !learningHistory.historyComplete() || learningHistory.attempts() == null)
+            throw new ModuleClassException(ErrorCode.PLANNING_DATA_UNAVAILABLE);
+
+        return buildValidatedPlanningSnapshot(planningStudents, learningHistory, scope, excludedStudentCount);
+    }
+
+    private void requireCompleteStudent(StudentPlanningResponse student) {
+        if (student.id() == null
+                || student.id() <= 0
+                || student.majorId() == null
+                || student.majorId() <= 0
+                || student.cohortId() == null
+                || student.cohortId() <= 0
+                || student.trainingType() == null
+                || student.admissionYear() == null
+                || student.admissionYear() < 1) {
+
+            throw new ModuleClassException(ErrorCode.PLANNING_DATA_UNAVAILABLE);
+        }
+    }
+
+    private record AssignmentKey(Long majorId, Long cohortId, TrainingType trainingType) {}
+
+    private Map<AssignmentKey, String> loadCurriculumCodesByAssignment(List<StudentPlanningResponse> students) {
         // Gom các ngành (majorId) và khóa (cohortId) trong DS sinh viên lại
         var majorIds = students.stream().map(StudentPlanningResponse::majorId).collect(Collectors.toSet());
         var cohortIds = students.stream().map(StudentPlanningResponse::cohortId).collect(Collectors.toSet());
@@ -72,6 +105,11 @@ public class AcademicPlanningSnapshotService {
                 throw new ModuleClassException(ErrorCode.PLANNING_DATA_UNAVAILABLE);
         }
 
+        return curriculumCodesByAssignment;
+    }
+
+    private List<AcademicPlanningSnapshot.PlanningStudent> toPlanningStudents(
+            List<StudentPlanningResponse> students, Map<AssignmentKey, String> curriculumCodesByAssignment) {
         // Với mỗi SV, tra map với key là bộ 3 "majorId + cohorId + trainingType" để lấy curriculumCode tương ứng
         var planningStudents = students.stream()
                 .map(student -> {
@@ -89,12 +127,14 @@ public class AcademicPlanningSnapshotService {
                 })
                 .toList();
 
-        // lấy lịch sử học của sinh viên
-        var learningHistory = enrollmentFacade.findLearningHistory(
-                students.stream().map(StudentPlanningResponse::id).collect(Collectors.toSet()));
-        if (learningHistory == null || !learningHistory.historyComplete() || learningHistory.attempts() == null)
-            throw new ModuleClassException(ErrorCode.PLANNING_DATA_UNAVAILABLE);
+        return planningStudents;
+    }
 
+    private AcademicPlanningSnapshot buildValidatedPlanningSnapshot(
+            List<AcademicPlanningSnapshot.PlanningStudent> planningStudents,
+            LearningHistoryResponse learningHistory,
+            EnrollmentScopeResponse scope,
+            int excludedStudentCount) {
         try {
             var learningAttempts = learningHistory.attempts().stream()
                     .map(attempt -> new AcademicPlanningSnapshot.LearningAttempt(
@@ -121,21 +161,4 @@ public class AcademicPlanningSnapshotService {
             throw new ModuleClassException(ErrorCode.PLANNING_DATA_UNAVAILABLE);
         }
     }
-
-    private void requireCompleteStudent(StudentPlanningResponse student) {
-        if (student.id() == null
-                || student.id() <= 0
-                || student.majorId() == null
-                || student.majorId() <= 0
-                || student.cohortId() == null
-                || student.cohortId() <= 0
-                || student.trainingType() == null
-                || student.admissionYear() == null
-                || student.admissionYear() < 1) {
-
-            throw new ModuleClassException(ErrorCode.PLANNING_DATA_UNAVAILABLE);
-        }
-    }
-
-    private record AssignmentKey(Long majorId, Long cohortId, TrainingType trainingType) {}
 }

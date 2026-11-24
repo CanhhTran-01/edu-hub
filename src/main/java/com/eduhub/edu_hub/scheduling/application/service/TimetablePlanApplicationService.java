@@ -138,76 +138,13 @@ public class TimetablePlanApplicationService {
                     .orElseThrow();
         var allocation = codec.read(plan.getAllocationJson(), TimetableAllocation.class);
         var previousProblem = codec.read(plan.getProblemJson(), TimetableProblem.class);
-        // Đồng bộ với PUT Lecturer: khóa giảng viên trước môn; khóa phòng trước kiểm tra và ghi lịch.
-        var lecturerIds = allocation.sessions().stream()
-                .map(TimetableAllocation.SessionPlacement::lecturerId)
-                .collect(Collectors.toCollection(TreeSet::new));
-        peopleFacade.lockLecturersForTimetabling(lecturerIds);
-        var roomIds = allocation.sessions().stream()
-                .map(TimetableAllocation.SessionPlacement::roomId)
-                .collect(Collectors.toCollection(TreeSet::new));
-        Map<Long, Room> roomsById = new HashMap<>();
-        curriculumFacade.requireOpenableSubjects(classes.stream()
-                .map(moduleClass -> moduleClass.getSubject().getId())
-                .collect(Collectors.toSet()));
-        for (Long roomId : roomIds)
-            roomsById.put(
-                    roomId,
-                    roomRepository
-                            .findForUpdateByIdAndDeletedFalse(roomId)
-                            .orElseThrow(() -> new RoomException(ErrorCode.ROOM_NOT_FOUND)));
-        roomsById.values().forEach(room -> entityManager.refresh(room, LockModeType.PESSIMISTIC_WRITE));
-        entityManager.flush();
+        var roomsById = lockAllocationResources(classes, allocation);
         // Đọc lại nguồn lịch sau khi đã giữ khóa tài nguyên, tránh hai lớp khác nhau cùng chiếm một ca.
         var currentProblem = snapshotService.loadProblem(semester, classes, previousProblem.pinnedModuleClassIds());
-        if (!plan.getInputFingerprint().equals(codec.fingerprint(currentProblem)))
-            throw new TimetableException(ErrorCode.TIMETABLE_STALE_PLAN);
-        var assessment = TimetablePolicy.assess(currentProblem, allocation, true);
-        if (!assessment.isFeasible())
-            throw new TimetableException(
-                    ErrorCode.TIMETABLE_INVALID_ALLOCATION,
-                    assessment.violations().stream()
-                            .map(message -> new FieldErrorDetail("allocation", message))
-                            .toList());
-        // Phòng là entity đã khóa: kiểm tra trực tiếp cả trạng thái và capacity, không dùng snapshot cũ.
-        var requirementsById = currentProblem.classes().stream()
-                .collect(Collectors.toMap(TimetableProblem.ClassRequirement::moduleClassId, Function.identity()));
-        for (var session : allocation.sessions()) {
-            var room = roomsById.get(session.roomId());
-            if (room.isDeleted()
-                    || room.getStatus() != RoomStatus.ACTIVE
-                    || room.getCapacity()
-                            < requirementsById.get(session.moduleClassId()).maxCapacity())
-                throw new TimetableException(ErrorCode.TIMETABLE_STALE_PLAN);
-        }
-        var classesById = classes.stream().collect(Collectors.toMap(ModuleClass::getId, Function.identity()));
-        var schedules = scheduleRepository.findAll(
-                ClassScheduleSpecification.notDeletedAndModuleClassIdIn(classesById.keySet()), Sort.by("id"));
-        schedules.forEach(schedule -> {
-            schedule.setDeleted(true);
-            schedule.setUpdatedAt(currentAuditTimestamp());
-        });
-        scheduleRepository.saveAll(schedules);
-        List<ClassSchedule> newSchedules = new ArrayList<>();
-        for (var session : allocation.sessions()) {
-            var moduleClass = classesById.get(session.moduleClassId());
-            moduleClass.applyTeachingAssignment(entityManager.getReference(Lecturer.class, session.lecturerId()));
-            moduleClass.setUpdatedAt(currentAuditTimestamp());
-            var schedule = ClassSchedule.builder()
-                    .moduleClass(moduleClass)
-                    .room(roomsById.get(session.roomId()))
-                    .dayOfWeek(session.date().getDayOfWeek().getValue() + 1)
-                    .lessonOrderStart((session.shift() - 1) * 3 + 1)
-                    .lessonOrderEnd(session.shift() * 3)
-                    .startDate(session.date())
-                    .endDate(session.date())
-                    .build();
-            schedule.setCreatedAt(currentAuditTimestamp());
-            schedule.setUpdatedAt(schedule.getCreatedAt());
-            newSchedules.add(schedule);
-        }
-        moduleClassRepository.saveAll(classes);
-        scheduleRepository.saveAllAndFlush(newSchedules);
+        requireCurrentAllocation(plan, currentProblem, allocation);
+        requireLockedRoomCapacity(currentProblem, allocation, roomsById);
+        // Thay lịch và phân công trong transaction hiện tại; bất kỳ lỗi nào cũng hoàn tác toàn phương án.
+        persistTeachingAssignments(classes, allocation, roomsById);
         plan.setState(TimetablePlanState.APPLIED);
         plan.setAppliedAt(LocalDateTime.now(clock));
         plan.setUpdatedAt(currentAuditTimestamp());
@@ -292,5 +229,89 @@ public class TimetablePlanApplicationService {
                         ? null
                         : codec.read(plan.getAllocationJson(), TimetableAllocation.class),
                 Arrays.asList(codec.read(plan.getDiagnosticsJson(), String[].class)));
+    }
+
+    private Map<Long, Room> lockAllocationResources(List<ModuleClass> classes, TimetableAllocation allocation) {
+        // Đồng bộ với PUT Lecturer: khóa giảng viên trước môn; khóa phòng trước kiểm tra và ghi lịch.
+        var lecturerIds = allocation.sessions().stream()
+                .map(TimetableAllocation.SessionPlacement::lecturerId)
+                .collect(Collectors.toCollection(TreeSet::new));
+        peopleFacade.lockLecturersForTimetabling(lecturerIds);
+        var roomIds = allocation.sessions().stream()
+                .map(TimetableAllocation.SessionPlacement::roomId)
+                .collect(Collectors.toCollection(TreeSet::new));
+        Map<Long, Room> roomsById = new HashMap<>();
+        curriculumFacade.requireOpenableSubjects(classes.stream()
+                .map(moduleClass -> moduleClass.getSubject().getId())
+                .collect(Collectors.toSet()));
+        for (Long roomId : roomIds)
+            roomsById.put(
+                    roomId,
+                    roomRepository
+                            .findForUpdateByIdAndDeletedFalse(roomId)
+                            .orElseThrow(() -> new RoomException(ErrorCode.ROOM_NOT_FOUND)));
+        roomsById.values().forEach(room -> entityManager.refresh(room, LockModeType.PESSIMISTIC_WRITE));
+        entityManager.flush();
+        return roomsById;
+    }
+
+    private void requireCurrentAllocation(
+            TimetablePlan plan, TimetableProblem currentProblem, TimetableAllocation allocation) {
+        if (!plan.getInputFingerprint().equals(codec.fingerprint(currentProblem)))
+            throw new TimetableException(ErrorCode.TIMETABLE_STALE_PLAN);
+        var assessment = TimetablePolicy.assess(currentProblem, allocation, true);
+        if (!assessment.isFeasible())
+            throw new TimetableException(
+                    ErrorCode.TIMETABLE_INVALID_ALLOCATION,
+                    assessment.violations().stream()
+                            .map(message -> new FieldErrorDetail("allocation", message))
+                            .toList());
+    }
+
+    private void requireLockedRoomCapacity(
+            TimetableProblem currentProblem, TimetableAllocation allocation, Map<Long, Room> roomsById) {
+        // Phòng là entity đã khóa: kiểm tra trực tiếp cả trạng thái và capacity, không dùng snapshot cũ.
+        var requirementsById = currentProblem.classes().stream()
+                .collect(Collectors.toMap(TimetableProblem.ClassRequirement::moduleClassId, Function.identity()));
+        for (var session : allocation.sessions()) {
+            var room = roomsById.get(session.roomId());
+            if (room.isDeleted()
+                    || room.getStatus() != RoomStatus.ACTIVE
+                    || room.getCapacity()
+                            < requirementsById.get(session.moduleClassId()).maxCapacity())
+                throw new TimetableException(ErrorCode.TIMETABLE_STALE_PLAN);
+        }
+    }
+
+    private void persistTeachingAssignments(
+            List<ModuleClass> classes, TimetableAllocation allocation, Map<Long, Room> roomsById) {
+        var classesById = classes.stream().collect(Collectors.toMap(ModuleClass::getId, Function.identity()));
+        var schedules = scheduleRepository.findAll(
+                ClassScheduleSpecification.notDeletedAndModuleClassIdIn(classesById.keySet()), Sort.by("id"));
+        schedules.forEach(schedule -> {
+            schedule.setDeleted(true);
+            schedule.setUpdatedAt(currentAuditTimestamp());
+        });
+        scheduleRepository.saveAll(schedules);
+        List<ClassSchedule> newSchedules = new ArrayList<>();
+        for (var session : allocation.sessions()) {
+            var moduleClass = classesById.get(session.moduleClassId());
+            moduleClass.applyTeachingAssignment(entityManager.getReference(Lecturer.class, session.lecturerId()));
+            moduleClass.setUpdatedAt(currentAuditTimestamp());
+            var schedule = ClassSchedule.builder()
+                    .moduleClass(moduleClass)
+                    .room(roomsById.get(session.roomId()))
+                    .dayOfWeek(session.date().getDayOfWeek().getValue() + 1)
+                    .lessonOrderStart((session.shift() - 1) * 3 + 1)
+                    .lessonOrderEnd(session.shift() * 3)
+                    .startDate(session.date())
+                    .endDate(session.date())
+                    .build();
+            schedule.setCreatedAt(currentAuditTimestamp());
+            schedule.setUpdatedAt(schedule.getCreatedAt());
+            newSchedules.add(schedule);
+        }
+        moduleClassRepository.saveAll(classes);
+        scheduleRepository.saveAllAndFlush(newSchedules);
     }
 }
