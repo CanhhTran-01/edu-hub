@@ -1,7 +1,7 @@
 package com.eduhub.edu_hub.people.domain.model;
 
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.shared.common.BaseEntity;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -59,7 +59,7 @@ public class Student extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "activity_status", nullable = false)
-    private ActivityStatus activityStatus;
+    private StudentActivityStatus activityStatus;
 
     @Column(name = "academic_warning_status")
     private String academicWarningStatus;

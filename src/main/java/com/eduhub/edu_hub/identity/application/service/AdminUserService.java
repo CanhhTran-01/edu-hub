@@ -128,9 +128,9 @@ public class AdminUserService {
         UserAccountAdministrationPolicy.validateSelfLock(
                 actorUser.getId(), actorUser.getRole().getRoleName(), targetUser.getId(), activeSystemAdminCount);
 
+        // NOTE: Khóa tài khoản cũng chưa thu hồi JWT ACCESS tức thì tại API chỉ kiểm tra chữ ký/hạn token.
         targetUser.setStatus(UserStatus.LOCKED);
         revokeUserSessions(targetUser.getId());
-        // NOTE: Khóa tài khoản cũng chưa thu hồi JWT ACCESS tức thì tại API chỉ kiểm tra chữ ký/hạn token.
 
         // TODO(ACCESS_TOKEN_REVOCATION): Đồng bộ lock với logout/reset/đổi mật khẩu khi triển khai thu hồi jti.
 

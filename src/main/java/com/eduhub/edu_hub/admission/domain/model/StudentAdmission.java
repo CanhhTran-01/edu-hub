@@ -1,7 +1,7 @@
 package com.eduhub.edu_hub.admission.domain.model;
 
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.shared.common.BaseEntity;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -38,5 +38,5 @@ public class StudentAdmission extends BaseEntity {
 
     @Builder.Default
     @Enumerated(EnumType.STRING)
-    private ActivityStatus activityStatus = ActivityStatus.STUDYING;
+    private StudentActivityStatus activityStatus = StudentActivityStatus.STUDYING;
 }

@@ -1,6 +1,6 @@
 package com.eduhub.edu_hub.people.api.dto.request;
 
-import com.eduhub.edu_hub.shared.text.TextsNormalizer;
+import com.eduhub.edu_hub.shared.common.TextsNormalizer;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;

@@ -32,10 +32,8 @@ public class AdmissionNotificationDispatcher {
             fixedDelayString = "${notification.mail-retry-delay-ms:${admission.mail-retry-delay-ms:60000}}",
             initialDelayString = "${notification.mail-retry-delay-ms:${admission.mail-retry-delay-ms:60000}}")
     public void sendDueNotifications() {
-
         if (!systemConfigService.getSnapshot().getBoolean(SystemConfigKey.ADMISSION_NOTIFICATIONS_ENABLED))
             return; // Công tắc bật/tắt job (có thể cấu hình)
-
         dispatchService.sendDueNotifications();
     }
 }

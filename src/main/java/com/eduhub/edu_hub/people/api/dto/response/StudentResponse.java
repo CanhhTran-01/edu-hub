@@ -1,6 +1,6 @@
 package com.eduhub.edu_hub.people.api.dto.response;
 
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -23,7 +23,7 @@ public class StudentResponse {
     private String trainingType;
     private BigDecimal entranceScore;
     private BigDecimal targetGpa;
-    private ActivityStatus activityStatus; // STUDYING, DEACTIVATED, DELETED
+    private StudentActivityStatus activityStatus; // STUDYING, DEACTIVATED, DELETED
     private String academicWarningStatus;
     private String academicWarningReason;
     private String statusReason;

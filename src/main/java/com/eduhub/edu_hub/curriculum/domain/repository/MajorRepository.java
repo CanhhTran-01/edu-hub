@@ -11,6 +11,4 @@ public interface MajorRepository extends JpaRepository<Major, Long> {
     List<Major> findByDeletedFalseOrderById();
 
     Optional<Major> findByIdAndDeletedFalse(Long id);
-
-    Optional<Major> findByMajorCodeIgnoreCaseAndDeletedFalse(String code);
 }

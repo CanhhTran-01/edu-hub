@@ -10,9 +10,9 @@ import com.eduhub.edu_hub.people.application.exception.ProfileCreationException;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.application.facade.dto.*;
 import com.eduhub.edu_hub.people.application.service.StudentCodeGenerator;
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.people.domain.model.*;
 import com.eduhub.edu_hub.people.domain.repository.*;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService;
 import com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey;
@@ -164,7 +164,7 @@ public class PeopleAdmissionFacadeImpl implements PeopleFacade.Admission {
         }
         student.setAdministrativeClass(target);
         student.setEntranceScore(request.entranceScore());
-        student.setActivityStatus(ActivityStatus.STUDYING);
+        student.setActivityStatus(StudentActivityStatus.STUDYING);
         // Cùng transaction với hồ sơ nhập học: lỗi ở admission phải rollback cả Student/User/MSSV.
         return AdmissionStudentRegistrationResult.builder()
                 .student(studentInfo(students.saveAndFlush(student)))

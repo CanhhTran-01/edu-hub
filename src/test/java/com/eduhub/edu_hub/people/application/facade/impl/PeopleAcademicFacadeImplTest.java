@@ -7,9 +7,9 @@ import com.eduhub.edu_hub.curriculum.api.dto.response.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import com.eduhub.edu_hub.curriculum.domain.model.Major;
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.people.domain.model.*;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import java.math.BigDecimal;
 import java.util.*;
 import org.junit.jupiter.api.Test;
@@ -37,7 +37,7 @@ class PeopleAcademicFacadeImplTest {
                 .studentCode("SV99")
                 .fullName("Sinh viên")
                 .administrativeClass(administrativeClass)
-                .activityStatus(ActivityStatus.DEACTIVATED)
+                .activityStatus(StudentActivityStatus.DEACTIVATED)
                 .targetGpa(new BigDecimal("3.25"))
                 .academicWarningStatus("WARNING")
                 .academicWarningReason("Lý do đã lưu")
@@ -48,7 +48,7 @@ class PeopleAcademicFacadeImplTest {
                 .thenReturn(List.of(new MajorSimpleResponse(2L, "CNTT", "Công nghệ thông tin", null, false)));
         var profile = facade.findStudentByUserId(7L);
         assertThat(profile.studentId()).isEqualTo(99L);
-        assertThat(profile.activityStatus()).isEqualTo(ActivityStatus.DEACTIVATED);
+        assertThat(profile.activityStatus()).isEqualTo(StudentActivityStatus.DEACTIVATED);
         assertThat(profile.majorName()).isEqualTo("Công nghệ thông tin");
         assertThat(profile.admissionYear()).isEqualTo(2026);
         assertThat(profile.academicWarningReason()).isEqualTo("Lý do đã lưu");

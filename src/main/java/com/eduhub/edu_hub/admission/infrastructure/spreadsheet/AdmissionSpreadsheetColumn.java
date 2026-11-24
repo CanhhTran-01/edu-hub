@@ -1,6 +1,6 @@
 package com.eduhub.edu_hub.admission.infrastructure.spreadsheet;
 
-import com.eduhub.edu_hub.shared.text.TextsNormalizer;
+import com.eduhub.edu_hub.shared.common.TextsNormalizer;
 
 enum AdmissionSpreadsheetColumn {
     APPLICATION_CODE("Mã hồ sơ", "ma_ho_so"),

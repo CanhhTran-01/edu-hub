@@ -13,7 +13,7 @@ import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.people.api.dto.response.EnrollmentStudentResponse;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.util.*;
 import org.junit.jupiter.api.Test;
@@ -38,7 +38,7 @@ class StudentCurriculumQueryServiceTest {
                 .thenReturn(UserInfoResponse.builder().id(7L).build());
         when(peopleFacade.findStudentByUserId(7L))
                 .thenReturn(new EnrollmentStudentResponse(
-                        99L, "SV99", "Sinh viên", 2L, 3L, TrainingType.LIEN_THONG, 2026, ActivityStatus.STUDYING));
+                        99L, "SV99", "Sinh viên", 2L, 3L, TrainingType.LIEN_THONG, 2026, StudentActivityStatus.STUDYING));
         when(catalog.findCurriculum(2L, 3L, TrainingType.LIEN_THONG)).thenReturn(Optional.of(curriculum(10)));
         var response = service.findMyCurriculum(principal);
         assertThat(response.semesters()).hasSize(10);

@@ -6,7 +6,7 @@ import com.eduhub.edu_hub.admission.domain.enums.AdmissionApplicantStatus;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionApplicant;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionPlanClass;
 import com.eduhub.edu_hub.people.domain.model.*;
-import com.eduhub.edu_hub.shared.text.TextsNormalizer;
+import com.eduhub.edu_hub.shared.common.TextsNormalizer;
 import java.math.BigDecimal;
 import java.util.*;
 import org.junit.jupiter.api.Test;

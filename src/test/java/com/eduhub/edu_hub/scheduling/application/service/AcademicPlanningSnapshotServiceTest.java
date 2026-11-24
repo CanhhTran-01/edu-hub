@@ -11,9 +11,9 @@ import com.eduhub.edu_hub.enrollment.application.facade.dto.LearningAttemptRespo
 import com.eduhub.edu_hub.enrollment.application.facade.dto.LearningHistoryResponse;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.application.facade.dto.StudentPlanningResponse;
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.scheduling.domain.enums.LearningOutcome;
 import com.eduhub.edu_hub.scheduling.domain.model.AcademicPlanningSnapshot;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.util.List;
@@ -130,7 +130,7 @@ class AcademicPlanningSnapshotServiceTest {
     }
 
     private StudentPlanningResponse student(Long id, TrainingType type, Integer year) {
-        return new StudentPlanningResponse(id, "SV" + id, 3L, 4L, type, year, ActivityStatus.STUDYING);
+        return new StudentPlanningResponse(id, "SV" + id, 3L, 4L, type, year, StudentActivityStatus.STUDYING);
     }
 
     private void assertUnavailable() {

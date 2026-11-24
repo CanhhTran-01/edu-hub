@@ -7,12 +7,12 @@ import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.application.facade.dto.StudentPlanningResponse;
 import com.eduhub.edu_hub.people.application.service.LecturerApplicationService;
 import com.eduhub.edu_hub.people.domain.enums.LecturerStatus;
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.people.domain.model.Lecturer;
 import com.eduhub.edu_hub.people.domain.model.LecturerTeachingSubject;
 import com.eduhub.edu_hub.people.domain.repository.LecturerRepository;
 import com.eduhub.edu_hub.people.domain.repository.LecturerTeachingSubjectRepository;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.util.List;
 import java.util.Set;
@@ -81,7 +81,7 @@ public class PeopleSchedulingFacadeImpl implements PeopleFacade.Scheduling {
 
         // Chỉ lấy sinh viên chưa xóa mềm và có trạng thái STUDYING (đang học)
         // Sinh viên bảo lưu, thôi học, đã tốt nghiệp không nằm trong diện lập kế hoạch
-        return students.findAllByDeletedFalseAndActivityStatus(ActivityStatus.STUDYING).stream()
+        return students.findAllByDeletedFalseAndActivityStatus(StudentActivityStatus.STUDYING).stream()
                 .map(student -> {
                     var administrativeClass = student.getAdministrativeClass();
                     var cohort = administrativeClass == null ? null : administrativeClass.getCohort();

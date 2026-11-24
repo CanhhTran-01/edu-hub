@@ -2,8 +2,8 @@ package com.eduhub.edu_hub.people.domain.repository;
 
 import com.eduhub.edu_hub.people.api.dto.response.AccountProfileContactResponse;
 import com.eduhub.edu_hub.people.api.dto.response.StudentRosterProfileResponse;
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.people.domain.model.Student;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.NonNull;
@@ -50,7 +50,7 @@ public interface StudentRepository extends JpaRepository<Student, Long>, JpaSpec
     Optional<Student> findByIdAndDeletedFalse(Long id);
 
     @EntityGraph(attributePaths = {"administrativeClass", "administrativeClass.cohort"})
-    List<Student> findAllByDeletedFalseAndActivityStatus(ActivityStatus activityStatus);
+    List<Student> findAllByDeletedFalseAndActivityStatus(StudentActivityStatus activityStatus);
 
     @Override
     @EntityGraph(attributePaths = {"administrativeClass", "administrativeClass.cohort"})

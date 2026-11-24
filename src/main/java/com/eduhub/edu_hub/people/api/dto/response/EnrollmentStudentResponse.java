@@ -1,7 +1,7 @@
 package com.eduhub.edu_hub.people.api.dto.response;
 
 import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 
 public record EnrollmentStudentResponse(
         Long studentId,
@@ -11,4 +11,4 @@ public record EnrollmentStudentResponse(
         Long cohortId,
         TrainingType trainingType,
         Integer admissionYear,
-        ActivityStatus activityStatus) {}
+        StudentActivityStatus activityStatus) {}

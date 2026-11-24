@@ -17,6 +17,7 @@ public record StudentCurriculumResponse(
         int requiredGraduationCredits,
         int totalCatalogCredits,
         List<PlannedSemesterResponse> semesters) {
+
     public record PlannedSemesterResponse(int semesterNumber, List<PlannedSubjectResponse> subjects) {}
 
     public record PlannedSubjectResponse(

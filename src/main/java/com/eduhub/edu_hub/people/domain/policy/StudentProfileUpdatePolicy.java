@@ -1,8 +1,8 @@
 package com.eduhub.edu_hub.people.domain.policy;
 
 import com.eduhub.edu_hub.people.application.exception.StudentProfileException;
+import com.eduhub.edu_hub.shared.common.TextsNormalizer;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
-import com.eduhub.edu_hub.shared.text.TextsNormalizer;
 import java.time.LocalDate;
 
 /** Chuẩn hóa và kiểm tra thông tin hồ sơ từ đầu vào; không tải dữ liệu hoặc kiểm tra quyền người gọi. */

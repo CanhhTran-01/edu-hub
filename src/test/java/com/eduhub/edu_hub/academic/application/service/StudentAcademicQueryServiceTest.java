@@ -15,9 +15,9 @@ import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.people.api.dto.response.StudentAcademicProfileResponse;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.scheduling.api.dto.response.SemesterResponse;
 import com.eduhub.edu_hub.scheduling.application.facade.SchedulingFacade;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.math.BigDecimal;
 import java.time.*;
@@ -59,7 +59,7 @@ class StudentAcademicQueryServiceTest {
                         "CT8A",
                         TrainingType.CHINH_QUY,
                         2026,
-                        ActivityStatus.STUDYING,
+                        StudentActivityStatus.STUDYING,
                         new BigDecimal("3.25"),
                         "WARNING",
                         "Lý do đã lưu"));

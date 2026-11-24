@@ -1,8 +1,8 @@
 package com.eduhub.edu_hub.people.api.dto.request;
 
 import com.eduhub.edu_hub.people.application.exception.StudentProfileException;
+import com.eduhub.edu_hub.shared.common.TextsNormalizer;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
-import com.eduhub.edu_hub.shared.text.TextsNormalizer;
 import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.DecimalMax;

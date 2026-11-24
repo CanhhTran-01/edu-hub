@@ -10,6 +10,7 @@ import com.eduhub.edu_hub.curriculum.application.facade.dto.CurriculumOpeningSub
 import com.eduhub.edu_hub.curriculum.domain.model.Subject;
 import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.people.domain.model.Lecturer;
 import com.eduhub.edu_hub.scheduling.api.dto.request.CreateModuleClassRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.CreateModuleClassesRequest;
@@ -25,7 +26,6 @@ import com.eduhub.edu_hub.scheduling.domain.policy.OpeningDemandPolicy;
 import com.eduhub.edu_hub.scheduling.domain.repository.ModuleClassRepository;
 import com.eduhub.edu_hub.scheduling.domain.repository.SemesterRepository;
 import com.eduhub.edu_hub.shared.config.TimeConfig;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import jakarta.persistence.EntityManager;
@@ -239,7 +239,7 @@ class ModuleClassApplicationServiceTest {
                         "DATABASE",
                         true,
                         List.of(new AcademicPlanningSnapshot.PlanningStudent(
-                                1L, "SV01", "CTDT01", 2026, ActivityStatus.STUDYING)),
+                                1L, "SV01", "CTDT01", 2026, StudentActivityStatus.STUDYING)),
                         List.of()));
         when(curriculum.findPlanningSubjects())
                 .thenReturn(List.of(CurriculumOpeningSubjectResponse.builder()

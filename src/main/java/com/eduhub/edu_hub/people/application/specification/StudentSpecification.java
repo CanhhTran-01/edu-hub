@@ -1,10 +1,10 @@
 package com.eduhub.edu_hub.people.application.specification;
 
 import com.eduhub.edu_hub.people.api.dto.request.StudentSearchRequest;
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
 import com.eduhub.edu_hub.people.domain.model.Cohort;
 import com.eduhub.edu_hub.people.domain.model.Student;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
@@ -17,7 +17,7 @@ import org.springframework.data.jpa.domain.Specification;
 public final class StudentSpecification {
     private StudentSpecification() {}
 
-    public static Specification<Student> fromRequest(StudentSearchRequest request, ActivityStatus activityStatus) {
+    public static Specification<Student> fromRequest(StudentSearchRequest request, StudentActivityStatus activityStatus) {
         return Specification.allOf(
                 notDeleted(),
                 matchesKeyword(request.getKeyword()),
@@ -59,7 +59,7 @@ public final class StudentSpecification {
         };
     }
 
-    public static Specification<Student> hasActivityStatus(ActivityStatus activityStatus) {
+    public static Specification<Student> hasActivityStatus(StudentActivityStatus activityStatus) {
         return (root, query, builder) ->
                 activityStatus == null ? null : builder.equal(root.get("activityStatus"), activityStatus);
     }

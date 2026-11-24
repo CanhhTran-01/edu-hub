@@ -1,8 +1,8 @@
 package com.eduhub.edu_hub.people.domain.policy;
 
 import com.eduhub.edu_hub.people.application.exception.LecturerProfileException;
+import com.eduhub.edu_hub.shared.common.TextsNormalizer;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
-import com.eduhub.edu_hub.shared.text.TextsNormalizer;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;

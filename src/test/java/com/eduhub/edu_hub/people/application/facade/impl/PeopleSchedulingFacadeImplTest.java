@@ -7,11 +7,11 @@ import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.people.application.service.LecturerApplicationService;
 import com.eduhub.edu_hub.people.domain.enums.LecturerStatus;
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.people.domain.model.*;
 import com.eduhub.edu_hub.people.domain.repository.LecturerRepository;
 import com.eduhub.edu_hub.people.domain.repository.LecturerTeachingSubjectRepository;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -97,9 +97,9 @@ class PeopleSchedulingFacadeImplTest {
         var student = new Student();
         student.setId(4L);
         student.setStudentCode("SV04");
-        student.setActivityStatus(ActivityStatus.STUDYING);
+        student.setActivityStatus(StudentActivityStatus.STUDYING);
         student.setAdministrativeClass(administrativeClass);
-        when(students.findAllByDeletedFalseAndActivityStatus(ActivityStatus.STUDYING))
+        when(students.findAllByDeletedFalseAndActivityStatus(StudentActivityStatus.STUDYING))
                 .thenReturn(List.of(student));
 
         var result = facade.findStudentsForPlanning();

@@ -2,8 +2,8 @@ package com.eduhub.edu_hub.admission.domain.policy;
 
 import com.eduhub.edu_hub.admission.application.exception.AdmissionPlanException;
 import com.eduhub.edu_hub.admission.domain.model.ClassDivisionScenario;
+import com.eduhub.edu_hub.shared.common.TextsNormalizer;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
-import com.eduhub.edu_hub.shared.text.TextsNormalizer;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Component;

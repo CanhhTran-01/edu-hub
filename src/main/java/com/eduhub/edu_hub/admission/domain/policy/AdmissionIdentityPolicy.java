@@ -3,7 +3,7 @@ package com.eduhub.edu_hub.admission.domain.policy;
 import com.eduhub.edu_hub.admission.domain.enums.AdmissionApplicantStatus;
 import com.eduhub.edu_hub.admission.domain.model.AdmissionApplicant;
 import com.eduhub.edu_hub.admission.domain.model.StudentAdmission;
-import com.eduhub.edu_hub.shared.text.TextsNormalizer;
+import com.eduhub.edu_hub.shared.common.TextsNormalizer;
 import java.util.*;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;

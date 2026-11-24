@@ -1,7 +1,7 @@
 package com.eduhub.edu_hub.scheduling.domain.model;
 
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.scheduling.domain.enums.LearningOutcome;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import java.util.*;
 
 public record AcademicPlanningSnapshot(
@@ -26,7 +26,7 @@ public record AcademicPlanningSnapshot(
     }
 
     public record PlanningStudent(
-            long id, String studentCode, String curriculumCode, int admissionYear, ActivityStatus activityStatus) {}
+            long id, String studentCode, String curriculumCode, int admissionYear, StudentActivityStatus activityStatus) {}
 
     public record LearningAttempt(
             long studentId, String subjectCode, int academicYearStart, int semesterNumber, LearningOutcome status) {

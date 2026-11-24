@@ -30,9 +30,6 @@ public class AdminUserController {
     //  mới được tìm kiếm, xem chi tiết, khóa/mở khóa và reset mật khẩu ở đây. Hiện JWT ACCESS của role khác vẫn gọi
     //  được.Quyền kỹ thuật này không cho phép SYSTEM_ADMIN cập nhật hồ sơ Student qua API của People.
 
-    // Danh sách dùng chung cho dashboard và tìm kiếm; FE chọn tài khoản rồi tải chi tiết trước khi thao tác.
-    // FLOW: Admin truy cập, tìm kiếm -> hiển thị simple -> bấm xem chi tiết -> chọn thao tác trong cửa sổ popup
-
     @GetMapping
     public ApiResponse<PageResponse<UserAccountSummaryResponse>> searchUserAccounts(
             @AuthenticationPrincipal Jwt authenticatedJwt, @Valid SearchUserAccountsRequest request) {

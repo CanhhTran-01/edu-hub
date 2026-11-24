@@ -62,9 +62,7 @@ public class QueuedAdmissionNotificationSender {
     private void deliverAndRecordOutcome(QueuedAdmissionNotification notification, LocalDateTime attemptTime) {
         try {
             AccountNotificationResponse deliveryResult = sendUsingCurrentStudentAccount(notification);
-
-            // cập nhật trạng thái
-            recordDeliveryResult(notification, deliveryResult, attemptTime);
+            recordDeliveryResult(notification, deliveryResult, attemptTime); // cập nhật trạng thái
         } catch (RuntimeException exception) {
             log.warn(
                     "Notification delivery crashed: notificationId={}, failureType={}",

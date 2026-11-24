@@ -3,13 +3,13 @@ package com.eduhub.edu_hub.scheduling.domain.policy;
 import static org.assertj.core.api.Assertions.*;
 
 import com.eduhub.edu_hub.curriculum.application.facade.dto.CurriculumOpeningSubjectResponse;
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.scheduling.api.dto.response.OpeningSubjectResponse;
 import com.eduhub.edu_hub.scheduling.api.mapper.OpeningSubjectResponseMapper;
 import com.eduhub.edu_hub.scheduling.domain.enums.LearningOutcome;
 import com.eduhub.edu_hub.scheduling.domain.model.AcademicPlanningSnapshot;
 import com.eduhub.edu_hub.scheduling.domain.model.AcademicPlanningSnapshot.*;
 import com.eduhub.edu_hub.scheduling.infrastructure.PlanningTestData;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.util.List;
@@ -48,9 +48,9 @@ class OpeningDemandPolicyTest {
                 "TEST",
                 true,
                 List.of(
-                        new PlanningStudent(1, "SV01", "CNTT_4Y_V1", 2020, ActivityStatus.STUDYING),
-                        new PlanningStudent(2, "SV02", "CNTT_4Y_V1", 2020, ActivityStatus.DEACTIVATED),
-                        new PlanningStudent(3, "SV03", "CNTT_4Y_V1", 2020, ActivityStatus.DELETED)),
+                        new PlanningStudent(1, "SV01", "CNTT_4Y_V1", 2020, StudentActivityStatus.STUDYING),
+                        new PlanningStudent(2, "SV02", "CNTT_4Y_V1", 2020, StudentActivityStatus.DEACTIVATED),
+                        new PlanningStudent(3, "SV03", "CNTT_4Y_V1", 2020, StudentActivityStatus.DELETED)),
                 List.of());
         var result = calculateOpeningSubjects("HK_1_2026_2027", List.of(subject("CNTT_4Y_V1", 1)), data);
         assertThat(result).singleElement().satisfies(demand -> {
@@ -135,7 +135,7 @@ class OpeningDemandPolicyTest {
         return new AcademicPlanningSnapshot(
                 "TEST",
                 historyComplete,
-                List.of(new PlanningStudent(1, "SV01", "CNTT_4Y_V1", 2026, ActivityStatus.STUDYING)),
+                List.of(new PlanningStudent(1, "SV01", "CNTT_4Y_V1", 2026, StudentActivityStatus.STUDYING)),
                 attempts);
     }
 

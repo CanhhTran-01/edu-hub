@@ -6,8 +6,8 @@ import static com.eduhub.edu_hub.admission.infrastructure.spreadsheet.AdmissionS
 import com.eduhub.edu_hub.admission.application.exception.AdmissionImportScopeException;
 import com.eduhub.edu_hub.admission.application.exception.AdmissionSpreadsheetException;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
+import com.eduhub.edu_hub.shared.common.TextsNormalizer;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
-import com.eduhub.edu_hub.shared.text.TextsNormalizer;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.poi.ss.usermodel.*;

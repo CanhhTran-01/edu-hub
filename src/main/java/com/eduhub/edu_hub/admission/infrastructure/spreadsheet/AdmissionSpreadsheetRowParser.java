@@ -3,7 +3,7 @@ package com.eduhub.edu_hub.admission.infrastructure.spreadsheet;
 import static com.eduhub.edu_hub.admission.infrastructure.spreadsheet.AdmissionSpreadsheetColumn.*;
 
 import com.eduhub.edu_hub.admission.domain.enums.AdmissionApplicantStatus;
-import com.eduhub.edu_hub.shared.text.TextsNormalizer;
+import com.eduhub.edu_hub.shared.common.TextsNormalizer;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;

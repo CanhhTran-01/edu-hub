@@ -2,9 +2,9 @@ package com.eduhub.edu_hub.admission.infrastructure.spreadsheet;
 
 import com.eduhub.edu_hub.admission.application.exception.AdmissionSpreadsheetException;
 import com.eduhub.edu_hub.admission.infrastructure.config.AdmissionSettings;
+import com.eduhub.edu_hub.shared.common.TextsNormalizer;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
-import com.eduhub.edu_hub.shared.text.TextsNormalizer;
 import java.io.IOException;
 import java.util.*;
 import lombok.RequiredArgsConstructor;

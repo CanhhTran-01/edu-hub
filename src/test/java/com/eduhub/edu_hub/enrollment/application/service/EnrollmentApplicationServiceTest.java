@@ -18,10 +18,10 @@ import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.people.api.dto.response.EnrollmentStudentResponse;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.scheduling.api.dto.response.*;
 import com.eduhub.edu_hub.scheduling.application.facade.SchedulingFacade;
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.time.*;
 import java.util.*;
@@ -59,7 +59,7 @@ class EnrollmentApplicationServiceTest {
     private final com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService systemConfigService =
             com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData.configuredService();
     private final EnrollmentStudentResponse student = new EnrollmentStudentResponse(
-            10L, "SV10", "Sinh viên", 1L, 2L, TrainingType.CHINH_QUY, 2026, ActivityStatus.STUDYING);
+            10L, "SV10", "Sinh viên", 1L, 2L, TrainingType.CHINH_QUY, 2026, StudentActivityStatus.STUDYING);
 
     @BeforeEach
     void setUp() {

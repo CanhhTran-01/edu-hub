@@ -16,11 +16,11 @@ import com.eduhub.edu_hub.enrollment.infrastructure.config.EnrollmentRegistratio
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.people.api.dto.response.EnrollmentStudentResponse;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.scheduling.api.dto.response.*;
 import com.eduhub.edu_hub.scheduling.application.facade.SchedulingFacade;
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
 import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.systemconfig.api.dto.response.SystemConfigSnapshotResponse;
 import com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService;
@@ -227,7 +227,7 @@ public class EnrollmentApplicationService {
     }
 
     private void requireEligibleStudent(EnrollmentStudentResponse student) {
-        if (student.activityStatus() != ActivityStatus.STUDYING)
+        if (student.activityStatus() != StudentActivityStatus.STUDYING)
             throw new EnrollmentException(ErrorCode.ENROLLMENT_STUDENT_INELIGIBLE);
         if (student.admissionYear() == null) throw new EnrollmentException(ErrorCode.ENROLLMENT_DATA_INCOMPLETE);
         if (student.admissionYear() < settings.getFirstSupportedAdmissionYear())

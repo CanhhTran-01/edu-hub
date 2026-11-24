@@ -8,11 +8,11 @@ import com.eduhub.edu_hub.people.api.mapper.StudentResponseMapper;
 import com.eduhub.edu_hub.people.application.exception.ProfileSearchException;
 import com.eduhub.edu_hub.people.application.exception.StudentProfileException;
 import com.eduhub.edu_hub.people.application.specification.StudentSpecification;
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
 import com.eduhub.edu_hub.people.domain.model.Student;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
 import com.eduhub.edu_hub.shared.common.PageResponse;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.mapper.PageMapper;
 import java.util.Collections;
@@ -37,7 +37,7 @@ public class StudentApplicationService {
 
     public PageResponse<StudentResponse> search(StudentSearchRequest request) {
 
-        ActivityStatus activityStatus = validateSearchRequest(request);
+        StudentActivityStatus activityStatus = validateSearchRequest(request);
 
         var students = studentRepository.findAll(
                 StudentSpecification.fromRequest(request, activityStatus),
@@ -58,13 +58,13 @@ public class StudentApplicationService {
                 .orElseThrow(() -> new StudentProfileException(ErrorCode.STUDENT_NOT_FOUND));
     }
 
-    private ActivityStatus validateSearchRequest(StudentSearchRequest request) {
+    private StudentActivityStatus validateSearchRequest(StudentSearchRequest request) {
         if (request.getPage() < 0 || request.getSize() < 1) {
             throw new ProfileSearchException();
         }
         if (request.getActivityStatus() != null && !request.getActivityStatus().isBlank()) {
             try {
-                return ActivityStatus.valueOf(request.getActivityStatus());
+                return StudentActivityStatus.valueOf(request.getActivityStatus());
             } catch (IllegalArgumentException exception) {
                 throw new ProfileSearchException();
             }

@@ -283,7 +283,6 @@ public class SubjectApplicationService {
 
         // đổi sang response
         List<SubjectResponse> responses = toResponseList(subjects.getContent());
-
         return PageMapper.toPageResponse(new PageImpl<>(responses, pageable, subjects.getTotalElements()));
     }
 

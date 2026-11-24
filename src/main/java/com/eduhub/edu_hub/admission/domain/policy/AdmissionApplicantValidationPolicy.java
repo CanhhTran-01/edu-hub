@@ -1,7 +1,7 @@
 package com.eduhub.edu_hub.admission.domain.policy;
 
 import com.eduhub.edu_hub.admission.domain.model.AdmissionApplicant;
-import com.eduhub.edu_hub.shared.text.TextsNormalizer;
+import com.eduhub.edu_hub.shared.common.TextsNormalizer;
 import jakarta.validation.Validator;
 import jakarta.validation.constraints.Email;
 import java.time.LocalDate;

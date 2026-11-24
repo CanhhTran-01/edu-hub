@@ -31,9 +31,6 @@ public class SubjectController {
     private final ApiResponseFactory apiResponseFactory;
     private final SubjectApplicationService subjectApplicationService;
 
-    // TODO(CURRICULUM_VALIDATION): curriculum(n)--(n)subject, cần kiểm tra recommend_semester <= duration_semesters
-    //  và subject/major/curriculum chưa bị ẩn hoặc ngừng sử dụng trước khi thay đổi quan hệ
-
     @GetMapping
     public ApiResponse<PageResponse<SubjectResponse>> searchSubjects(
             @Valid @ModelAttribute SubjectSearchRequest request) {

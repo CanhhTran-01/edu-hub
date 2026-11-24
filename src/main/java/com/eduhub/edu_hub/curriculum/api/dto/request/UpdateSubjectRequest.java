@@ -20,8 +20,6 @@ public class UpdateSubjectRequest {
 
     // Bỏ field hoặc null giữ tổng tiết cũ, để cập nhật dữ liệu cũ theo từng môn.
     @Min(value = 1, message = "Tổng số tiết phải là số nguyên dương")
-    @tools.jackson.databind.annotation.JsonDeserialize(
-            using = com.eduhub.edu_hub.curriculum.api.serialization.TeachingPeriodsDeserializer.class)
     private Integer totalTeachingPeriods;
 
     private String description;

@@ -120,25 +120,29 @@ public class AuthApplicationService {
         RefreshAttempt attempt = new TransactionTemplate(transactionManager)
                 .execute(status -> rotateRefreshTokenInTransaction(tokenHash));
 
-        // Thu hồi do dùng lại token phải commit trước khi trả 401, không ném lỗi trong callback để rollback việc thu
-        // hồi.
+        // Phát hiện dùng lại refresh token
+        // Phải commit việc thu hồi token trước trong transaction riêng rồi mới trả 401.
+        // Không ném lỗi trong callback, vì sẽ rollback và mất việc thu hồi.
         if (attempt == null) throw new IdentityAuthenticationException(ErrorCode.UNEXPECTED_ERROR);
         if (attempt.error() != null) throw new IdentityAuthenticationException(attempt.error());
         return attempt.response();
     }
 
     private RefreshAttempt rotateRefreshTokenInTransaction(String tokenHash) {
+        // 1. Xác định người dùng sở hữu refresh token.
         Long userId = refreshTokenRepository
                 .findUserIdByTokenHash(tokenHash)
                 .orElseThrow(() -> new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED));
 
-        // Khóa User trước token, cùng thứ tự với đổi/reset mật khẩu và logout; đọc lại token sau khi chờ khóa.
+        // 2. Khóa User trước token, cùng thứ tự với đổi/reset mật khẩu và logout; đọc lại token sau khi chờ khóa.
         User user = userRepository
                 .findByIdForUpdate(userId)
                 .orElseThrow(() -> new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED));
         RefreshToken currentToken = refreshTokenRepository
                 .findByTokenHashForUpdate(tokenHash)
                 .orElseThrow(() -> new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED));
+
+        // 3. Kiểm tra quyền sở hữu, trạng thái xóa và thời hạn của refresh token.
         Instant issuedAt = clock.instant();
         LocalDateTime now = LocalDateTime.ofInstant(issuedAt, clock.getZone());
         if (!currentToken.getUser().getId().equals(userId)
@@ -146,18 +150,24 @@ public class AuthApplicationService {
                 || !now.isBefore(currentToken.getExpiresAt())) {
             throw new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED);
         }
+
+        // 4. Phát hiện tái sử dụng token đã bị thu hồi và vô hiệu hóa toàn bộ token family.
+        // Trả về lỗi thay vì ném exception để việc thu hồi token không bị rollback.
         if (currentToken.isRevoked()) {
             refreshTokenRepository
                     .findByTokenFamilyIdAndRevokedFalse(currentToken.getTokenFamilyId())
                     .forEach(token -> token.setRevoked(true));
             return new RefreshAttempt(null, ErrorCode.UNAUTHENTICATED);
         }
+
+        // 5. Đảm bảo tài khoản vẫn đang hoạt động, chưa bị xóa hoặc khóa.
         if (user.isDeleted()
                 || user.getStatus() != UserStatus.ACTIVE
                 || (user.getLockedUntil() != null && now.isBefore(user.getLockedUntil()))) {
             throw new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED);
         }
 
+        // 6. Xoay refresh token: tạo token mới cùng token family và thời hạn, đồng thời thu hồi token cũ.
         var authenticationConfiguration = systemConfigService.getSnapshot();
         String refreshToken = tokenService.newRefreshToken();
         RefreshToken nextToken = new RefreshToken();
@@ -168,11 +178,13 @@ public class AuthApplicationService {
         currentToken.setRevoked(true);
         nextToken = refreshTokenRepository.saveAndFlush(nextToken);
 
-        // Không kéo dài phiên khi xoay token; JWT mới cũng không vượt hạn phiên còn lại.
+        // 7. Không kéo dài phiên khi xoay token; JWT mới cũng không vượt hạn phiên còn lại.
         Instant expiresAt = issuedAt.plus(authenticationConfiguration.getDuration(ACCESS_TOKEN_LIFETIME));
         Instant sessionExpiresAt =
                 currentToken.getExpiresAt().atZone(clock.getZone()).toInstant();
         if (expiresAt.isAfter(sessionExpiresAt)) expiresAt = sessionExpiresAt;
+
+        // 8. Phát hành access token mới và trả về cặp token cùng thời hạn hiệu lực.
         return new RefreshAttempt(
                 RefreshTokenResponse.builder()
                         .accessToken(tokenService.generateAccessToken(user, nextToken.getId(), issuedAt, expiresAt))

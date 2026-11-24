@@ -7,11 +7,11 @@ import com.eduhub.edu_hub.curriculum.api.dto.response.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import com.eduhub.edu_hub.people.api.dto.response.StudentRosterProfileResponse;
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
 import com.eduhub.edu_hub.people.domain.model.Cohort;
 import com.eduhub.edu_hub.people.domain.model.Student;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Optional;
@@ -75,7 +75,7 @@ class PeopleEnrollmentFacadeImplTest {
                 .build();
         var student = Student.builder()
                 .administrativeClass(administrativeClass)
-                .activityStatus(ActivityStatus.DEACTIVATED)
+                .activityStatus(StudentActivityStatus.DEACTIVATED)
                 .build();
         student.setId(9L);
         when(students.findByUserIdAndDeletedFalse(7L)).thenReturn(Optional.of(student));
@@ -87,7 +87,7 @@ class PeopleEnrollmentFacadeImplTest {
         assertThat(profile.majorId()).isEqualTo(majorDeleted ? null : 2L);
         assertThat(profile.cohortId()).isEqualTo(8L);
         assertThat(profile.admissionYear()).isEqualTo(2026);
-        assertThat(profile.activityStatus()).isEqualTo(ActivityStatus.DEACTIVATED);
+        assertThat(profile.activityStatus()).isEqualTo(StudentActivityStatus.DEACTIVATED);
         verifyNoInteractions(entityManager);
     }
 

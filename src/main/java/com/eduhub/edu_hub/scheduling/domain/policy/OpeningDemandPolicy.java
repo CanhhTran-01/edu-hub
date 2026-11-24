@@ -1,11 +1,11 @@
 package com.eduhub.edu_hub.scheduling.domain.policy;
 
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassException;
 import com.eduhub.edu_hub.scheduling.domain.enums.LearningOutcome;
 import com.eduhub.edu_hub.scheduling.domain.enums.OpeningDemandCategory;
 import com.eduhub.edu_hub.scheduling.domain.model.AcademicPlanningSnapshot;
 import com.eduhub.edu_hub.scheduling.domain.model.AcademicPlanningSnapshot.LearningAttempt;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.util.*;
 import java.util.regex.Pattern;
@@ -116,7 +116,7 @@ public class OpeningDemandPolicy {
             int currentSemester = 2 * (academicYear - student.admissionYear()) + semesterNumber;
 
             // Bỏ qua SV không STUDYING hoặc currentSemester < 1 (chưa nhập học)
-            if (student.activityStatus() != ActivityStatus.STUDYING || currentSemester < 1) continue;
+            if (student.activityStatus() != StudentActivityStatus.STUDYING || currentSemester < 1) continue;
 
             // Không tìm thấy chương trình của SV thì lỗi
             var curriculumSubjects = subjectsByCurriculumCode.get(student.curriculumCode());

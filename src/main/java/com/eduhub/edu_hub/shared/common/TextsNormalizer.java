@@ -1,4 +1,4 @@
-package com.eduhub.edu_hub.shared.text;
+package com.eduhub.edu_hub.shared.common;
 
 import java.text.Collator;
 import java.text.Normalizer;

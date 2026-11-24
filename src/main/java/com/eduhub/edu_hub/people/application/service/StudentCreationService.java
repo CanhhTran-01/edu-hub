@@ -10,14 +10,14 @@ import com.eduhub.edu_hub.people.api.dto.response.StudentResponse;
 import com.eduhub.edu_hub.people.api.mapper.StudentResponseMapper;
 import com.eduhub.edu_hub.people.application.exception.ProfileCreationException;
 import com.eduhub.edu_hub.people.domain.enums.AccountNotificationStatus;
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
 import com.eduhub.edu_hub.people.domain.model.Student;
 import com.eduhub.edu_hub.people.domain.policy.ProfileCreationPolicy;
 import com.eduhub.edu_hub.people.domain.repository.AdministrativeClassRepository;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
+import com.eduhub.edu_hub.shared.common.TextsNormalizer;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
-import com.eduhub.edu_hub.shared.text.TextsNormalizer;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -166,7 +166,7 @@ public class StudentCreationService {
                 .phone(request.getPhone() == null ? null : request.getPhone().trim())
                 .citizenId(citizenId)
                 .entranceScore(request.getEntranceScore())
-                .activityStatus(ActivityStatus.STUDYING)
+                .activityStatus(StudentActivityStatus.STUDYING)
                 .build();
 
         return student;

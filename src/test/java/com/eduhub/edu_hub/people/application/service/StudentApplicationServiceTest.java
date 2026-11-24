@@ -14,11 +14,11 @@ import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.people.api.dto.request.StudentSearchRequest;
 import com.eduhub.edu_hub.people.api.mapper.StudentResponseMapper;
 import com.eduhub.edu_hub.people.application.exception.ProfileSearchException;
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
 import com.eduhub.edu_hub.people.domain.model.Cohort;
 import com.eduhub.edu_hub.people.domain.model.Student;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Join;
@@ -156,8 +156,8 @@ class StudentApplicationServiceTest {
     }
 
     @ParameterizedTest
-    @EnumSource(ActivityStatus.class)
-    void combinesActivityStatusWithKeywordAndAcademicScope(ActivityStatus activityStatus) {
+    @EnumSource(StudentActivityStatus.class)
+    void combinesActivityStatusWithKeywordAndAcademicScope(StudentActivityStatus activityStatus) {
         StudentSearchRequest request = new StudentSearchRequest();
         request.setKeyword(" An ");
         request.setClassId(3L);

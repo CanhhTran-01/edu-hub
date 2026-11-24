@@ -15,12 +15,12 @@ import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.people.api.dto.request.UpdateStudentProfileRequest;
 import com.eduhub.edu_hub.people.api.mapper.StudentResponseMapper;
 import com.eduhub.edu_hub.people.application.exception.StudentProfileException;
+import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
 import com.eduhub.edu_hub.people.domain.model.Cohort;
 import com.eduhub.edu_hub.people.domain.model.Student;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
 import com.eduhub.edu_hub.shared.config.TimeConfig;
-import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -111,7 +111,7 @@ class StudentAdminUpdateServiceTest {
         assertThat(student.getAdministrativeClass()).isSameAs(administrativeClass);
         assertThat(student.getStudentCode()).isEqualTo("CNTT080101");
         assertThat(student.getUserId()).isEqualTo(101L);
-        assertThat(student.getActivityStatus()).isEqualTo(ActivityStatus.STUDYING);
+        assertThat(student.getActivityStatus()).isEqualTo(StudentActivityStatus.STUDYING);
         verify(studentRepository).existsByCitizenIdAndIdNotAndDeletedFalse("012345678901", 1L);
         verify(identityFacade).updateAccountEmail(101L, "new@example.com");
         verify(studentRepository).save(same(student));
@@ -340,7 +340,7 @@ class StudentAdminUpdateServiceTest {
         student.setTargetGpa(new BigDecimal("2.50"));
         student.setAcademicWarningStatus("LEVEL_1");
         student.setAcademicWarningReason("GPA thực tế dưới ngưỡng");
-        student.setActivityStatus(ActivityStatus.STUDYING);
+        student.setActivityStatus(StudentActivityStatus.STUDYING);
         when(studentRepository.findStudentProfileByIdForUpdate(1L)).thenReturn(Optional.of(student));
         return student;
     }
