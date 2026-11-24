@@ -1,10 +1,7 @@
 package com.eduhub.edu_hub.scheduling.domain.policy;
 
-import com.eduhub.edu_hub.scheduling.application.exception.RoomConflictException;
 import com.eduhub.edu_hub.scheduling.application.exception.RoomException;
-import com.eduhub.edu_hub.shared.common.FieldErrorDetail;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
-import java.util.ArrayList;
 import java.util.Locale;
 import java.util.regex.Pattern;
 import lombok.AccessLevel;
@@ -12,52 +9,41 @@ import lombok.NoArgsConstructor;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class RoomPolicy {
-    public static final String CODE_PATTERN = "[0-9]+-[A-Za-z0-9]+";
-    public static final String CODE_FORMAT_MESSAGE = "Mã phòng phải theo định dạng <số phòng>-<tòa nhà>, ví dụ 102-TA1";
+    public static final String CODE_PATTERN = "[A-Z0-9]+-[A-Z0-9]+-[0-9]+";
+    public static final String CODE_FORMAT_MESSAGE =
+            "Mã phòng phải theo định dạng <cơ sở>-<tòa nhà>-<số phòng>, ví dụ CS1-TA1-102";
 
     private static final Pattern ROOM_CODE = Pattern.compile(CODE_PATTERN);
 
     public static NormalizedRoomDetails normalizeRoomDetails(
-            String rawRoomCode,
             String roomName,
             String campusCodeInput,
             String buildingCodeInput,
             String roomNumberInput,
             Integer capacity) {
 
-        // check code có khớp PATTERN không
-        String roomCode = normalizeIdentifier(rawRoomCode, 50);
-        if (!ROOM_CODE.matcher(roomCode).matches()) {
-            throw new RoomException(ErrorCode.INVALID_ROOM_CODE);
-        }
-
         // check sức chứa
         if (capacity == null || capacity < 1) {
             throw new RoomException(ErrorCode.VALIDATION_ERROR);
         }
 
-        int separator = roomCode.indexOf('-');
-        String roomNumberFromCode = roomCode.substring(0, separator);
-        String buildingFromCode = roomCode.substring(separator + 1);
-        String roomNumber = roomNumberInput == null ? roomNumberFromCode : normalizeIdentifier(roomNumberInput, 50);
+        String roomNumber = normalizeIdentifier(roomNumberInput, 50);
         String buildingCode = normalizeIdentifier(buildingCodeInput, 50);
-        var fieldErrors = new ArrayList<FieldErrorDetail>();
-        if (!roomNumber.equals(roomNumberFromCode)) {
-            fieldErrors.add(new FieldErrorDetail("roomNumber", "Số phòng phải khớp phần trước dấu - trong mã phòng"));
-        }
-        if (!buildingCode.equals(buildingFromCode)) {
-            fieldErrors.add(new FieldErrorDetail("buildingCode", "Tòa nhà phải khớp phần sau dấu - trong mã phòng"));
-        }
-        if (!fieldErrors.isEmpty()) {
-            throw new RoomConflictException(ErrorCode.VALIDATION_ERROR, fieldErrors);
-        }
-
         // lấy mã tòa nhà
-        String campusCode =
-                (campusCodeInput == null || campusCodeInput.isBlank()) ? "" : normalizeIdentifier(campusCodeInput, 100);
+        String campusCode = normalizeIdentifier(campusCodeInput, 100);
+        // BE ghép mã từ vị trí đã chuẩn hóa để cùng số phòng ở các cơ sở khác nhau có mã riêng.
+        String roomCode = generateRoomCode(campusCode, buildingCode, roomNumber);
 
         return new NormalizedRoomDetails(
                 roomCode, requireText(roomName, 255), campusCode, buildingCode, roomNumber, capacity);
+    }
+
+    public static String generateRoomCode(String campus, String buildingCode, String roomNumber) {
+        String code = normalizeIdentifier(campus, 100) + "-" + normalizeIdentifier(buildingCode, 50) + "-"
+                + normalizeIdentifier(roomNumber, 50);
+        if (code.length() > 50 || !ROOM_CODE.matcher(code).matches())
+            throw new RoomException(ErrorCode.INVALID_ROOM_CODE);
+        return code;
     }
 
     private static String normalizeIdentifier(String rawText, int maxLength) {

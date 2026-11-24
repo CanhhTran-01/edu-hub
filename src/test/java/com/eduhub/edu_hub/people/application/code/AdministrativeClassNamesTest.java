@@ -17,15 +17,15 @@ class AdministrativeClassNamesTest {
         "Trí tuệ nhân tạo,TT",
         "Luật,L"
     })
-    void derivesPrefixFromFirstAndLastInitialWithoutDiacritics(String name, String prefix) {
-        assertThat(AdministrativeClassNames.prefix("  " + name.toLowerCase(java.util.Locale.ROOT) + "  "))
+    void derivesPrefixFromFirstAndLastInitialFromConfiguredMapping(String name, String prefix) {
+        assertThat(AdministrativeClassNames.prefix("  " + name.toLowerCase(java.util.Locale.ROOT) + "  ", prefixes()))
                 .isEqualTo(prefix);
     }
 
     @ParameterizedTest
     @CsvSource({"1,A", "2,B", "26,Z", "27,AA", "28,AB", "52,AZ", "53,BA", "99,CU"})
     void createsNamesAndReadsBackTheirBusinessSequence(int sequence, String suffix) {
-        String name = AdministrativeClassNames.create("Công nghệ thông tin", 8, sequence);
+        String name = AdministrativeClassNames.create("Công nghệ thông tin", 8, sequence, prefixes());
         assertThat(name).isEqualTo("CT8" + suffix);
         assertThat(AdministrativeClassNames.sequence(name, 8)).hasValue(sequence);
     }
@@ -46,7 +46,13 @@ class AdministrativeClassNamesTest {
     @ParameterizedTest
     @ValueSource(ints = {0, 100})
     void cannotGenerateSequenceOutsideStudentCodeRange(int sequence) {
-        assertThatThrownBy(() -> AdministrativeClassNames.create("Công nghệ thông tin", 8, sequence))
+        assertThatThrownBy(() -> AdministrativeClassNames.create("Công nghệ thông tin", 8, sequence, prefixes()))
                 .isInstanceOf(BaseException.class);
+    }
+
+    private java.util.Map<String, String> prefixes() {
+        return com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData.snapshot(java.util.Map.of())
+                .getCodePrefixes(
+                        com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey.MAJOR_CODE_PREFIXES);
     }
 }

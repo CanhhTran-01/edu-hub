@@ -7,8 +7,10 @@ import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
 import com.eduhub.edu_hub.people.domain.policy.StudentCodePolicy;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import com.eduhub.edu_hub.shared.systemconfig.api.dto.response.SystemConfigSnapshotResponse;
 import com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService;
 import com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey;
+import com.eduhub.edu_hub.shared.systemconfig.domain.policy.CodePrefixMappingPolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -47,9 +49,8 @@ public class StudentCodeGenerator {
                 || administrativeClass.getMajor().getId() == null) {
             throw new ProfileCreationException(ErrorCode.INVALID_STUDENT_CODE_MAJOR);
         }
-        String canonicalCode = curriculumMajors
-                .requireMajor(administrativeClass.getMajor().getId())
-                .majorCode();
+        var configuration = systemConfigService.getSnapshot();
+        String majorPrefix = resolveMajorPrefix(administrativeClass.getMajor().getId(), configuration);
         if (administrativeClass.getCohort() == null) {
             throw new ProfileCreationException(ErrorCode.INVALID_STUDENT_CODE_COHORT);
         }
@@ -61,9 +62,18 @@ public class StudentCodeGenerator {
         int classNumber = AdministrativeClassNames.sequence(administrativeClass.getClassName(), configuredCohort)
                 .orElseThrow(() -> new ProfileCreationException(ErrorCode.INVALID_STUDENT_CODE_CLASS));
         return StudentCodePolicy.generatePrefix(
-                canonicalCode,
-                cohortNumber,
-                classNumber,
-                systemConfigService.getSnapshot().getString(SystemConfigKey.STUDENT_CODE_FORMAT));
+                majorPrefix, cohortNumber, classNumber, configuration.getString(SystemConfigKey.STUDENT_CODE_FORMAT));
+    }
+
+    private String resolveMajorPrefix(Long majorId, SystemConfigSnapshotResponse configuration) {
+        var major = curriculumMajors.requireMajor(majorId);
+        CodePrefixMappingPolicy.requireUnambiguousName(
+                major.majorName(),
+                curriculumMajors.findMajorsForClassNaming().stream()
+                        .map(candidate -> candidate.majorName())
+                        .toList(),
+                SystemConfigKey.MAJOR_CODE_PREFIXES);
+        // Tên ngành chỉ tạo khóa tra cứu; tiền tố MSSV luôn lấy từ mapping đã được quản trị thiết lập.
+        return configuration.requireNameCodePrefix(SystemConfigKey.MAJOR_CODE_PREFIXES, major.majorName());
     }
 }

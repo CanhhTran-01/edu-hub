@@ -8,9 +8,6 @@ import lombok.Data;
 
 @Data
 public class CreateSubjectRequest {
-    @NotBlank(message = "Mã học phần không được để trống")
-    private String subjectCode;
-
     @NotBlank(message = "Tên học phần không được để trống")
     private String subjectName;
 

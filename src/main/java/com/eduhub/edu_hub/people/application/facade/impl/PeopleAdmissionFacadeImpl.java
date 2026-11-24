@@ -14,6 +14,9 @@ import com.eduhub.edu_hub.people.domain.repository.*;
 import com.eduhub.edu_hub.shared.enums.ActivityStatus;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService;
+import com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey;
+import com.eduhub.edu_hub.shared.systemconfig.domain.policy.CodePrefixMappingPolicy;
 import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Set;
@@ -33,6 +36,7 @@ public class PeopleAdmissionFacadeImpl implements PeopleFacade.Admission {
     private final StudentCodeGenerator codes;
     private final IdentityFacade identity;
     private final EntityManager entities;
+    private final SystemConfigService systemConfigService;
 
     public AdmissionCohortInfo requireCohort(Long id) {
         Cohort cohort = cohorts.findByIdAndDeletedFalse(id)
@@ -72,11 +76,20 @@ public class PeopleAdmissionFacadeImpl implements PeopleFacade.Admission {
     @Transactional(propagation = Propagation.MANDATORY)
     public AdmissionClassInfo createClass(AdmissionClassRequest request) {
         var major = majors.requireMajor(request.majorId());
+        CodePrefixMappingPolicy.requireUnambiguousName(
+                major.majorName(),
+                majors.findMajorsForClassNaming().stream()
+                        .map(candidate -> candidate.majorName())
+                        .toList(),
+                SystemConfigKey.MAJOR_CODE_PREFIXES);
         Cohort cohort = cohorts.findByIdAndDeletedFalse(request.cohortId())
                 .orElseThrow(() -> new BaseException(ErrorCode.INVALID_STUDENT_CODE_COHORT));
         AdministrativeClass value = AdministrativeClass.builder()
                 .className(AdministrativeClassNames.create(
-                        major.majorName(), cohort.getCodeSequence(), request.sequence()))
+                        major.majorName(),
+                        cohort.getCodeSequence(),
+                        request.sequence(),
+                        systemConfigService.getSnapshot().getCodePrefixes(SystemConfigKey.MAJOR_CODE_PREFIXES)))
                 .major(entities.getReference(Major.class, request.majorId()))
                 .cohort(cohort)
                 .trainingType(TrainingType.CHINH_QUY)
@@ -97,12 +110,13 @@ public class PeopleAdmissionFacadeImpl implements PeopleFacade.Admission {
     }
 
     public List<AdmissionClassPrefix> findClassPrefixes() {
+        var majorPrefixes = systemConfigService.getSnapshot().getCodePrefixes(SystemConfigKey.MAJOR_CODE_PREFIXES);
         return majors.findMajorsForClassNaming().stream()
                 .map(m -> AdmissionClassPrefix.builder()
                         .majorId(m.id())
                         .majorCode(m.majorCode())
                         .majorName(m.majorName())
-                        .prefix(AdministrativeClassNames.prefix(m.majorName()))
+                        .prefix(majorPrefixes.get(CodePrefixMappingPolicy.lookupKeyFromName(m.majorName())))
                         .build())
                 .toList();
     }

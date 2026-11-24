@@ -292,6 +292,7 @@ class LecturerCreationServiceTest {
         Faculty faculty = new Faculty();
         faculty.setId(1L);
         faculty.setFacultyCode("CNTT");
+        faculty.setFacultyName("Công nghệ thông tin");
         when(facultyRepository.findActiveFacultyForCodeAllocation(1L)).thenReturn(Optional.of(faculty));
         when(lecturerCodeGenerator.allocateNextLecturerSequence(faculty, 2026)).thenReturn(1);
         when(lecturerCodeGenerator.generateLecturerCode(faculty, 2026, 1)).thenReturn("CNTT26001");

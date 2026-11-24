@@ -66,6 +66,13 @@ class SubjectApplicationServiceTest {
     @InjectMocks
     private SubjectApplicationService service;
 
+    @org.junit.jupiter.api.BeforeEach
+    void configureSubjectSequence() {
+        org.mockito.Mockito.lenient()
+                .when(subjectRepository.allocateNextSubjectSequence())
+                .thenReturn(1L);
+    }
+
     @Test
     void savesSubjectAndReturnsResult() {
         CreateSubjectRequest request = validRequest();
@@ -78,7 +85,7 @@ class SubjectApplicationServiceTest {
         SubjectResponse response = service.createSubject(request);
 
         assertThat(response.getId()).isEqualTo(14L);
-        assertThat(response.getSubjectCode()).isEqualTo("CS101");
+        assertThat(response.getSubjectCode()).isEqualTo("HP000001");
         assertThat(response.getSubjectName()).isEqualTo("Lập trình cơ bản");
         assertThat(response.getCredits()).isEqualTo(3);
         assertThat(response.getStatus()).isEqualTo(SubjectStatus.ACTIVE);
@@ -91,7 +98,7 @@ class SubjectApplicationServiceTest {
 
     @Test
     void rejectsDuplicateCode() {
-        when(subjectRepository.existsBySubjectCode("CS101")).thenReturn(true);
+        when(subjectRepository.existsBySubjectCode("HP000001")).thenReturn(true);
 
         assertThatThrownBy(() -> service.createSubject(validRequest()))
                 .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
@@ -513,7 +520,6 @@ class SubjectApplicationServiceTest {
 
     private CreateSubjectRequest validRequest() {
         var request = new CreateSubjectRequest();
-        request.setSubjectCode("CS101");
         request.setSubjectName("Lập trình cơ bản");
         request.setCredits(3);
         request.setTotalTeachingPeriods(45);

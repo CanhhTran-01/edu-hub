@@ -189,6 +189,40 @@ class SystemConfigServiceTest {
                 .isEqualTo(120);
     }
 
+    @Test
+    void keepsMissingMappingsLocalToCodeIssuanceAndAcceptsAdministratorUpdates() {
+        var empty = service.getSnapshot();
+        assertThat(empty.getCodePrefixes(MAJOR_CODE_PREFIXES)).isEmpty();
+        assertThat(empty.getInteger(ADMISSION_MAXIMUM_CAPACITY)).isEqualTo(50);
+        assertThatThrownBy(() -> empty.requireNameCodePrefix(MAJOR_CODE_PREFIXES, "Công nghệ thông tin"))
+                .isInstanceOfSatisfying(SystemConfigException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.CODE_PREFIX_MAPPING_MISSING));
+        service.updateConfigurations(
+                request(
+                        change(MAJOR_CODE_PREFIXES, "{\"cntt\":\"ct\"}", 0),
+                        change(TRAINING_TYPE_CODE_PREFIXES, "{\"VAN_BANG_2\":\"VB2\"}", 0)),
+                7L);
+        assertThat(service.getSnapshot().requireNameCodePrefix(MAJOR_CODE_PREFIXES, "Công nghệ thông tin"))
+                .isEqualTo("CT");
+        assertThat(empty.getCodePrefixes(MAJOR_CODE_PREFIXES)).isEmpty();
+        assertThat(configuration(MAJOR_CODE_PREFIXES).getConfigValue()).isEqualTo("{\"CNTT\":\"CT\"}");
+        assertThat(service.findConfigurations(Group.CURRICULUM))
+                .singleElement()
+                .satisfies(configuration -> assertThat(configuration.dataType()).isEqualTo(DataType.STRING_MAP));
+    }
+
+    @Test
+    void rejectsInvalidMappingsBeforeChangingAnyConfiguration() {
+        assertThatThrownBy(() -> service.updateConfigurations(
+                        request(
+                                change(MAIL_BRAND_NAME, "Tên mới", 0),
+                                change(MAJOR_CODE_PREFIXES, "{\"CNTT\":\"CT\",\"ATTT\":\"CT\"}", 0)),
+                        7L))
+                .isInstanceOf(SystemConfigException.class);
+        assertThat(configurations).allMatch(configuration -> configuration.getConfigValue() == null);
+        verify(repository, never()).flush();
+    }
+
     private SystemConfig configuration(SystemConfigKey key) {
         return configurations.stream()
                 .filter(configuration -> configuration.getConfigKey().equals(key.propertyName()))

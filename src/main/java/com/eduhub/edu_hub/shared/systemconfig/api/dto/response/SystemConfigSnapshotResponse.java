@@ -2,6 +2,7 @@ package com.eduhub.edu_hub.shared.systemconfig.api.dto.response;
 
 import com.eduhub.edu_hub.shared.systemconfig.application.exception.SystemConfigException;
 import com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey;
+import com.eduhub.edu_hub.shared.systemconfig.domain.policy.CodePrefixMappingPolicy;
 import java.time.Duration;
 import java.util.Map;
 
@@ -19,6 +20,18 @@ public record SystemConfigSnapshotResponse(Map<SystemConfigKey, String> values) 
 
     public int getInteger(SystemConfigKey key) {
         return Integer.parseInt(getString(key));
+    }
+
+    public Map<String, String> getCodePrefixes(SystemConfigKey key) {
+        return CodePrefixMappingPolicy.parseMappings(getString(key), key);
+    }
+
+    public String requireNameCodePrefix(SystemConfigKey key, String name) {
+        return requireCodePrefix(key, CodePrefixMappingPolicy.lookupKeyFromName(name));
+    }
+
+    public String requireCodePrefix(SystemConfigKey key, String lookupKey) {
+        return CodePrefixMappingPolicy.requirePrefix(getCodePrefixes(key), key, lookupKey);
     }
 
     public boolean getBoolean(SystemConfigKey key) {

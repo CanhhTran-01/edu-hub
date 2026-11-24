@@ -20,6 +20,8 @@ import com.eduhub.edu_hub.people.domain.repository.FacultyRepository;
 import com.eduhub.edu_hub.people.domain.repository.LecturerRepository;
 import com.eduhub.edu_hub.people.domain.repository.LecturerTeachingSubjectRepository;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey;
+import com.eduhub.edu_hub.shared.systemconfig.domain.policy.CodePrefixMappingPolicy;
 import com.eduhub.edu_hub.shared.text.TextsNormalizer;
 import java.util.List;
 import java.util.Set;
@@ -108,6 +110,7 @@ public class LecturerCreationService {
         String fullName = request.getFullName().trim();
         boolean hasPossibleDuplicate = lecturerRepository.existsByFullNameIgnoreCaseAndDateOfBirthAndDeletedFalse(
                 fullName, request.getDateOfBirth());
+        requireUnambiguousFacultyName(faculty);
         int lecturerSequence =
                 lecturerCodeGenerator.allocateNextLecturerSequence(faculty, request.getRecruitmentYear());
         String lecturerCode =
@@ -185,5 +188,14 @@ public class LecturerCreationService {
                 .status(LecturerStatus.ACTIVE)
                 .build();
         return lecturer;
+    }
+
+    private void requireUnambiguousFacultyName(Faculty faculty) {
+        CodePrefixMappingPolicy.requireUnambiguousName(
+                faculty.getFacultyName(),
+                facultyRepository.findAllByDeletedFalseOrderByFacultyNameAscIdAsc().stream()
+                        .map(Faculty::getFacultyName)
+                        .toList(),
+                SystemConfigKey.FACULTY_CODE_PREFIXES);
     }
 }

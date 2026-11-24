@@ -20,18 +20,21 @@ public class LecturerCodeGenerator {
     private final SystemConfigService systemConfigService;
 
     public String generateLecturerCode(Faculty faculty, Integer recruitmentYear, int lecturerSequence) {
+        var configuration = systemConfigService.getSnapshot();
         return LecturerCodePolicy.generateCode(
-                faculty.getFacultyCode(),
+                configuration.requireNameCodePrefix(SystemConfigKey.FACULTY_CODE_PREFIXES, faculty.getFacultyName()),
                 recruitmentYear,
                 lecturerSequence,
-                systemConfigService.getSnapshot().getString(SystemConfigKey.LECTURER_CODE_FORMAT));
+                configuration.getString(SystemConfigKey.LECTURER_CODE_FORMAT));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public int allocateNextLecturerSequence(Faculty faculty, Integer recruitmentYear) {
-        LecturerCodePolicy.validateCodeScope(faculty.getFacultyCode(), recruitmentYear);
-        LecturerCodePolicy.validateCodeFormat(
-                systemConfigService.getSnapshot().getString(SystemConfigKey.LECTURER_CODE_FORMAT));
+        var configuration = systemConfigService.getSnapshot();
+        String facultyPrefix =
+                configuration.requireNameCodePrefix(SystemConfigKey.FACULTY_CODE_PREFIXES, faculty.getFacultyName());
+        LecturerCodePolicy.validateCodeScope(facultyPrefix, recruitmentYear);
+        LecturerCodePolicy.validateCodeFormat(configuration.getString(SystemConfigKey.LECTURER_CODE_FORMAT));
         return lecturerCodeCounterRepository
                 .allocateNextLecturerSequence(
                         faculty.getId(), recruitmentYear, LecturerCodePolicy.MAXIMUM_LECTURER_SEQUENCE)

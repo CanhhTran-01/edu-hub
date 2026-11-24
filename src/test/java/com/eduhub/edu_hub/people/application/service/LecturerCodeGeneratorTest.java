@@ -39,9 +39,9 @@ class LecturerCodeGeneratorTest {
                 .thenReturn(List.of(999))
                 .thenReturn(List.of());
 
-        assertThat(allocateAndGenerateLecturerCode(faculty, 2026)).isEqualTo("CNTT26001");
-        assertThat(allocateAndGenerateLecturerCode(faculty, 2026)).isEqualTo("CNTT26002");
-        assertThat(allocateAndGenerateLecturerCode(faculty, 2026)).isEqualTo("CNTT26999");
+        assertThat(allocateAndGenerateLecturerCode(faculty, 2026)).isEqualTo("CT26001");
+        assertThat(allocateAndGenerateLecturerCode(faculty, 2026)).isEqualTo("CT26002");
+        assertThat(allocateAndGenerateLecturerCode(faculty, 2026)).isEqualTo("CT26999");
         assertThatThrownBy(() -> allocateAndGenerateLecturerCode(faculty, 2026))
                 .isInstanceOfSatisfying(
                         ProfileCreationException.class,
@@ -58,19 +58,20 @@ class LecturerCodeGeneratorTest {
                 .thenReturn(List.of(1));
         when(jdbcTemplate.queryForList(anyString(), eq(Integer.class), eq(1L), eq(2027), eq(999)))
                 .thenReturn(List.of(1));
-        assertThat(allocateAndGenerateLecturerCode(faculty(1L, "CNTT"), 2026)).isEqualTo("CNTT26001");
-        assertThat(allocateAndGenerateLecturerCode(faculty(2L, "ATTT"), 2026)).isEqualTo("ATTT26001");
-        assertThat(allocateAndGenerateLecturerCode(faculty(1L, "CNTT"), 2027)).isEqualTo("CNTT27001");
+        assertThat(allocateAndGenerateLecturerCode(faculty(1L, "CNTT"), 2026)).isEqualTo("CT26001");
+        assertThat(allocateAndGenerateLecturerCode(faculty(2L, "ATTT"), 2026)).isEqualTo("AT26001");
+        assertThat(allocateAndGenerateLecturerCode(faculty(1L, "CNTT"), 2027)).isEqualTo("CT27001");
     }
 
     @Test
-    void refusesUnknownFacultyCodeBeforeTouchingCounter() {
-        assertThatThrownBy(() -> allocateAndGenerateLecturerCode(faculty(1L, null), 2026))
+    void requiresConfiguredNamePrefixBeforeTouchingCounter() {
+        Faculty faculty = faculty(1L, "CNTT");
+        faculty.setFacultyName("Khoa mới");
+        assertThatThrownBy(() -> allocateAndGenerateLecturerCode(faculty, 2026))
                 .isInstanceOfSatisfying(
-                        ProfileCreationException.class, exception -> assertThat(exception.getErrorCode())
-                                .isEqualTo(ErrorCode.INVALID_LECTURER_CODE_FACULTY));
-        assertThatThrownBy(() -> allocateAndGenerateLecturerCode(faculty(1L, "cntt"), 2026))
-                .isInstanceOf(ProfileCreationException.class);
+                        com.eduhub.edu_hub.shared.exception.BaseException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CODE_PREFIX_MAPPING_MISSING));
         verifyNoInteractions(jdbcTemplate);
     }
 
@@ -88,9 +89,9 @@ class LecturerCodeGeneratorTest {
     @Test
     void generatesCodeFromProvidedSequenceWithoutAllocatingAnotherNumber() {
         Faculty faculty = faculty(1L, "CNTT");
-        assertThat(lecturerCodeGenerator.generateLecturerCode(faculty, 2026, 1)).isEqualTo("CNTT26001");
+        assertThat(lecturerCodeGenerator.generateLecturerCode(faculty, 2026, 1)).isEqualTo("CT26001");
         assertThat(lecturerCodeGenerator.generateLecturerCode(faculty, 2026, 999))
-                .isEqualTo("CNTT26999");
+                .isEqualTo("CT26999");
         verifyNoInteractions(jdbcTemplate);
     }
 
@@ -122,7 +123,7 @@ class LecturerCodeGeneratorTest {
         configureFormat(resolvedFormat);
 
         assertThat(lecturerCodeGenerator.generateLecturerCode(faculty(1L, "CNTT"), 2026, 1))
-                .isEqualTo("CNTT-26-001");
+                .isEqualTo("CT-26-001");
         verifyNoInteractions(jdbcTemplate);
     }
 
@@ -130,7 +131,7 @@ class LecturerCodeGeneratorTest {
     void supportsConfiguredComponentOrderAndPreservesYearAndSequencePadding() {
         configureFormat("[SttGV]_[MaKhoa]-[NamTuyenDung]");
         assertThat(lecturerCodeGenerator.generateLecturerCode(faculty(1L, "CNTT"), 2006, 7))
-                .isEqualTo("007_CNTT-06");
+                .isEqualTo("007_CT-06");
         verifyNoInteractions(jdbcTemplate);
     }
 
@@ -165,6 +166,10 @@ class LecturerCodeGeneratorTest {
     private void configureFormat(String codeFormat) {
         var configuration = mock(SystemConfigSnapshotResponse.class);
         when(configuration.getString(SystemConfigKey.LECTURER_CODE_FORMAT)).thenReturn(codeFormat);
+        lenient()
+                .when(configuration.requireNameCodePrefix(eq(SystemConfigKey.FACULTY_CODE_PREFIXES), anyString()))
+                .thenAnswer(call -> SystemConfigTestData.snapshot(java.util.Map.of())
+                        .requireNameCodePrefix(SystemConfigKey.FACULTY_CODE_PREFIXES, call.getArgument(1)));
         when(systemConfigService.getSnapshot()).thenReturn(configuration);
     }
 
@@ -177,6 +182,11 @@ class LecturerCodeGeneratorTest {
         Faculty faculty = new Faculty();
         faculty.setId(facultyId);
         faculty.setFacultyCode(facultyCode);
+        faculty.setFacultyName(
+                facultyCode == null
+                        ? null
+                        : java.util.Map.of("CNTT", "Công nghệ thông tin", "ATTT", "An toàn thông tin")
+                                .get(facultyCode));
         return faculty;
     }
 }

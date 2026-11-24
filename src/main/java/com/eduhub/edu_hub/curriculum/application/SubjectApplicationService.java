@@ -14,6 +14,7 @@ import com.eduhub.edu_hub.curriculum.application.specification.SubjectSpecificat
 import com.eduhub.edu_hub.curriculum.domain.enums.SubjectStatus;
 import com.eduhub.edu_hub.curriculum.domain.model.Subject;
 import com.eduhub.edu_hub.curriculum.domain.model.SubjectPrerequisite;
+import com.eduhub.edu_hub.curriculum.domain.policy.SubjectCodePolicy;
 import com.eduhub.edu_hub.curriculum.domain.repository.SubjectPrerequisiteRepository;
 import com.eduhub.edu_hub.curriculum.domain.repository.SubjectRepository;
 import com.eduhub.edu_hub.scheduling.application.facade.SchedulingFacade;
@@ -57,7 +58,8 @@ public class SubjectApplicationService {
             throw new SubjectException(ErrorCode.VALIDATION_ERROR);
 
         // checking
-        if (subjectRepository.existsBySubjectCode(request.getSubjectCode())) {
+        String subjectCode = SubjectCodePolicy.generateCode(subjectRepository.allocateNextSubjectSequence());
+        if (subjectRepository.existsBySubjectCode(subjectCode)) {
             throw new SubjectException(ErrorCode.DUPLICATE_SUBJECT_CODE);
         }
         if (subjectRepository.existsBySubjectName(request.getSubjectName())) {
@@ -69,7 +71,7 @@ public class SubjectApplicationService {
 
         // update field
         Subject subject = Subject.builder()
-                .subjectCode(request.getSubjectCode())
+                .subjectCode(subjectCode)
                 .subjectName(request.getSubjectName())
                 .credits(request.getCredits())
                 .totalTeachingPeriods(request.getTotalTeachingPeriods())

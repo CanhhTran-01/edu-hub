@@ -13,7 +13,7 @@ import lombok.Setter;
 @Setter
 public class Faculty extends BaseEntity {
     // TODO(FACULTY_CODE_DATA): Bổ sung mã khoa chính thức cho dữ liệu cũ sau khi được đối soát;
-    //  không suy mã từ tên khoa. Khoa chưa có mã không được dùng để cấp MSGV mới.
+    //  mã danh mục này được giữ cho lịch sử; tiền tố MSGV mới lấy từ mapping theo tên khoa trong SystemConfig.
     @Column(name = "faculty_code", unique = true)
     private String facultyCode;
 

@@ -106,6 +106,8 @@ public class SystemConfigValidationPolicy {
                         normalizedValue = duration.toString();
                     }
                     case STRING -> {}
+                    case STRING_MAP -> normalizedValue =
+                            CodePrefixMappingPolicy.normalizeMappings(normalizedValue, key);
                 }
                 normalizedValues.put(key, normalizedValue);
             } catch (IllegalArgumentException | ArithmeticException exception) {

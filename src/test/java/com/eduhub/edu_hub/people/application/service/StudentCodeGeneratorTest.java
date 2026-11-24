@@ -35,25 +35,25 @@ class StudentCodeGeneratorTest {
     }
 
     @Test
-    void generatesCodesWithCanonicalMajorAndPaddedComponents() {
+    void generatesCodesWithConfiguredPrefixAndPaddedComponents() {
         assertThat(generator.generateStudentCode(administrativeClass(1L, "CT", "CT8", "L01"), 28))
-                .isEqualTo("CNTT080128");
+                .isEqualTo("CT080128");
         assertThat(generator.generateStudentCode(administrativeClass(2L, "AT", "AT20", "L02"), 5))
-                .isEqualTo("ATTT200205");
+                .isEqualTo("AT200205");
         assertThat(generator.generateStudentCode(administrativeClass(3L, "DT", "DT7", "L01"), 17))
-                .isEqualTo("DTVT070117");
+                .isEqualTo("DT070117");
     }
 
     @Test
     void padsCohortAndSequenceWithZero() {
         assertThat(generator.generateStudentCode(administrativeClass(1L, "dt", "DT7", "L01"), 1))
-                .isEqualTo("DTVT070101");
+                .isEqualTo("DT070101");
     }
 
     @Test
-    void usesCanonicalMajorCodeWithoutLocalPrefixMapping() {
+    void usesConfiguredMappingInsteadOfCanonicalMajorCode() {
         AdministrativeClass value = administrativeClass(4L, "AI", "AI8", "L01");
-        assertThat(generator.generateStudentCode(value, 1)).isEqualTo("TTNT080101");
+        assertThat(generator.generateStudentCode(value, 1)).isEqualTo("TT080101");
     }
 
     @Test
@@ -94,7 +94,7 @@ class StudentCodeGeneratorTest {
                 .thenReturn(com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData.snapshot(java.util.Map.of(
                         com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey.STUDENT_CODE_FORMAT,
                         "[MaNganh]-[SttKhoa]-[SttLop]-[SttSVTrongLop]")));
-        assertThat(generator.generateStudentCode(value, 1)).isEqualTo("CNTT-08-01-01");
+        assertThat(generator.generateStudentCode(value, 1)).isEqualTo("CT-08-01-01");
         value.setLastStudentSequence(28);
         assertThat(generator.allocateNextStudentSequence(value)).isEqualTo(29);
         assertThat(generator.allocateNextStudentSequence(value)).isEqualTo(30);
@@ -113,9 +113,23 @@ class StudentCodeGeneratorTest {
     @Test
     void readsAlphabeticClassSuffixForStudentCodeWithoutUsingEntityId() {
         assertThat(generator.generateStudentCode(administrativeClass(777L, "CT", "CT8", "CT8A"), 1))
-                .isEqualTo("CNTT080101");
+                .isEqualTo("CT080101");
         assertThat(generator.generateStudentCode(administrativeClass(999L, "CT", "CT8", "CT8AA"), 3))
-                .isEqualTo("CNTT082703");
+                .isEqualTo("CT082703");
+    }
+
+    @Test
+    void missingMappingDoesNotAdvanceThePersistedStudentCounter() {
+        var administrativeClass = administrativeClass(1L, "CT", "K8", "CT8A");
+        administrativeClass.setLastStudentSequence(12);
+        when(systemConfigService.getSnapshot())
+                .thenReturn(com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData.snapshot(java.util.Map.of(
+                        com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey.MAJOR_CODE_PREFIXES,
+                        "{}")));
+        assertThatThrownBy(() -> generator.allocateNextStudentSequence(administrativeClass))
+                .isInstanceOf(com.eduhub.edu_hub.shared.systemconfig.application.exception.SystemConfigException.class);
+        assertThat(administrativeClass.getLastStudentSequence()).isEqualTo(12);
+        org.mockito.Mockito.verifyNoInteractions(students);
     }
 
     private AdministrativeClass administrativeClass(Long id, String majorCode, String cohortCode, String className) {
@@ -131,8 +145,19 @@ class StudentCodeGeneratorTest {
         value.setMajor(major);
         org.mockito.Mockito.lenient()
                 .when(majors.requireMajor(id))
-                .thenReturn(
-                        new com.eduhub.edu_hub.curriculum.application.facade.dto.MajorResponse(id, canonical, "Major"));
+                .thenReturn(new com.eduhub.edu_hub.curriculum.application.facade.dto.MajorResponse(
+                        id,
+                        canonical,
+                        java.util.Map.of(
+                                        "CNTT",
+                                        "Công nghệ thông tin",
+                                        "ATTT",
+                                        "An toàn thông tin",
+                                        "DTVT",
+                                        "Điện tử viễn thông",
+                                        "TTNT",
+                                        "Trí tuệ nhân tạo")
+                                .get(canonical)));
         value.setCohort(cohort);
         value.setClassName(className);
         return value;

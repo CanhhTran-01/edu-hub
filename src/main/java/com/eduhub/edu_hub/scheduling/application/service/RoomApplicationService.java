@@ -66,7 +66,6 @@ public class RoomApplicationService {
 
         // chuẩn hóa dữ liệu request
         var roomDetails = RoomPolicy.normalizeRoomDetails(
-                request.getRoomCode(),
                 request.getRoomName(),
                 request.getCampus(),
                 request.getBuildingCode(),
@@ -92,7 +91,6 @@ public class RoomApplicationService {
 
         // chuẩn hóa dữ liệu request
         var roomDetails = RoomPolicy.normalizeRoomDetails(
-                request.getRoomCode(),
                 request.getRoomName(),
                 request.getCampus(),
                 request.getBuildingCode(),

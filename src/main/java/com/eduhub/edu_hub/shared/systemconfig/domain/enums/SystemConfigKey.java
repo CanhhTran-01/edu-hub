@@ -10,6 +10,14 @@ import lombok.RequiredArgsConstructor;
 @Getter
 @RequiredArgsConstructor
 public enum SystemConfigKey {
+    MAJOR_CODE_PREFIXES("people.major-code-prefixes", Group.PEOPLE, DataType.STRING_MAP, "Mapping mã ngành", "{}"),
+    FACULTY_CODE_PREFIXES("people.faculty-code-prefixes", Group.PEOPLE, DataType.STRING_MAP, "Mapping mã khoa", "{}"),
+    TRAINING_TYPE_CODE_PREFIXES(
+            "curriculum.training-type-code-prefixes",
+            Group.CURRICULUM,
+            DataType.STRING_MAP,
+            "Mapping hệ đào tạo",
+            "{}"),
     ADMISSION_MINIMUM_CAPACITY(
             "admission.min-capacity", Group.ADMISSION, DataType.INTEGER, "Sĩ số nhập học tối thiểu", "40"),
     ADMISSION_MAXIMUM_CAPACITY(
@@ -121,6 +129,7 @@ public enum SystemConfigKey {
     }
 
     public enum Group {
+        CURRICULUM,
         ADMISSION,
         PEOPLE,
         ENROLLMENT,
@@ -130,6 +139,7 @@ public enum SystemConfigKey {
     }
 
     public enum DataType {
+        STRING_MAP,
         INTEGER,
         BOOLEAN,
         DURATION,

@@ -63,7 +63,7 @@ class RoomApplicationServiceTest {
     @Test
     void createsNormalizedActiveRoomWithCapacityIndependentOfClassLimit() {
         var request = createRequest();
-        request.setRoomCode("  102-ta1  ");
+
         request.setBuildingCode(" ta1 ");
         request.setRoomNumber(" 102 ");
         request.setCapacity(120);
@@ -79,7 +79,7 @@ class RoomApplicationServiceTest {
         var result = service.createRoom(request);
 
         assertThat(result.getId()).isEqualTo(1L);
-        assertThat(result.getRoomCode()).isEqualTo("102-TA1");
+        assertThat(result.getRoomCode()).isEqualTo("CS1-TA1-102");
         assertThat(result.getBuildingCode()).isEqualTo("TA1");
         assertThat(result.getRoomNumber()).isEqualTo("102");
         assertThat(result.getCapacity()).isEqualTo(120);
@@ -88,7 +88,7 @@ class RoomApplicationServiceTest {
 
     @Test
     void rejectsCodeReservedByAnyRoomIncludingSoftDeleted() {
-        when(repository.existsByRoomCode("102-TA1")).thenReturn(true);
+        when(repository.existsByRoomCode("CS1-TA1-102")).thenReturn(true);
 
         assertError(() -> service.createRoom(createRequest()), ErrorCode.DUPLICATE_ROOM_CODE);
 
@@ -97,7 +97,7 @@ class RoomApplicationServiceTest {
 
     @Test
     void rejectsReservedPhysicalLocation() {
-        when(repository.existsByCampusAndBuildingCodeAndRoomNumber("", "TA1", "102"))
+        when(repository.existsByCampusAndBuildingCodeAndRoomNumber("CS1", "TA1", "102"))
                 .thenReturn(true);
 
         assertError(() -> service.createRoom(createRequest()), ErrorCode.DUPLICATE_ROOM_LOCATION);
@@ -111,7 +111,7 @@ class RoomApplicationServiceTest {
         request.setCapacity(0);
         assertError(() -> service.createRoom(request), ErrorCode.VALIDATION_ERROR);
         request.setCapacity(80);
-        request.setRoomCode("   ");
+        request.setCampus("   ");
         assertError(() -> service.createRoom(request), ErrorCode.VALIDATION_ERROR);
         verify(repository, never()).saveAndFlush(any());
     }
@@ -143,18 +143,18 @@ class RoomApplicationServiceTest {
         when(repository.findForUpdateByIdAndDeletedFalse(1L)).thenReturn(Optional.of(room));
         when(repository.saveAndFlush(room)).thenReturn(room);
         var request = updateRequest();
-        request.setRoomCode(" 102-ta1 ");
+
         request.setCapacity(100);
 
         var result = service.updateRoom(1L, request);
 
         assertThat(result.getId()).isEqualTo(1L);
-        assertThat(result.getRoomCode()).isEqualTo("102-TA1");
+        assertThat(result.getRoomCode()).isEqualTo("CS1-TA1-102");
         assertThat(result.getCapacity()).isEqualTo(100);
         assertThat(result.getStatus()).isEqualTo(RoomStatus.INACTIVE);
         assertThat(room.getCreatedAt()).isEqualTo(createdAt);
-        verify(repository).existsByRoomCodeAndIdNot("102-TA1", 1L);
-        verify(repository).existsByCampusAndBuildingCodeAndRoomNumberAndIdNot("", "TA1", "102", 1L);
+        verify(repository).existsByRoomCodeAndIdNot("CS1-TA1-102", 1L);
+        verify(repository).existsByCampusAndBuildingCodeAndRoomNumberAndIdNot("CS1", "TA1", "102", 1L);
     }
 
     @ParameterizedTest
@@ -165,13 +165,13 @@ class RoomApplicationServiceTest {
         var room = room();
         when(repository.findForUpdateByIdAndDeletedFalse(1L)).thenReturn(Optional.of(room));
         var request = updateRequest();
-        request.setRoomCode("202-TB2");
+
         request.setBuildingCode("TB2");
         request.setRoomNumber("202");
         if (error == ErrorCode.DUPLICATE_ROOM_CODE) {
-            when(repository.existsByRoomCodeAndIdNot("202-TB2", 1L)).thenReturn(true);
+            when(repository.existsByRoomCodeAndIdNot("CS1-TB2-202", 1L)).thenReturn(true);
         } else {
-            when(repository.existsByCampusAndBuildingCodeAndRoomNumberAndIdNot("", "TB2", "202", 1L))
+            when(repository.existsByCampusAndBuildingCodeAndRoomNumberAndIdNot("CS1", "TB2", "202", 1L))
                     .thenReturn(true);
         }
 
@@ -304,56 +304,48 @@ class RoomApplicationServiceTest {
     }
 
     @Test
-    void acceptsUseCaseFieldsWithoutSeparateRoomNumberAndNormalizesCampus() {
+    void generatesCodeFromRequiredLocationAndNormalizesCampus() {
         var request = createRequest();
-        request.setRoomCode("102-ta1");
+
         request.setRoomName("  Phòng học 102  ");
         request.setCampus(" cs1 ");
-        request.setRoomNumber(null);
+        request.setRoomNumber("102");
         when(repository.saveAndFlush(any(Room.class))).thenAnswer(call -> {
             Room saved = call.getArgument(0);
             saved.setId(1L);
             return saved;
         });
         var result = service.createRoom(request);
-        assertThat(result.getRoomCode()).isEqualTo("102-TA1");
+        assertThat(result.getRoomCode()).isEqualTo("CS1-TA1-102");
         assertThat(result.getRoomName()).isEqualTo("Phòng học 102");
         assertThat(result.getCampus()).isEqualTo("CS1");
         assertThat(result.getRoomNumber()).isEqualTo("102");
     }
 
     @ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(
-            strings = {"TA1-102", "CS1-102-TA1", "102TA1", "102_TA1", "102--TA1", "102-TA1!", "102 TA1", "102A-TA1"})
-    void a1RejectsInvalidCodeFormat(String code) {
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"TA-1", "TA_1", "TA 1", "TA!1", "TA/1"})
+    void rejectsInvalidLocationComponents(String buildingCode) {
         var request = createRequest();
-        request.setRoomCode(code);
+        request.setBuildingCode(buildingCode);
         assertError(() -> service.createRoom(request), ErrorCode.INVALID_ROOM_CODE);
         org.mockito.Mockito.verifyNoInteractions(repository);
     }
 
     @ParameterizedTest
-    @org.junit.jupiter.params.provider.CsvSource({"102,TB2,buildingCode", "103,TA1,roomNumber"})
-    void rejectsCodeThatDoesNotMatchRoomNumberOrBuildingOnCreateAndUpdate(
-            String number, String building, String field) {
+    @org.junit.jupiter.params.provider.CsvSource({"102,TB2", "103,TA1"})
+    void regeneratesCodeFromLocationOnCreateAndUpdate(String number, String building) {
         var create = createRequest();
         create.setRoomNumber(number);
         create.setBuildingCode(building);
         var update = updateRequest();
         update.setRoomNumber(number);
         update.setBuildingCode(building);
-
-        for (Runnable action :
-                List.<Runnable>of(() -> service.createRoom(create), () -> service.updateRoom(1L, update))) {
-            assertThatThrownBy(action::run).isInstanceOfSatisfying(RoomConflictException.class, exception -> {
-                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.VALIDATION_ERROR);
-                assertThat(exception.getErrors()).singleElement().satisfies(error -> {
-                    assertThat(error.getField()).isEqualTo(field);
-                    assertThat(error.getMessage()).contains("khớp");
-                });
-            });
-        }
-        org.mockito.Mockito.verifyNoInteractions(repository, schedules);
+        when(repository.findForUpdateByIdAndDeletedFalse(1L)).thenReturn(Optional.of(room()));
+        when(repository.saveAndFlush(any(Room.class))).thenAnswer(call -> call.getArgument(0));
+        assertThat(service.createRoom(create).getRoomCode()).isEqualTo("CS1-" + building + "-" + number);
+        var updated = service.updateRoom(1L, update);
+        assertThat(updated.getRoomCode()).isEqualTo("CS1-" + building + "-" + number);
+        assertThat(updated.getId()).isEqualTo(1L);
     }
 
     private ModuleClass scheduledClass(Long id, int maxCapacity) {
@@ -371,8 +363,9 @@ class RoomApplicationServiceTest {
 
     private CreateRoomRequest createRequest() {
         var request = new CreateRoomRequest();
-        request.setRoomCode("102-TA1");
+
         request.setRoomName("Phòng 102");
+        request.setCampus("CS1");
         request.setBuildingCode("TA1");
         request.setRoomNumber("102");
         request.setCapacity(80);
@@ -381,8 +374,9 @@ class RoomApplicationServiceTest {
 
     private UpdateRoomRequest updateRequest() {
         var request = new UpdateRoomRequest();
-        request.setRoomCode("102-TA1");
+
         request.setRoomName("Phòng 102");
+        request.setCampus("CS1");
         request.setBuildingCode("TA1");
         request.setRoomNumber("102");
         request.setCapacity(80);

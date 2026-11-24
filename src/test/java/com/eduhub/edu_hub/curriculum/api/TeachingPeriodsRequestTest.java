@@ -25,7 +25,6 @@ class TeachingPeriodsRequestTest {
     void requiresPositiveTeachingPeriodsForNewSubjects() {
         try (var factory = Validation.buildDefaultValidatorFactory()) {
             var request = new CreateSubjectRequest();
-            request.setSubjectCode("CS1");
             request.setSubjectName("Môn học");
             request.setCredits(3);
             assertThat(factory.getValidator().validate(request))

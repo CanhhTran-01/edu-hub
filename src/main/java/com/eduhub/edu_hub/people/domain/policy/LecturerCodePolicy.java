@@ -11,8 +11,8 @@ public final class LecturerCodePolicy {
 
     private LecturerCodePolicy() {}
 
-    public static void validateCodeScope(String facultyCode, Integer recruitmentYear) {
-        if (facultyCode == null || !facultyCode.matches("[A-Z]+")) {
+    public static void validateCodeScope(String facultyPrefix, Integer recruitmentYear) {
+        if (facultyPrefix == null || !facultyPrefix.matches("[A-Z]+")) {
             throw new ProfileCreationException(
                     ErrorCode.INVALID_LECTURER_CODE_FACULTY,
                     "facultyId",
@@ -39,14 +39,14 @@ public final class LecturerCodePolicy {
     }
 
     public static String generateCode(
-            String facultyCode, Integer recruitmentYear, int lecturerSequence, String codeFormat) {
-        validateCodeScope(facultyCode, recruitmentYear);
+            String facultyPrefix, Integer recruitmentYear, int lecturerSequence, String codeFormat) {
+        validateCodeScope(facultyPrefix, recruitmentYear);
         validateCodeFormat(codeFormat);
         if (lecturerSequence < 1 || lecturerSequence > MAXIMUM_LECTURER_SEQUENCE) {
             throw new ProfileCreationException(ErrorCode.LECTURER_CODE_EXHAUSTED);
         }
         return codeFormat
-                .replace("[MaKhoa]", facultyCode)
+                .replace("[MaKhoa]", facultyPrefix)
                 .replace("[NamTuyenDung]", String.format(Locale.ROOT, "%02d", recruitmentYear % 100))
                 .replace("[SttGV]", String.format(Locale.ROOT, "%03d", lecturerSequence));
     }

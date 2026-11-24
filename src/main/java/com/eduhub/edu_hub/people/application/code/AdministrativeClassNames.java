@@ -2,8 +2,10 @@ package com.eduhub.edu_hub.people.application.code;
 
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
-import java.text.Normalizer;
+import com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey;
+import com.eduhub.edu_hub.shared.systemconfig.domain.policy.CodePrefixMappingPolicy;
 import java.util.Locale;
+import java.util.Map;
 import java.util.OptionalInt;
 import java.util.regex.Pattern;
 
@@ -13,36 +15,18 @@ public final class AdministrativeClassNames {
 
     private AdministrativeClassNames() {}
 
-    public static String prefix(String majorName) {
-
-        if (majorName == null) throw new BaseException(ErrorCode.INVALID_STUDENT_CODE_MAJOR);
-
-        String plain = Normalizer.normalize(majorName, Normalizer.Form.NFD)
-                .replaceAll("\\p{M}+", "")
-                .replace('đ', 'd')
-                .replace('Đ', 'D')
-                .toUpperCase(Locale.ROOT);
-
-        StringBuilder initials = new StringBuilder();
-
-        for (String word : plain.split("[^A-Z]+")) {
-            if (!word.isEmpty()) initials.append(word.charAt(0));
-        }
-
-        if (initials.isEmpty()) throw new BaseException(ErrorCode.INVALID_STUDENT_CODE_MAJOR);
-
-        // TODO(CLASS_PREFIX_CONFIG): Bổ sung cấu hình ghi đè tiền tố theo từng ngành trong cấu hình hệ thống.
-        //  Hiện tại vẫn tiếp tục tự suy ra tiền tố; nếu trùng tiền tố giữa các ngành thì chỉ cảnh báo, không được chặn.
-        //  Việc ghi đè/đổi tên ngành trong tương lai không được âm thầm đổi tên các lớp hiện có hoặc làm thay đổi MSSV.
-
-        return initials.length() == 1
-                ? initials.toString()
-                : "" + initials.charAt(0) + initials.charAt(initials.length() - 1);
+    public static String prefix(String majorName, Map<String, String> majorPrefixes) {
+        // Chỉ tra tiền tố cho lớp mới; tên lớp lịch sử vẫn được đọc độc lập với mapping hiện hành.
+        return CodePrefixMappingPolicy.requirePrefix(
+                majorPrefixes,
+                SystemConfigKey.MAJOR_CODE_PREFIXES,
+                CodePrefixMappingPolicy.lookupKeyFromName(majorName));
     }
 
-    public static String create(String majorName, int cohortSequence, int classSequence) {
+    public static String create(
+            String majorName, int cohortSequence, int classSequence, Map<String, String> majorPrefixes) {
         if (cohortSequence < 1 || cohortSequence > 99) throw new BaseException(ErrorCode.INVALID_STUDENT_CODE_COHORT);
-        return prefix(majorName) + cohortSequence + suffix(classSequence);
+        return prefix(majorName, majorPrefixes) + cohortSequence + suffix(classSequence);
     }
 
     public static String suffix(int sequence) {

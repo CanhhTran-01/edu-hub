@@ -11,7 +11,7 @@ import java.util.List;
 import tools.jackson.databind.annotation.JsonDeserialize;
 
 public record UpdateSystemConfigsRequest(
-        @NotEmpty @Size(max = 19) List<@NotNull @Valid ConfigurationUpdateRequest> configurations) {
+        @NotEmpty @Size(max = 22) List<@NotNull @Valid ConfigurationUpdateRequest> configurations) {
 
     public record ConfigurationUpdateRequest(
             @NotNull SystemConfigKey key,

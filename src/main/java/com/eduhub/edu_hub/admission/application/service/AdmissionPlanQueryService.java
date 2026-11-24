@@ -23,6 +23,7 @@ import com.eduhub.edu_hub.scheduling.application.facade.SchedulingFacade;
 import com.eduhub.edu_hub.shared.exception.*;
 import com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService;
 import com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey;
+import com.eduhub.edu_hub.shared.systemconfig.domain.policy.CodePrefixMappingPolicy;
 import com.eduhub.edu_hub.shared.text.TextsNormalizer;
 import java.math.*;
 import java.util.*;
@@ -101,16 +102,25 @@ public class AdmissionPlanQueryService {
                 .filter(classPrefix -> classPrefix.majorId().equals(majorId))
                 .findFirst()
                 .orElseThrow(() -> new AdmissionPlanException(ErrorCode.INVALID_STUDENT_CODE_MAJOR));
+        if (majorClassPrefix.prefix() == null) {
+            warnings.add(CodePrefixMappingPolicy.missingMapping(
+                            SystemConfigKey.MAJOR_CODE_PREFIXES,
+                            CodePrefixMappingPolicy.lookupKeyFromName(majorClassPrefix.majorName()))
+                    .getFieldErrors()
+                    .getFirst()
+                    .getMessage());
+            return;
+        }
         var majorsWithSamePrefix = classPrefixes.stream()
                 .filter(classPrefix -> !classPrefix.majorId().equals(majorId)
-                        && classPrefix.prefix().equals(majorClassPrefix.prefix()))
+                        && majorClassPrefix.prefix().equals(classPrefix.prefix()))
                 .map(classPrefix -> classPrefix.majorName() + " (" + classPrefix.majorCode() + ")")
                 .toList();
         if (!majorsWithSamePrefix.isEmpty()) {
-            // TODO(CLASS_PREFIX_CONFIG): Cho phép Admin cấu hình tiền tố; hiện trùng chỉ cảnh báo.
+            // Chỉ cảnh báo khi đọc plan cũ; bộ sinh mã mới chặn các tên tạo cùng khóa tra cứu.
             warnings.add("Tiền tố lớp " + majorClassPrefix.prefix() + " của ngành " + majorClassPrefix.majorName()
                     + " trùng với: " + String.join(", ", majorsWithSamePrefix)
-                    + ". Vẫn có thể tạo lớp; chức năng cấu hình tiền tố sẽ được bổ sung sau.");
+                    + ". Cần đối soát khóa tra cứu trước khi tạo lớp hoặc cấp MSSV mới.");
         }
     }
 

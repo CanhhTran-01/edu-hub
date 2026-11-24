@@ -50,7 +50,7 @@ class RoomControllerTest {
     private final ApiResponseFactory apiResponseFactory = new ApiResponseFactory(CLOCK);
     private static final String BODY =
             """
-            {"roomCode":"102-TA1","roomName":"Phòng 102","buildingCode":"TA1","roomNumber":"102","capacity":80}
+            {"campus":"CS1","roomName":"Phòng 102","buildingCode":"TA1","roomNumber":"102","capacity":80}
             """;
 
     @Mock
@@ -75,7 +75,7 @@ class RoomControllerTest {
                         .content(BODY))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.roomCode").value("102-TA1"))
+                .andExpect(jsonPath("$.data.roomCode").value("CS1-TA1-102"))
                 .andExpect(jsonPath("$.data.capacity").value(80))
                 .andExpect(jsonPath("$.data.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.data.roomType").doesNotExist())
@@ -100,7 +100,7 @@ class RoomControllerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"roomCode", "roomName", "buildingCode", "capacity"})
+    @ValueSource(strings = {"campus", "roomName", "buildingCode", "roomNumber", "capacity"})
     void missingRequiredCreateFieldReturns400(String field) throws Exception {
         String invalid = BODY.replaceAll("\"" + field + "\":(\"[^\"]*\"|[0-9]+)", "\"" + field + "\":null");
         mvc.perform(post("/api/v1/rooms")
@@ -116,7 +116,7 @@ class RoomControllerTest {
         for (String value : new String[] {" ", "A".repeat(51)}) {
             mvc.perform(post("/api/v1/rooms")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content(BODY.replace("102-TA1", value)))
+                            .content(BODY.replace("TA1", value)))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code").value(1001));
         }
@@ -253,18 +253,18 @@ class RoomControllerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"TA1-102", "CS1-102-TA1", "102TA1", "102_TA1", "102--TA1", "102-TA1!", "102A-TA1"})
-    void invalidRoomCodeReturnsSpecificFieldError(String code) throws Exception {
+    @ValueSource(strings = {"TA-1", "TA_1", "TA 1", "TA!1", "TA/1"})
+    void invalidBuildingCodeReturnsSpecificFieldError(String code) throws Exception {
         mvc.perform(post("/api/v1/rooms")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(BODY.replace("102-TA1", code)))
+                        .content(BODY.replace("TA1", code)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors[0].field").value("roomCode"));
+                .andExpect(jsonPath("$.errors[0].field").value("buildingCode"));
         mvc.perform(put("/api/v1/rooms/1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(BODY.replace("102-TA1", code)))
+                        .content(BODY.replace("TA1", code)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors[0].field").value("roomCode"));
+                .andExpect(jsonPath("$.errors[0].field").value("buildingCode"));
         verifyNoInteractions(service);
     }
 
@@ -295,9 +295,9 @@ class RoomControllerTest {
     private RoomResponse room() {
         return RoomResponse.builder()
                 .id(1L)
-                .roomCode("102-TA1")
+                .roomCode("CS1-TA1-102")
                 .roomName("Phòng 102")
-                .campus("")
+                .campus("CS1")
                 .buildingCode("TA1")
                 .roomNumber("102")
                 .capacity(80)

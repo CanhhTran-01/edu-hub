@@ -12,8 +12,8 @@ public final class StudentCodePolicy {
     private StudentCodePolicy() {}
 
     public static String generatePrefix(
-            String majorCode, Integer cohortSequence, int classSequence, String codeFormat) {
-        if (majorCode == null || !majorCode.toUpperCase(Locale.ROOT).matches("[A-Z]+")) {
+            String majorPrefix, Integer cohortSequence, int classSequence, String codeFormat) {
+        if (majorPrefix == null || !majorPrefix.toUpperCase(Locale.ROOT).matches("[A-Z]+")) {
             throw new ProfileCreationException(ErrorCode.INVALID_STUDENT_CODE_MAJOR);
         }
         if (cohortSequence == null || cohortSequence < 1 || cohortSequence > 99) {
@@ -33,7 +33,7 @@ public final class StudentCodePolicy {
         }
         if (!remainingFormat.matches("[A-Za-z0-9_-]*")) throw new ProfileCreationException(ErrorCode.VALIDATION_ERROR);
         return codeFormat
-                .replace("[MaNganh]", majorCode.toUpperCase(Locale.ROOT))
+                .replace("[MaNganh]", majorPrefix.toUpperCase(Locale.ROOT))
                 .replace("[SttKhoa]", String.format(Locale.ROOT, "%02d", cohortSequence))
                 .replace("[SttLop]", String.format(Locale.ROOT, "%02d", classSequence));
     }

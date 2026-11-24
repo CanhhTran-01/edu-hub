@@ -130,7 +130,7 @@ public enum ErrorCode {
     ROOM_NOT_FOUND(4326, "Không tìm thấy phòng học", HttpStatus.NOT_FOUND),
     DUPLICATE_ROOM_CODE(4327, "Mã phòng đã tồn tại", HttpStatus.CONFLICT),
     DUPLICATE_ROOM_LOCATION(4328, "Cơ sở, tòa nhà và số phòng đã tồn tại", HttpStatus.CONFLICT),
-    INVALID_ROOM_CODE(4329, "Mã phòng phải theo định dạng <số phòng>-<tòa nhà>, ví dụ 102-TA1", HttpStatus.BAD_REQUEST),
+    INVALID_ROOM_CODE(4329, "Mã phòng phải có dạng CS1-TA1-102 và không vượt quá 50 ký tự", HttpStatus.BAD_REQUEST),
     ROOM_IN_USE(
             4330, "Phòng có lịch học thuộc kỳ chưa kết thúc, không được ngừng sử dụng hoặc xóa", HttpStatus.CONFLICT),
     ROOM_CAPACITY_BELOW_CLASS(4331, "Sức chứa phòng nhỏ hơn sức chứa tối đa của lớp đang xếp", HttpStatus.CONFLICT),
@@ -198,6 +198,10 @@ public enum ErrorCode {
     // Cấu hình tham số hệ thống
     SYSTEM_CONFIG_CHANGED(4701, "Cấu hình đã thay đổi, vui lòng tải lại", HttpStatus.CONFLICT),
     SYSTEM_CONFIG_UNAVAILABLE(4702, "Tham số hệ thống chưa được cấu hình hợp lệ", HttpStatus.SERVICE_UNAVAILABLE),
+    CODE_PREFIX_MAPPING_MISSING(
+            4703, "Chưa cấu hình tiền tố sinh mã; vui lòng liên hệ SYSTEM_ADMIN", HttpStatus.SERVICE_UNAVAILABLE),
+    CODE_PREFIX_MAPPING_AMBIGUOUS(
+            4704, "Khóa viết tắt trùng giữa các tên danh mục, cần đối soát trước khi cấp mã", HttpStatus.CONFLICT),
 
     // Security
     UNAUTHENTICATED(4000, "Vui lòng đăng nhập", HttpStatus.UNAUTHORIZED),
