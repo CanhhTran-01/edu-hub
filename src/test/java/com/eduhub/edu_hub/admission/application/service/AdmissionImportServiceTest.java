@@ -134,10 +134,11 @@ class AdmissionImportServiceTest {
         verifyNoInteractions(spreadsheetReader, applicantRepository, majorCatalogFacade, peopleAdmissionFacade);
     }
 
-    @Test
-    void checksThePlanScopeBeforeLoadingOrReplacingExistingApplicants() {
+    @ParameterizedTest
+    @ValueSource(strings = {"majorCode", "cohortCode"})
+    void checksThePlanScopeBeforeLoadingOrReplacingExistingApplicants(String mismatchedField) {
         var scopeError = new AdmissionImportScopeException(
-                List.of(new FieldErrorDetail("majorCode", "Ngành trong file không khớp")));
+                List.of(new FieldErrorDetail(mismatchedField, "Ngành hoặc khóa trong file không khớp")));
         when(spreadsheetReader.parse(eq(file), any(AdmissionSpreadsheetScope.class)))
                 .thenThrow(scopeError);
 

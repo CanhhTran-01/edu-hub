@@ -30,6 +30,7 @@ public class AdmissionController {
     }
 
     // 2. Chọn ngành và khóa, sau đó tải mẫu XLSX để nhập danh sách đúng phạm vi.
+    // FE lấy dropdown từ GET /api/v1/majors và /api/v1/cohorts; mẫu chốt cả mã ngành và mã khóa đã chọn.
     @GetMapping("/student-admissions/template")
     public ResponseEntity<byte[]> downloadImportTemplate(@RequestParam Long majorId, @RequestParam Long cohortId) {
         return ResponseEntity.ok()

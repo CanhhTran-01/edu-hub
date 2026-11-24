@@ -63,11 +63,11 @@ class AdmissionSpreadsheetReaderTest {
             var sheet = workbook.getSheetAt(0);
             row(sheet, 1, "HS01", "012345678901", "Nguyễn Văn An", "25.50");
             row(sheet, 2, "HS02", "012345678902", "Trần Văn Bình", "24");
-            sheet.getRow(AdmissionSpreadsheetReader.HEADER_ROW_INDEX + 2)
+            sheet.getRow(AdmissionSpreadsheetReader.COMPACT_HEADER_ROW_INDEX + 2)
                     .getCell(3)
                     .setCellFormula("20+4");
             row(sheet, 3, "HS03", "012345678903", "Lê Văn Cường", "23");
-            sheet.getRow(AdmissionSpreadsheetReader.HEADER_ROW_INDEX + 3)
+            sheet.getRow(AdmissionSpreadsheetReader.COMPACT_HEADER_ROW_INDEX + 3)
                     .getCell(1)
                     .setCellValue(12345678903D);
             var parsed = parser.parse(file(workbook), SCOPE);
@@ -84,8 +84,8 @@ class AdmissionSpreadsheetReaderTest {
     void rejectsMissingRequiredHeaders() throws Exception {
         try (var workbook = workbook()) {
             var sheet = workbook.getSheetAt(0);
-            sheet.removeRow(sheet.getRow(AdmissionSpreadsheetReader.HEADER_ROW_INDEX));
-            sheet.createRow(AdmissionSpreadsheetReader.HEADER_ROW_INDEX)
+            sheet.removeRow(sheet.getRow(AdmissionSpreadsheetReader.COMPACT_HEADER_ROW_INDEX));
+            sheet.createRow(AdmissionSpreadsheetReader.COMPACT_HEADER_ROW_INDEX)
                     .createCell(0)
                     .setCellValue("ho_ten");
             assertThatThrownBy(() -> parser.parse(file(workbook), SCOPE))
@@ -114,13 +114,16 @@ class AdmissionSpreadsheetReaderTest {
             var sheet = workbook.getSheetAt(0);
             assertThat(sheet.getSheetName()).isEqualTo("Sinh viên trúng tuyển");
             assertThat(sheet.getRow(0).getCell(0).getStringCellValue()).isEqualTo("Sinh viên trúng tuyển");
-            assertThat(sheet.getRow(1).getCell(0).getStringCellValue()).isEqualTo("Tên ngành");
-            assertThat(sheet.getRow(1).getCell(1).getStringCellValue()).isEqualTo("Công nghệ thông tin");
-            assertThat(sheet.getRow(2).getCell(0).getStringCellValue()).isEqualTo("Mã ngành");
-            assertThat(sheet.getRow(2).getCell(1).getStringCellValue()).isEqualTo("CNTT");
-            assertThat(sheet.getRow(3).getPhysicalNumberOfCells()).isZero();
+            assertThat(sheet.getRow(1).getPhysicalNumberOfCells()).isZero();
+            assertThat(sheet.getRow(5).getPhysicalNumberOfCells()).isZero();
+            assertThat(sheet.getRow(2).getCell(0).getStringCellValue()).isEqualTo("Tên ngành");
+            assertThat(sheet.getRow(2).getCell(1).getStringCellValue()).isEqualTo("Công nghệ thông tin");
+            assertThat(sheet.getRow(3).getCell(0).getStringCellValue()).isEqualTo("Mã ngành");
+            assertThat(sheet.getRow(3).getCell(1).getStringCellValue()).isEqualTo("CNTT");
+            assertThat(sheet.getRow(4).getCell(0).getStringCellValue()).isEqualTo("Mã khóa");
+            assertThat(sheet.getRow(4).getCell(1).getStringCellValue()).isEqualTo("CT8");
             assertThat(IntStream.range(0, 8)
-                            .mapToObj(index -> sheet.getRow(4).getCell(index).getStringCellValue())
+                            .mapToObj(index -> sheet.getRow(6).getCell(index).getStringCellValue())
                             .toList())
                     .containsExactly(
                             "Mã hồ sơ",
@@ -133,39 +136,88 @@ class AdmissionSpreadsheetReaderTest {
                             "Số điện thoại");
             assertThat(sheet.getColumnStyle(1).getDataFormatString()).isEqualTo("@");
             assertThat(sheet.getColumnStyle(7).getDataFormatString()).isEqualTo("@");
-            assertThat(sheet.getPaneInformation().getHorizontalSplitPosition()).isEqualTo((short) 5);
+            assertThat(sheet.getPaneInformation().getHorizontalSplitPosition()).isEqualTo((short) 7);
         }
     }
 
     @Test
-    void importsApplicantsFromTheNewTemplateUsingTheSelectedCohort() throws Exception {
+    void importsApplicantsFromTheCurrentTemplateWhenBothCodesMatchAfterNormalization() throws Exception {
         try (var workbook = new XSSFWorkbook(
                 new ByteArrayInputStream(new AdmissionSpreadsheetTemplateWriter().writeTemplate(SCOPE)))) {
             row(workbook.getSheetAt(0), 1, "HS01", "012345678901", "Nguyễn Văn An", "25");
-            var selectedScope = new AdmissionSpreadsheetScope("CNTT", "Công nghệ thông tin", "CT9");
+            var selectedScope = new AdmissionSpreadsheetScope(" cntt ", "Tên ngành đã thay đổi", " ct8 ");
             assertThat(parser.parse(file(workbook), selectedScope))
                     .singleElement()
                     .satisfies(applicant -> {
                         assertThat(applicant.getState()).isEqualTo(AdmissionApplicantStatus.VALID);
-                        assertThat(applicant.getRowNumber()).isEqualTo(6);
+                        assertThat(applicant.getRowNumber()).isEqualTo(8);
                         assertThat(applicant.getCitizenId()).isEqualTo("012345678901");
                     });
         }
     }
 
-    @Test
-    void rejectsTheNewTemplateWhenItsMajorDiffersFromTheSelectedMajor() throws Exception {
+    @ParameterizedTest
+    @CsvSource({"ATTT, CT8, majorCode", "CNTT, CT9, cohortCode"})
+    void rejectsTheCurrentTemplateWhenItsMajorOrCohortDiffersFromTheSelectedScope(
+            String fileMajorCode, String fileCohortCode, String field) throws Exception {
         try (var workbook = new XSSFWorkbook(
                 new ByteArrayInputStream(new AdmissionSpreadsheetTemplateWriter().writeTemplate(SCOPE)))) {
-            workbook.getSheetAt(0).getRow(2).getCell(1).setCellValue("ATTT");
+            workbook.getSheetAt(0).getRow(3).getCell(1).setCellValue(fileMajorCode);
+            workbook.getSheetAt(0).getRow(4).getCell(1).setCellValue(fileCohortCode);
             assertThatThrownBy(() -> parser.parse(file(workbook), SCOPE))
                     .isInstanceOfSatisfying(AdmissionImportScopeException.class, exception -> {
                         assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ADMISSION_IMPORT_SCOPE_MISMATCH);
                         assertThat(exception.getErrors()).singleElement().satisfies(detail -> {
-                            assertThat(detail.getField()).isEqualTo("majorCode");
-                            assertThat(detail.getMessage()).contains("ATTT", "CNTT");
+                            assertThat(detail.getField()).isEqualTo(field);
+                            assertThat(detail.getMessage())
+                                    .contains(
+                                            field.equals("majorCode") ? fileMajorCode : fileCohortCode,
+                                            field.equals("majorCode") ? SCOPE.majorCode() : SCOPE.cohortCode());
                         });
                     });
+        }
+    }
+
+    @Test
+    void reportsBothScopeMismatchesInTheCurrentTemplateBeforeReadingApplicants() throws Exception {
+        try (var workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(new AdmissionSpreadsheetTemplateWriter().writeTemplate(SCOPE)))) {
+            var sheet = workbook.getSheetAt(0);
+            sheet.getRow(3).getCell(1).setCellValue("ATTT");
+            sheet.getRow(4).getCell(1).setCellValue("CT9");
+            row(sheet, 1, "HS01", "012345678901", "Nguyễn Văn An", "25");
+            assertThatThrownBy(() -> parser.parse(file(workbook), SCOPE))
+                    .isInstanceOfSatisfying(
+                            AdmissionImportScopeException.class, exception -> assertThat(exception.getErrors())
+                                    .extracting(FieldErrorDetail::getField)
+                                    .containsExactly("majorCode", "cohortCode"));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {-1, 0, 1})
+    void rejectsTheCurrentTemplateWithoutItsCohortRowLabelOrCode(int missingColumnIndex) throws Exception {
+        try (var workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(new AdmissionSpreadsheetTemplateWriter().writeTemplate(SCOPE)))) {
+            var sheet = workbook.getSheetAt(0);
+            if (missingColumnIndex < 0) sheet.removeRow(sheet.getRow(4));
+            else sheet.getRow(4).getCell(missingColumnIndex).setBlank();
+            assertThatThrownBy(() -> parser.parse(file(workbook), SCOPE))
+                    .isInstanceOfSatisfying(
+                            AdmissionSpreadsheetException.class, exception -> assertThat(exception.getErrorCode())
+                                    .isEqualTo(ErrorCode.ADMISSION_IMPORT_METADATA_REQUIRED));
+        }
+    }
+
+    @Test
+    void rejectsTheSpacedTemplateWithAnEmptyCohortRow() throws Exception {
+        try (var workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(new AdmissionSpreadsheetTemplateWriter().writeTemplate(SCOPE)))) {
+            workbook.getSheetAt(0).createRow(4);
+            assertThatThrownBy(() -> parser.parse(file(workbook), SCOPE))
+                    .isInstanceOfSatisfying(
+                            AdmissionSpreadsheetException.class, exception -> assertThat(exception.getErrorCode())
+                                    .isEqualTo(ErrorCode.ADMISSION_IMPORT_METADATA_REQUIRED));
         }
     }
 
@@ -174,7 +226,7 @@ class AdmissionSpreadsheetReaderTest {
     void stillRequiresTheMajorLabelAndCodeInTheNewTemplate(int columnIndex) throws Exception {
         try (var workbook = new XSSFWorkbook(
                 new ByteArrayInputStream(new AdmissionSpreadsheetTemplateWriter().writeTemplate(SCOPE)))) {
-            workbook.getSheetAt(0).getRow(2).getCell(columnIndex).setBlank();
+            workbook.getSheetAt(0).getRow(3).getCell(columnIndex).setBlank();
             assertThatThrownBy(() -> parser.parse(file(workbook), SCOPE))
                     .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
                             .isEqualTo(ErrorCode.ADMISSION_IMPORT_METADATA_REQUIRED));
@@ -182,7 +234,7 @@ class AdmissionSpreadsheetReaderTest {
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {0, 1, 2, 3})
+    @ValueSource(ints = {0, 1, 2, 3, 4, 5})
     void rejectsFormulasAnywhereAboveTheNewTemplateHeader(int rowIndex) throws Exception {
         try (var workbook = new XSSFWorkbook(
                 new ByteArrayInputStream(new AdmissionSpreadsheetTemplateWriter().writeTemplate(SCOPE)))) {
@@ -190,6 +242,69 @@ class AdmissionSpreadsheetReaderTest {
             assertThatThrownBy(() -> parser.parse(file(workbook), SCOPE))
                     .isInstanceOfSatisfying(BaseException.class, exception -> assertThat(exception.getErrorCode())
                             .isEqualTo(ErrorCode.ADMISSION_IMPORT_INVALID));
+        }
+    }
+
+    @Test
+    void preservesSpacedTemplateRowNumbersAndDoesNotCountSpacerRowsAgainstTheImportLimit() throws Exception {
+        var settings = new AdmissionSettings();
+        settings.setMaxImportRows(3);
+        var limitedParser = new AdmissionSpreadsheetReader(settings);
+        try (var workbook = new XSSFWorkbook(
+                new ByteArrayInputStream(new AdmissionSpreadsheetTemplateWriter().writeTemplate(SCOPE)))) {
+            var sheet = workbook.getSheetAt(0);
+            row(sheet, 1, "HS01", "012345678901", "Nguyễn Văn An", "25");
+            row(sheet, 3, "HS02", "012345678902", "Trần Văn Bình", "24");
+            assertThat(limitedParser.parse(file(workbook), SCOPE))
+                    .extracting(AdmissionSpreadsheetApplicant::getRowNumber)
+                    .containsExactly(8, 10);
+            row(sheet, 4, "HS03", "012345678903", "Lê Văn Cường", "23");
+            assertThatThrownBy(() -> limitedParser.parse(file(workbook), SCOPE))
+                    .isInstanceOfSatisfying(
+                            AdmissionSpreadsheetException.class, exception -> assertThat(exception.getErrorCode())
+                                    .isEqualTo(ErrorCode.ADMISSION_IMPORT_INVALID));
+        }
+    }
+
+    @Test
+    void stillImportsTheCompactTemplateAtItsOriginalRowNumbers() throws Exception {
+        try (var workbook = compactTemplate()) {
+            var applicantRow = workbook.getSheetAt(0).createRow(5);
+            applicantRow.createCell(0).setCellValue("HS01");
+            applicantRow.createCell(1).setCellValue("012345678901");
+            applicantRow.createCell(2).setCellValue("Nguyễn Văn An");
+            applicantRow.createCell(3).setCellValue("25");
+            assertThat(parser.parse(file(workbook), SCOPE)).singleElement().satisfies(applicant -> {
+                assertThat(applicant.getState()).isEqualTo(AdmissionApplicantStatus.VALID);
+                assertThat(applicant.getRowNumber()).isEqualTo(6);
+            });
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"ATTT, CT8, majorCode", "CNTT, CT9, cohortCode"})
+    void stillChecksBothScopeCodesInTheCompactTemplate(String majorCode, String cohortCode, String field)
+            throws Exception {
+        try (var workbook = compactTemplate()) {
+            var sheet = workbook.getSheetAt(0);
+            sheet.getRow(2).getCell(1).setCellValue(majorCode);
+            sheet.getRow(3).getCell(1).setCellValue(cohortCode);
+            assertThatThrownBy(() -> parser.parse(file(workbook), SCOPE))
+                    .isInstanceOfSatisfying(
+                            AdmissionImportScopeException.class, exception -> assertThat(exception.getErrors())
+                                    .extracting(FieldErrorDetail::getField)
+                                    .containsExactly(field));
+        }
+    }
+
+    @Test
+    void stillRejectsTheCompactTemplateWithoutCohortMetadata() throws Exception {
+        try (var workbook = compactTemplate()) {
+            workbook.getSheetAt(0).createRow(3);
+            assertThatThrownBy(() -> parser.parse(file(workbook), SCOPE))
+                    .isInstanceOfSatisfying(
+                            AdmissionSpreadsheetException.class, exception -> assertThat(exception.getErrorCode())
+                                    .isEqualTo(ErrorCode.ADMISSION_IMPORT_METADATA_REQUIRED));
         }
     }
 
@@ -307,7 +422,7 @@ class AdmissionSpreadsheetReaderTest {
     void readsReorderedVietnameseHeadersWithDifferentCaseSpacingAndUnicodeRepresentation() throws Exception {
         try (var workbook = workbook()) {
             var sheet = workbook.getSheetAt(0);
-            var header = sheet.getRow(AdmissionSpreadsheetReader.HEADER_ROW_INDEX);
+            var header = sheet.getRow(AdmissionSpreadsheetReader.COMPACT_HEADER_ROW_INDEX);
             for (int columnIndex = 0; columnIndex < 8; columnIndex++) {
                 header.removeCell(header.getCell(columnIndex));
             }
@@ -336,7 +451,7 @@ class AdmissionSpreadsheetReaderTest {
             var legacyHeaders = List.of(
                     "ma_ho_so", "cccd", "ho_ten", "diem_dau_vao", "ngay_sinh", "gioi_tinh", "email", "so_dien_thoai");
             for (int index = 0; index < legacyHeaders.size(); index++) {
-                sheet.getRow(AdmissionSpreadsheetReader.HEADER_ROW_INDEX)
+                sheet.getRow(AdmissionSpreadsheetReader.COMPACT_HEADER_ROW_INDEX)
                         .getCell(index)
                         .setCellValue(legacyHeaders.get(index));
             }
@@ -367,7 +482,7 @@ class AdmissionSpreadsheetReaderTest {
     void rejectsDuplicateColumnsIncludingLegacyAliases(String duplicateHeader) throws Exception {
         try (var workbook = workbook()) {
             workbook.getSheetAt(0)
-                    .getRow(AdmissionSpreadsheetReader.HEADER_ROW_INDEX)
+                    .getRow(AdmissionSpreadsheetReader.COMPACT_HEADER_ROW_INDEX)
                     .createCell(8)
                     .setCellValue(duplicateHeader);
             assertThatThrownBy(() -> parser.parse(file(workbook), SCOPE))
@@ -393,7 +508,7 @@ class AdmissionSpreadsheetReaderTest {
         try (var workbook = workbook()) {
             var sheet = workbook.getSheetAt(0);
             row(sheet, 1, "HS01", "012345678901", "Nguyễn Văn An", "25");
-            var dateCell = sheet.getRow(AdmissionSpreadsheetReader.HEADER_ROW_INDEX + 1)
+            var dateCell = sheet.getRow(AdmissionSpreadsheetReader.COMPACT_HEADER_ROW_INDEX + 1)
                     .createCell(4);
             dateCell.setCellValue(LocalDate.of(2001, 2, 3));
             var dateStyle = workbook.createCellStyle();
@@ -425,7 +540,7 @@ class AdmissionSpreadsheetReaderTest {
         try (var workbook = workbook()) {
             var sheet = workbook.getSheetAt(0);
             row(sheet, 1, "HS01", "012345678901", "Nguyễn Văn An", "25");
-            sheet.getRow(AdmissionSpreadsheetReader.HEADER_ROW_INDEX + 1)
+            sheet.getRow(AdmissionSpreadsheetReader.COMPACT_HEADER_ROW_INDEX + 1)
                     .createCell(8)
                     .setCellFormula("1+1");
             row(sheet, 2, "HS02", "012345678902", "Trần Văn Bình", "24");
@@ -445,6 +560,25 @@ class AdmissionSpreadsheetReaderTest {
         }
     }
 
+    private XSSFWorkbook compactTemplate() {
+        var workbook = new XSSFWorkbook();
+        var sheet = workbook.createSheet();
+        String[][] metadata = {
+            {"Sinh viên trúng tuyển"},
+            {"Tên ngành", SCOPE.majorName()},
+            {"Mã ngành", SCOPE.majorCode()},
+            {"Mã khóa", SCOPE.cohortCode()}
+        };
+        for (int rowIndex = 0; rowIndex < metadata.length; rowIndex++) {
+            var metadataRow = sheet.createRow(rowIndex);
+            for (int columnIndex = 0; columnIndex < metadata[rowIndex].length; columnIndex++) {
+                metadataRow.createCell(columnIndex).setCellValue(metadata[rowIndex][columnIndex]);
+            }
+        }
+        header(sheet);
+        return workbook;
+    }
+
     private XSSFWorkbook workbook() {
         var workbook = new XSSFWorkbook();
         var sheet = workbook.createSheet();
@@ -462,13 +596,16 @@ class AdmissionSpreadsheetReaderTest {
     }
 
     private void header(org.apache.poi.ss.usermodel.Sheet sheet) {
-        var header = sheet.createRow(AdmissionSpreadsheetReader.HEADER_ROW_INDEX);
+        var header = sheet.createRow(AdmissionSpreadsheetReader.COMPACT_HEADER_ROW_INDEX);
         for (int i = 0; i < AdmissionSpreadsheetReader.HEADERS.size(); i++)
             header.createCell(i).setCellValue(AdmissionSpreadsheetReader.HEADERS.get(i));
     }
 
     private void row(org.apache.poi.ss.usermodel.Sheet sheet, int number, String... values) {
-        var row = sheet.createRow(AdmissionSpreadsheetReader.HEADER_ROW_INDEX + number);
+        int headerRowIndex = "ma_nganh".equals(sheet.getRow(0).getCell(0).getStringCellValue())
+                ? AdmissionSpreadsheetReader.COMPACT_HEADER_ROW_INDEX
+                : AdmissionSpreadsheetReader.HEADER_ROW_INDEX;
+        var row = sheet.createRow(headerRowIndex + number);
         for (int i = 0; i < values.length; i++) row.createCell(i).setCellValue(values[i]);
     }
 

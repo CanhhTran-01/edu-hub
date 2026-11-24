@@ -20,9 +20,11 @@ public class AdmissionSpreadsheetTemplateWriter {
             Sheet sheet = workbook.createSheet("Sinh viên trúng tuyển");
 
             sheet.createRow(0).createCell(0).setCellValue("Sinh viên trúng tuyển");
-            writeMetadataRow(sheet, 1, "Tên ngành", spreadsheetScope.majorName());
-            writeMetadataRow(sheet, 2, "Mã ngành", spreadsheetScope.majorCode());
-            sheet.createRow(3);
+            sheet.createRow(1);
+            writeMetadataRow(sheet, 2, "Tên ngành", spreadsheetScope.majorName());
+            writeMetadataRow(sheet, 3, "Mã ngành", spreadsheetScope.majorCode());
+            writeMetadataRow(sheet, 4, "Mã khóa", spreadsheetScope.cohortCode());
+            sheet.createRow(5);
 
             Row headerRow = sheet.createRow(HEADER_ROW_INDEX);
             for (int columnIndex = 0; columnIndex < HEADERS.size(); columnIndex++) {

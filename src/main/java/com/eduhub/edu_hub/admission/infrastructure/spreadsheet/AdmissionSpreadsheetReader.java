@@ -17,7 +17,8 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class AdmissionSpreadsheetReader {
     private final AdmissionSettings admissionSettings;
-    public static final int HEADER_ROW_INDEX = 4;
+    public static final int HEADER_ROW_INDEX = 6;
+    static final int COMPACT_HEADER_ROW_INDEX = 4;
 
     public static final List<String> HEADERS = Arrays.stream(AdmissionSpreadsheetColumn.values())
             .map(AdmissionSpreadsheetColumn::headerTitle)
@@ -31,17 +32,22 @@ public class AdmissionSpreadsheetReader {
         // input và workbook tự động được đóng khi kết thúc khối try, tránh rò rỉ bộ nhớ
         try (var input = file.getInputStream();
                 var workbook = new XSSFWorkbook(input)) {
-            Sheet sheet = requireSingleSheetWithinRowLimit(workbook);
+            Sheet sheet = requireSingleSheet(workbook);
 
             // Apache POI tool giúp đọc value ô (Cell) dưới dạng String đúng như cách hiển thị trên Excel
             DataFormatter cellFormatter = new DataFormatter(Locale.ROOT);
+            var scopeValidator = new AdmissionSpreadsheetScopeValidator();
+            int headerRowIndex = scopeValidator.resolveHeaderRowIndex(sheet, cellFormatter);
+            validateApplicantRowLimit(sheet, headerRowIndex);
 
             // Sai ngành/khóa là lỗi toàn file, phải chặn trước khi đọc từng hồ sơ.
-            new AdmissionSpreadsheetScopeValidator().validateSelectedScope(sheet, cellFormatter, expectedScope);
+            scopeValidator.validateSelectedScope(sheet, cellFormatter, expectedScope, headerRowIndex);
 
             // Đọc hàng header, dựng bản đồ cột (map từng ô của hàng header với chỉ số cụ thể)
-            Map<AdmissionSpreadsheetColumn, Integer> columnIndexes = readHeaderColumnIndexes(sheet, cellFormatter);
-            return readApplicantRows(sheet, new AdmissionSpreadsheetRowParser(columnIndexes, cellFormatter));
+            Map<AdmissionSpreadsheetColumn, Integer> columnIndexes =
+                    readHeaderColumnIndexes(sheet, cellFormatter, headerRowIndex);
+            return readApplicantRows(
+                    sheet, new AdmissionSpreadsheetRowParser(columnIndexes, cellFormatter), headerRowIndex);
         } catch (BaseException exception) {
             throw exception;
         } catch (IOException | RuntimeException exception) {
@@ -58,24 +64,28 @@ public class AdmissionSpreadsheetReader {
         }
     }
 
-    private Sheet requireSingleSheetWithinRowLimit(Workbook workbook) {
+    private Sheet requireSingleSheet(Workbook workbook) {
         // phải đúng 1 sheet
         if (workbook.getNumberOfSheets() != 1) {
             throw new AdmissionSpreadsheetException(ErrorCode.ADMISSION_IMPORT_INVALID);
         }
 
-        // Không tính khối thông tin chung và hàng header vào giới hạn số dòng hồ sơ.
-        Sheet sheet = workbook.getSheetAt(0);
-        if (sheet.getLastRowNum() - HEADER_ROW_INDEX > admissionSettings.getMaxImportRows()) {
-            throw new AdmissionSpreadsheetException(ErrorCode.ADMISSION_IMPORT_INVALID);
-        }
-        return sheet;
+        return workbook.getSheetAt(0);
     }
 
-    private Map<AdmissionSpreadsheetColumn, Integer> readHeaderColumnIndexes(Sheet sheet, DataFormatter cellFormatter) {
+    private void validateApplicantRowLimit(Sheet sheet, int headerRowIndex) {
+        // Không tính khối thông tin chung và hàng header vào giới hạn số dòng hồ sơ.
+        // Mốc đếm đi theo bố cục đã nhận diện để hai dòng cách mới không làm hao giới hạn hồ sơ.
+        if (sheet.getLastRowNum() - headerRowIndex > admissionSettings.getMaxImportRows()) {
+            throw new AdmissionSpreadsheetException(ErrorCode.ADMISSION_IMPORT_INVALID);
+        }
+    }
+
+    private Map<AdmissionSpreadsheetColumn, Integer> readHeaderColumnIndexes(
+            Sheet sheet, DataFormatter cellFormatter, int headerRowIndex) {
         Map<AdmissionSpreadsheetColumn, Integer> columnIndexes = new EnumMap<>(AdmissionSpreadsheetColumn.class);
         Map<String, Integer> indexesByHeader = new HashMap<>(); // key=tên cột, value=chỉ số vị trí của cột (từ 0)
-        Row headerRow = sheet.getRow(HEADER_ROW_INDEX);
+        Row headerRow = sheet.getRow(headerRowIndex);
         if (headerRow == null) {
             throw new AdmissionSpreadsheetException(ErrorCode.ADMISSION_IMPORT_INVALID);
         }
@@ -105,11 +115,11 @@ public class AdmissionSpreadsheetReader {
     }
 
     private List<AdmissionSpreadsheetApplicant> readApplicantRows(
-            Sheet sheet, AdmissionSpreadsheetRowParser rowParser) {
+            Sheet sheet, AdmissionSpreadsheetRowParser rowParser, int headerRowIndex) {
         List<AdmissionSpreadsheetApplicant> spreadsheetApplicants = new ArrayList<>();
 
         // đọc từng dòng dữ liệu
-        for (int rowIndex = HEADER_ROW_INDEX + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+        for (int rowIndex = headerRowIndex + 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
             Row row = sheet.getRow(rowIndex);
 
             // bỏ qua dòng trống
