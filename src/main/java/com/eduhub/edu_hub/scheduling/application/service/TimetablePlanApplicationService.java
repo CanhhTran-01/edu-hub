@@ -3,7 +3,6 @@ package com.eduhub.edu_hub.scheduling.application.service;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
-import com.eduhub.edu_hub.people.domain.model.Lecturer;
 import com.eduhub.edu_hub.scheduling.api.dto.request.*;
 import com.eduhub.edu_hub.scheduling.api.dto.response.*;
 import com.eduhub.edu_hub.scheduling.api.mapper.TimetablePlanResponseMapper;
@@ -241,9 +240,8 @@ public class TimetablePlanApplicationService {
                 .map(TimetableAllocation.SessionPlacement::roomId)
                 .collect(Collectors.toCollection(TreeSet::new));
         Map<Long, Room> roomsById = new HashMap<>();
-        curriculumFacade.requireOpenableSubjects(classes.stream()
-                .map(moduleClass -> moduleClass.getSubject().getId())
-                .collect(Collectors.toSet()));
+        curriculumFacade.requireOpenableSubjects(
+                classes.stream().map(moduleClass -> moduleClass.getSubjectId()).collect(Collectors.toSet()));
         for (Long roomId : roomIds)
             roomsById.put(
                     roomId,
@@ -296,7 +294,7 @@ public class TimetablePlanApplicationService {
         List<ClassSchedule> newSchedules = new ArrayList<>();
         for (var session : allocation.sessions()) {
             var moduleClass = classesById.get(session.moduleClassId());
-            moduleClass.applyTeachingAssignment(entityManager.getReference(Lecturer.class, session.lecturerId()));
+            moduleClass.applyTeachingAssignment(session.lecturerId());
             moduleClass.setUpdatedAt(currentAuditTimestamp());
             var schedule = ClassSchedule.builder()
                     .moduleClass(moduleClass)

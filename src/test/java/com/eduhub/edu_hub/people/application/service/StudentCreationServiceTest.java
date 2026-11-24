@@ -67,7 +67,7 @@ class StudentCreationServiceTest {
         Major major = Major.builder().majorCode("CNTT").build();
         major.setId(10L);
         administrativeClass = AdministrativeClass.builder()
-                .major(major)
+                .majorId(major.getId())
                 .cohort(cohort)
                 .className("CT8A")
                 .trainingType(TrainingType.CHINH_QUY)

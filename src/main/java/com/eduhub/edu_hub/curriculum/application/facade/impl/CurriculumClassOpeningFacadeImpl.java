@@ -20,6 +20,20 @@ public class CurriculumClassOpeningFacadeImpl implements CurriculumFacade.ClassO
 
     @Override
     @Transactional(readOnly = true)
+    public Set<Long> findSubjectIdsByKeyword(String keyword) {
+        if (keyword == null || keyword.isBlank()) return Set.of();
+        String keywordPattern = "%"
+                + keyword.trim()
+                        .toLowerCase(Locale.ROOT)
+                        .replace("!", "!!")
+                        .replace("%", "!%")
+                        .replace("_", "!_") + "%";
+        // Giữ cùng phạm vi với phép tìm lớp cũ: cả môn đã ngừng/ẩn vẫn khớp mã hoặc tên lịch sử.
+        return subjectRepository.findSubjectIdsByKeyword(keywordPattern);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<CurriculumOpeningSubjectResponse> findPlanningSubjects() {
         return curriculumSubjectRepository.findAllByDeletedFalse().stream()
                 .filter(link -> link.getSubjectType() == SubjectType.REQUIRED // môn bắt buộc

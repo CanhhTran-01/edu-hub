@@ -44,7 +44,7 @@ public class ModuleClassLifecycleService {
 
         var subjectsById = curriculumFacade
                 .findSubjectsByIds(classes.stream()
-                        .map(moduleClass -> moduleClass.getSubject().getId())
+                        .map(moduleClass -> moduleClass.getSubjectId())
                         .collect(Collectors.toSet()))
                 .stream()
                 .collect(Collectors.toMap(SubjectSimpleResponse::getId, Function.identity()));
@@ -62,7 +62,7 @@ public class ModuleClassLifecycleService {
             if (synchronizeClassStatus(
                     semester,
                     moduleClass,
-                    subjectsById.get(moduleClass.getSubject().getId()),
+                    subjectsById.get(moduleClass.getSubjectId()),
                     schedulesByClassId.getOrDefault(moduleClass.getId(), List.of()))) changedCount++;
         }
 
@@ -91,7 +91,7 @@ public class ModuleClassLifecycleService {
                 LocalDate.now(clock),
                 subject == null ? null : subject.getTotalTeachingPeriods(),
                 schedules,
-                moduleClass.getLecturer() != null);
+                moduleClass.getLecturerId() != null);
         if (nextStatus != previousStatus) {
             if (previousStatus == ModuleClassStatus.OPEN) moduleClass.closeRegistration();
             if (nextStatus == ModuleClassStatus.COMPLETED) moduleClass.completeTeaching();

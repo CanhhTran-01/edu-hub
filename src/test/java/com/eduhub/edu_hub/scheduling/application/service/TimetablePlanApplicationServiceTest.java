@@ -152,7 +152,7 @@ class TimetablePlanApplicationServiceTest {
                 () -> service.applyPlan(principal, 9L, new ApplyTimetablePlanRequest(0L)),
                 ErrorCode.TIMETABLE_STALE_PLAN);
         assertThat(moduleClass.getStatus()).isEqualTo(ModuleClassStatus.UNSCHEDULED);
-        assertThat(moduleClass.getLecturer()).isNull();
+        assertThat(moduleClass.getLecturerId()).isNull();
         verify(scheduleRepository, never()).saveAll(any());
         verify(scheduleRepository, never()).saveAllAndFlush(any());
     }
@@ -161,14 +161,10 @@ class TimetablePlanApplicationServiceTest {
     void appliesCompleteAllocationWithLecturerAndSchedulesTogether() {
         var plan = plan();
         var moduleClass = prepareApplying(plan);
-        var lecturer = com.eduhub.edu_hub.people.domain.model.Lecturer.builder().build();
-        lecturer.setId(201L);
-        when(entityManager.getReference(com.eduhub.edu_hub.people.domain.model.Lecturer.class, 201L))
-                .thenReturn(lecturer);
         var response = service.applyPlan(principal, 9L, new ApplyTimetablePlanRequest(0L));
         assertThat(response.state()).isEqualTo(TimetablePlanState.APPLIED);
         assertThat(moduleClass.getStatus()).isEqualTo(ModuleClassStatus.SCHEDULED);
-        assertThat(moduleClass.getLecturer().getId()).isEqualTo(201L);
+        assertThat(moduleClass.getLecturerId()).isEqualTo(201L);
         assertThat(plan.getAppliedAt()).isEqualTo(LocalDateTime.parse("2026-11-12T07:00:00"));
         assertThat(plan.getUpdatedAt()).isEqualTo(LocalDateTime.parse("2026-11-12T00:00:00"));
         var schedules = ArgumentCaptor.forClass(List.class);
@@ -258,7 +254,7 @@ class TimetablePlanApplicationServiceTest {
         subject.setId(1L);
         var moduleClass = ModuleClass.builder()
                 .moduleClassCode("MC_1_0")
-                .subject(subject)
+                .subjectId(subject.getId())
                 .semester(semester)
                 .maxCapacity(60)
                 .status(ModuleClassStatus.UNSCHEDULED)

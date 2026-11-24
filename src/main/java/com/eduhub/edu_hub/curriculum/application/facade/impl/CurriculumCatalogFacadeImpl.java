@@ -7,7 +7,9 @@ import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import com.eduhub.edu_hub.curriculum.domain.model.Curriculum;
 import com.eduhub.edu_hub.curriculum.domain.repository.CurriculumRepository;
 import com.eduhub.edu_hub.curriculum.domain.repository.CurriculumSubjectRepository;
+import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class CurriculumCatalogFacadeImpl implements CurriculumFacade.Catalog {
     private final CurriculumRepository curriculums;
     private final CurriculumSubjectRepository curriculumSubjects;
+    private final PeopleFacade.Cohorts peopleCohorts;
 
     @Override
     public Optional<CurriculumResponse> findById(Long curriculumId) {
@@ -27,7 +30,7 @@ public class CurriculumCatalogFacadeImpl implements CurriculumFacade.Catalog {
     @Override
     public Optional<CurriculumResponse> findCurriculum(Long majorId, Long cohortId, TrainingType trainingType) {
         return curriculums
-                .findByMajor_IdAndCohort_IdAndTrainingTypeAndDeletedFalse(majorId, cohortId, trainingType)
+                .findByMajor_IdAndCohortIdAndTrainingTypeAndDeletedFalse(majorId, cohortId, trainingType)
                 .map(this::toResponse);
     }
 
@@ -46,15 +49,21 @@ public class CurriculumCatalogFacadeImpl implements CurriculumFacade.Catalog {
                                 .subjectType(link.getSubjectType())
                                 .build())
                         .toList();
-        var cohort = curriculum.getCohort();
-        String cohortCode = cohort == null || cohort.isDeleted() ? null : cohort.getCohortCode();
+        Long cohortId = curriculum.getCohortId();
+        // ID lịch sử được giữ kể cả khóa đã xóa; mã hiển thị chỉ lấy từ khóa chưa xóa qua People.
+        String cohortCode = cohortId == null
+                ? null
+                : peopleCohorts.findCohortsByIds(Set.of(cohortId)).stream()
+                        .findFirst()
+                        .map(cohort -> cohort.cohortCode())
+                        .orElse(null);
         return CurriculumResponse.builder()
                 .id(curriculum.getId())
                 .curriculumCode(curriculum.getCurriculumCode())
                 .curriculumName(curriculum.getCurriculumName())
                 .majorId(curriculum.getMajor().getId())
                 .majorName(curriculum.getMajor().getMajorName())
-                .cohortId(cohort == null ? null : cohort.getId())
+                .cohortId(cohortId)
                 .cohortCode(cohortCode)
                 .trainingType(curriculum.getTrainingType().name())
                 .durationSemesters(curriculum.getDurationSemesters())

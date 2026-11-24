@@ -45,12 +45,11 @@ public class StudentCodeGenerator {
     }
 
     private String prefix(AdministrativeClass administrativeClass) {
-        if (administrativeClass.getMajor() == null
-                || administrativeClass.getMajor().getId() == null) {
+        if (administrativeClass.getMajorId() == null) {
             throw new ProfileCreationException(ErrorCode.INVALID_STUDENT_CODE_MAJOR);
         }
         var configuration = systemConfigService.getSnapshot();
-        String majorPrefix = resolveMajorPrefix(administrativeClass.getMajor().getId(), configuration);
+        String majorPrefix = resolveMajorPrefix(administrativeClass.getMajorId(), configuration);
         if (administrativeClass.getCohort() == null) {
             throw new ProfileCreationException(ErrorCode.INVALID_STUDENT_CODE_COHORT);
         }

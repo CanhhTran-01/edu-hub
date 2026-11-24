@@ -4,9 +4,9 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+import com.eduhub.edu_hub.curriculum.api.dto.response.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.curriculum.application.facade.dto.MajorResponse;
-import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.people.application.facade.dto.AdmissionClassRequest;
 import com.eduhub.edu_hub.people.application.service.StudentCodeGenerator;
@@ -16,17 +16,17 @@ import com.eduhub.edu_hub.people.domain.repository.*;
 import com.eduhub.edu_hub.shared.systemconfig.SystemConfigTestData;
 import com.eduhub.edu_hub.shared.systemconfig.application.exception.SystemConfigException;
 import com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey;
-import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class PeopleAdmissionFacadeImplTest {
     private final AdministrativeClassRepository classes = mock(AdministrativeClassRepository.class);
     private final CohortRepository cohorts = mock(CohortRepository.class);
     private final CurriculumFacade.Majors majors = mock(CurriculumFacade.Majors.class);
-    private final EntityManager entities = mock(EntityManager.class);
+    private final CurriculumFacade.ReferenceData curriculumReferenceData = mock(CurriculumFacade.ReferenceData.class);
 
     @Test
     void createsClassUsingConfiguredPrefixInsteadOfInferringOneFromTheName() {
@@ -39,11 +39,10 @@ class PeopleAdmissionFacadeImplTest {
         cohort.setCodeSequence(8);
         cohort.setCohortCode("K8");
         when(cohorts.findByIdAndDeletedFalse(8L)).thenReturn(Optional.of(cohort));
-        when(entities.getReference(Major.class, 1L))
-                .thenReturn(Major.builder().majorName(major.majorName()).build());
         when(classes.saveAndFlush(any(AdministrativeClass.class))).thenAnswer(call -> {
             AdministrativeClass createdClass = call.getArgument(0);
             assertThat(createdClass.getClassName()).isEqualTo("IT8B");
+            assertThat(createdClass.getMajorId()).isEqualTo(1L);
             createdClass.setId(10L);
             return createdClass;
         });
@@ -81,6 +80,36 @@ class PeopleAdmissionFacadeImplTest {
         verifyNoInteractions(classes);
     }
 
+    @Test
+    void classListLoadsHistoricalMajorNamesOnceForTheEntireBatch() {
+        var facade = facade("{}");
+        var cohort = new Cohort();
+        cohort.setId(8L);
+        cohort.setCohortCode("K8");
+        cohort.setCodeSequence(8);
+        var firstClass = AdministrativeClass.builder()
+                .majorId(1L)
+                .cohort(cohort)
+                .className("CT8A")
+                .build();
+        firstClass.setId(10L);
+        var secondClass = AdministrativeClass.builder()
+                .majorId(1L)
+                .cohort(cohort)
+                .className("CT8B")
+                .build();
+        secondClass.setId(11L);
+        when(classes.findAllById(Set.of(10L, 11L))).thenReturn(List.of(firstClass, secondClass));
+        when(curriculumReferenceData.findMajorsByIds(Set.of(1L)))
+                .thenReturn(List.of(new MajorSimpleResponse(1L, "OLD", "Ngành đã ẩn", null, true)));
+
+        assertThat(facade.findClassesByIds(Set.of(10L, 11L)))
+                .extracting(classInfo -> classInfo.getMajorName())
+                .containsExactly("Ngành đã ẩn", "Ngành đã ẩn");
+        verify(curriculumReferenceData).findMajorsByIds(Set.of(1L));
+        verifyNoMoreInteractions(curriculumReferenceData);
+    }
+
     private PeopleAdmissionFacadeImpl facade(String mapping) {
         return new PeopleAdmissionFacadeImpl(
                 mock(StudentRepository.class),
@@ -89,7 +118,7 @@ class PeopleAdmissionFacadeImplTest {
                 majors,
                 mock(StudentCodeGenerator.class),
                 mock(IdentityFacade.class),
-                entities,
+                curriculumReferenceData,
                 SystemConfigTestData.configuredService(Map.of(SystemConfigKey.MAJOR_CODE_PREFIXES, mapping)));
     }
 }

@@ -9,14 +9,14 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface CurriculumRepository extends JpaRepository<Curriculum, Long> {
-    @EntityGraph(attributePaths = {"major", "cohort"})
+    @EntityGraph(attributePaths = "major")
     Optional<Curriculum> findByIdAndDeletedFalse(Long id);
 
-    @EntityGraph(attributePaths = {"major", "cohort"})
-    Optional<Curriculum> findByMajor_IdAndCohort_IdAndTrainingTypeAndDeletedFalse(
+    @EntityGraph(attributePaths = "major")
+    Optional<Curriculum> findByMajor_IdAndCohortIdAndTrainingTypeAndDeletedFalse(
             Long majorId, Long cohortId, TrainingType trainingType);
 
-    @EntityGraph(attributePaths = {"major", "cohort"})
-    List<Curriculum> findAllByMajor_IdInAndCohort_IdInAndDeletedFalse(
+    @EntityGraph(attributePaths = "major")
+    List<Curriculum> findAllByMajor_IdInAndCohortIdInAndDeletedFalse(
             Collection<Long> majorIds, Collection<Long> cohortIds);
 }

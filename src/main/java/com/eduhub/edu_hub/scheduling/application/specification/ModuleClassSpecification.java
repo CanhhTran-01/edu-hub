@@ -15,14 +15,14 @@ import org.springframework.util.StringUtils;
 public final class ModuleClassSpecification {
 
     public static Specification<ModuleClass> matchesStudentTimetable(Long semesterId, Set<Long> enrolledClassIds) {
-        return matchesRosterCriteria(semesterId, null, null)
+        return matchesRosterCriteria(semesterId, null, null, Set.of())
                 .and((root, query, builder) -> enrolledClassIds.isEmpty()
                         ? builder.disjunction()
                         : root.get("id").in(enrolledClassIds));
     }
 
     public static Specification<ModuleClass> matchesRosterCriteria(
-            Long semesterId, Long permittedLecturerId, String keyword) {
+            Long semesterId, Long permittedLecturerId, String keyword, Set<Long> matchingSubjectIds) {
         return (root, query, builder) -> {
             var predicates = new ArrayList<Predicate>();
             predicates.add(builder.isFalse(root.get("deleted")));
@@ -32,8 +32,7 @@ public final class ModuleClassSpecification {
 
             // Lecturer ID đã được service xác định từ User ID; client không thể mở rộng phạm vi này.
             // Nếu có permittedLecturerId, chỉ trả về các lớp của giảng viên đó
-            if (permittedLecturerId != null)
-                predicates.add(builder.equal(root.get("lecturer").get("id"), permittedLecturerId));
+            if (permittedLecturerId != null) predicates.add(builder.equal(root.get("lecturerId"), permittedLecturerId));
             if (StringUtils.hasText(keyword)) {
                 String searchPattern = "%"
                         + keyword.trim()
@@ -44,8 +43,9 @@ public final class ModuleClassSpecification {
                         + "%";
                 predicates.add(builder.or(
                         builder.like(builder.lower(root.get("moduleClassCode")), searchPattern, '\\'),
-                        builder.like(builder.lower(root.get("subject").get("subjectCode")), searchPattern, '\\'),
-                        builder.like(builder.lower(root.get("subject").get("subjectName")), searchPattern, '\\')));
+                        matchingSubjectIds.isEmpty()
+                                ? builder.disjunction()
+                                : root.get("subjectId").in(matchingSubjectIds)));
             }
 
             return builder.and(predicates.toArray(Predicate[]::new));
@@ -70,9 +70,9 @@ public final class ModuleClassSpecification {
             if (request.getSemesterId() != null)
                 predicates.add(builder.equal(root.get("semester").get("id"), request.getSemesterId()));
             if (request.getSubjectId() != null)
-                predicates.add(builder.equal(root.get("subject").get("id"), request.getSubjectId()));
+                predicates.add(builder.equal(root.get("subjectId"), request.getSubjectId()));
             if (request.getLecturerId() != null)
-                predicates.add(builder.equal(root.get("lecturer").get("id"), request.getLecturerId()));
+                predicates.add(builder.equal(root.get("lecturerId"), request.getLecturerId()));
             if (request.getStatus() != null) predicates.add(builder.equal(root.get("status"), request.getStatus()));
             return builder.and(predicates.toArray(Predicate[]::new));
         };

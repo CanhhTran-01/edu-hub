@@ -1,5 +1,6 @@
 package com.eduhub.edu_hub.people.application.facade.impl;
 
+import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.people.api.dto.response.EnrollmentStudentResponse;
 import com.eduhub.edu_hub.people.api.dto.response.StudentRosterProfileResponse;
 import com.eduhub.edu_hub.people.application.exception.StudentProfileException;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.*;
 public class PeopleEnrollmentFacadeImpl implements PeopleFacade.Enrollment {
     private final StudentRepository studentRepository;
     private final jakarta.persistence.EntityManager entityManager;
+    private final CurriculumFacade.ReferenceData curriculumReferenceData;
 
     @Override
     public Set<Long> findRosterStudentIdsByKeyword(String keyword) {
@@ -69,9 +71,12 @@ public class PeopleEnrollmentFacadeImpl implements PeopleFacade.Enrollment {
         Map<Long, Integer> admissionYearsByStudentId = new HashMap<>();
         if (studentIds.isEmpty()) return admissionYearsByStudentId;
         for (Student student : studentRepository.findAllById(studentIds)) {
-            var profile = toResponse(student);
-            if (profile.admissionYear() != null)
-                admissionYearsByStudentId.put(student.getId(), profile.admissionYear());
+            var administrativeClass = student.getAdministrativeClass();
+            var cohort = administrativeClass == null || administrativeClass.isDeleted()
+                    ? null
+                    : administrativeClass.getCohort();
+            if (cohort != null && !cohort.isDeleted() && cohort.getStartYear() != null)
+                admissionYearsByStudentId.put(student.getId(), cohort.getStartYear());
         }
         return admissionYearsByStudentId;
     }
@@ -80,13 +85,18 @@ public class PeopleEnrollmentFacadeImpl implements PeopleFacade.Enrollment {
         var administrativeClass = student.getAdministrativeClass();
         var cohort =
                 administrativeClass == null || administrativeClass.isDeleted() ? null : administrativeClass.getCohort();
-        var major =
-                administrativeClass == null || administrativeClass.isDeleted() ? null : administrativeClass.getMajor();
+        Long majorId = administrativeClass == null || administrativeClass.isDeleted()
+                ? null
+                : administrativeClass.getMajorId();
+        // Khóa ngoại giữ danh tính; trạng thái xóa của ngành vẫn do Curriculum cung cấp theo quy tắc hồ sơ cũ.
+        boolean hasUndeletedMajor = majorId != null
+                && curriculumReferenceData.findMajorsByIds(Set.of(majorId)).stream()
+                        .anyMatch(major -> !major.deleted());
         return new EnrollmentStudentResponse(
                 student.getId(),
                 student.getStudentCode(),
                 student.getFullName(),
-                major == null || major.isDeleted() ? null : major.getId(),
+                hasUndeletedMajor ? majorId : null,
                 cohort == null || cohort.isDeleted() ? null : cohort.getId(),
                 administrativeClass == null || administrativeClass.isDeleted()
                         ? null

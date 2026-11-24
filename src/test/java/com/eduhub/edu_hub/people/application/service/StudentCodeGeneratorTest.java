@@ -142,7 +142,7 @@ class StudentCodeGeneratorTest {
                 .get(majorCode.toUpperCase(java.util.Locale.ROOT));
         Major major = Major.builder().majorCode(canonical).build();
         major.setId(id);
-        value.setMajor(major);
+        value.setMajorId(major.getId());
         org.mockito.Mockito.lenient()
                 .when(majors.requireMajor(id))
                 .thenReturn(new com.eduhub.edu_hub.curriculum.application.facade.dto.MajorResponse(

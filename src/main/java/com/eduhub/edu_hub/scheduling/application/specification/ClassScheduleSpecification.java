@@ -36,7 +36,7 @@ public final class ClassScheduleSpecification {
         // lấy các lịch học của một môn học mà học kỳ chưa kết thúc
         return effective()
                 .and((root, query, builder) -> builder.and(
-                        builder.equal(root.get("moduleClass").get("subject").get("id"), subjectId),
+                        builder.equal(root.get("moduleClass").get("subjectId"), subjectId),
                         builder.greaterThanOrEqualTo(
                                 root.get("moduleClass").get("semester").get("endDate"), today)));
     }
@@ -44,7 +44,7 @@ public final class ClassScheduleSpecification {
     public static Specification<ClassSchedule> unfinishedForLecturer(Long lecturerId, LocalDate today) {
         return effective()
                 .and((root, query, builder) -> builder.and(
-                        builder.equal(root.get("moduleClass").get("lecturer").get("id"), lecturerId),
+                        builder.equal(root.get("moduleClass").get("lecturerId"), lecturerId),
                         builder.notEqual(root.get("moduleClass").get("status"), ModuleClassStatus.COMPLETED),
                         builder.greaterThanOrEqualTo(root.get("endDate"), today)));
     }

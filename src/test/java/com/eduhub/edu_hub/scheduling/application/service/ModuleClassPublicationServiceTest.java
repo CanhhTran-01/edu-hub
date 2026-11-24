@@ -163,7 +163,7 @@ class ModuleClassPublicationServiceTest {
                 .thenReturn(ModuleClassResponse.builder().id(100L).build());
         assertThat(service.withdraw(principal, 7L, all()).changedClassCount()).isEqualTo(1);
         assertThat(selected.getStatus()).isEqualTo(ModuleClassStatus.SCHEDULED);
-        assertThat(selected.getLecturer()).isNotNull();
+        assertThat(selected.getLecturerId()).isNotNull();
         verify(enrollmentUsage).countActiveRegistrations(100L);
         verifyNoInteractions(scheduleRepository);
     }
@@ -198,9 +198,9 @@ class ModuleClassPublicationServiceTest {
         lecturer.setId(8L);
         var moduleClass = ModuleClass.builder()
                 .semester(semester)
-                .subject(subject)
+                .subjectId(subject.getId())
                 .moduleClassCode("MC" + classId)
-                .lecturer(hasLecturer ? lecturer : null)
+                .lecturerId(hasLecturer ? lecturer.getId() : null)
                 .maxCapacity(40)
                 .currentSize(0)
                 .status(status)

@@ -291,7 +291,7 @@ class ModuleClassApplicationServiceTest {
         scheduledClass.setId(101L);
         var unscheduledClass = ModuleClass.builder()
                 .semester(targetSemester)
-                .subject(scheduledClass.getSubject())
+                .subjectId(scheduledClass.getSubjectId())
                 .moduleClassCode("MC_7_CS101_002")
                 .maxCapacity(40)
                 .currentSize(0)
@@ -370,11 +370,6 @@ class ModuleClassApplicationServiceTest {
     }
 
     private void prepare(Semester semester) {
-        lenient().when(entityManager.getReference(eq(Subject.class), anyLong())).thenAnswer(invocation -> {
-            var subject = Subject.builder().build();
-            subject.setId(invocation.getArgument(1));
-            return subject;
-        });
         when(semesters.findForUpdateByIdAndDeletedFalse(7L)).thenReturn(Optional.of(semester));
         when(curriculum.requireOpenableSubjects(anySet())).thenAnswer(invocation -> {
             Set<Long> ids = invocation.getArgument(0);
@@ -409,8 +404,8 @@ class ModuleClassApplicationServiceTest {
         lecturer.setId(5001L);
         var item = ModuleClass.builder()
                 .semester(semester)
-                .subject(subject)
-                .lecturer(lecturer)
+                .subjectId(subject.getId())
+                .lecturerId(lecturer == null ? null : lecturer.getId())
                 .classSequence(sequence)
                 .moduleClassCode("HISTORY_" + sequence)
                 .maxCapacity(80)

@@ -5,10 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+import com.eduhub.edu_hub.curriculum.api.dto.response.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
-import com.eduhub.edu_hub.curriculum.application.facade.dto.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
-import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.identity.api.dto.response.UserAccountEmailResponse;
 import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
 import com.eduhub.edu_hub.identity.application.exception.IdentityAuthenticationException;
@@ -79,15 +78,14 @@ class StudentAdminUpdateServiceTest {
         AdministrativeClass administrativeClass = new AdministrativeClass();
         administrativeClass.setId(30L);
         administrativeClass.setClassName("CT8A");
-        administrativeClass.setMajor(Major.builder().build());
-        administrativeClass.getMajor().setId(2L);
+        administrativeClass.setMajorId(2L);
         administrativeClass.setCohort(new Cohort());
         administrativeClass.getCohort().setCohortCode("CT8");
         administrativeClass.setTrainingType(TrainingType.CHINH_QUY);
         student.setAdministrativeClass(administrativeClass);
         prepareProfileResponse(student, "new@example.com");
         when(curriculumReferenceData.findMajorsByIds(Set.of(2L)))
-                .thenReturn(List.of(new MajorSimpleResponse(2L, "CNTT", "Công nghệ thông tin", null)));
+                .thenReturn(List.of(new MajorSimpleResponse(2L, "CNTT", "Công nghệ thông tin", null, false)));
         UpdateStudentProfileRequest request = new UpdateStudentProfileRequest();
         request.setFullName(" Nguyễn Văn Bình ");
         request.setDateOfBirth(LocalDate.of(2005, 2, 3));

@@ -1,19 +1,18 @@
 package com.eduhub.edu_hub.people.application.service;
 
+import com.eduhub.edu_hub.curriculum.api.dto.response.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
-import com.eduhub.edu_hub.curriculum.application.facade.dto.MajorSimpleResponse;
-import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.people.api.dto.request.StudentSearchRequest;
 import com.eduhub.edu_hub.people.api.dto.response.StudentResponse;
 import com.eduhub.edu_hub.people.api.mapper.StudentResponseMapper;
 import com.eduhub.edu_hub.people.application.exception.ProfileSearchException;
+import com.eduhub.edu_hub.people.application.exception.StudentProfileException;
 import com.eduhub.edu_hub.people.application.specification.StudentSpecification;
 import com.eduhub.edu_hub.people.domain.model.AdministrativeClass;
 import com.eduhub.edu_hub.people.domain.model.Student;
 import com.eduhub.edu_hub.people.domain.repository.StudentRepository;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.enums.ActivityStatus;
-import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.mapper.PageMapper;
 import java.util.Collections;
@@ -56,7 +55,7 @@ public class StudentApplicationService {
         return studentRepository
                 .findByIdAndDeletedFalse(id)
                 .map(this::toResponse)
-                .orElseThrow(() -> new BaseException(ErrorCode.STUDENT_NOT_FOUND));
+                .orElseThrow(() -> new StudentProfileException(ErrorCode.STUDENT_NOT_FOUND));
     }
 
     private ActivityStatus validateSearchRequest(StudentSearchRequest request) {
@@ -77,9 +76,7 @@ public class StudentApplicationService {
         var ids = students.stream()
                 .map(Student::getAdministrativeClass)
                 .filter(Objects::nonNull)
-                .map(AdministrativeClass::getMajor)
-                .filter(Objects::nonNull)
-                .map(Major::getId)
+                .map(AdministrativeClass::getMajorId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         if (ids.isEmpty()) return Map.of();

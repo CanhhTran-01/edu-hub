@@ -49,8 +49,7 @@ public final class StudentSpecification {
                 scopePredicates.add(builder.equal(administrativeClass.get("id"), classId));
             }
             if (majorId != null) {
-                scopePredicates.add(
-                        builder.equal(administrativeClass.get("major").get("id"), majorId));
+                scopePredicates.add(builder.equal(administrativeClass.get("majorId"), majorId));
             }
             if (cohortId != null) {
                 Join<AdministrativeClass, Cohort> cohort = administrativeClass.join("cohort", JoinType.LEFT);

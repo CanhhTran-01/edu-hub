@@ -50,9 +50,7 @@ public class SchedulingGradingFacadeImpl implements SchedulingFacade.Grading {
                 moduleClass.getModuleClassCode(),
                 semester.getId(),
                 semester.getSemesterCode(),
-                moduleClass.getLecturer() == null
-                        ? null
-                        : moduleClass.getLecturer().getId(),
+                moduleClass.getLecturerId(),
                 moduleClass.getStatus());
     }
 }

@@ -14,10 +14,8 @@ public final class ModuleClassResponseMapper {
             ModuleClass moduleClass,
             Map<Long, SubjectSimpleResponse> subjectsById,
             Map<Long, String> lecturerNamesById) {
-        var subject = subjectsById.get(moduleClass.getSubject().getId());
-        Long lecturerId = moduleClass.getLecturer() == null
-                ? null
-                : moduleClass.getLecturer().getId();
+        var subject = subjectsById.get(moduleClass.getSubjectId());
+        Long lecturerId = moduleClass.getLecturerId();
         return ModuleClassSimpleResponse.builder()
                 .id(moduleClass.getId())
                 .moduleClassCode(moduleClass.getModuleClassCode())
@@ -45,17 +43,15 @@ public final class ModuleClassResponseMapper {
             Map<Long, String> lecturerNamesById,
             List<com.eduhub.edu_hub.scheduling.api.dto.response.ClassScheduleResponse> schedules) {
 
-        var subject = subjectsById.get(moduleClass.getSubject().getId());
-        Long lecturerId = moduleClass.getLecturer() == null
-                ? null
-                : moduleClass.getLecturer().getId();
+        var subject = subjectsById.get(moduleClass.getSubjectId());
+        Long lecturerId = moduleClass.getLecturerId();
         String lecturerName = lecturerId == null ? null : lecturerNamesById.get(lecturerId);
 
         return ModuleClassResponse.builder()
                 .id(moduleClass.getId())
                 .semesterId(moduleClass.getSemester().getId())
                 .semesterCode(moduleClass.getSemester().getSemesterCode())
-                .subjectId(moduleClass.getSubject().getId())
+                .subjectId(moduleClass.getSubjectId())
                 .subjectCode(subject == null ? null : subject.getSubjectCode())
                 .subjectName(subject == null ? null : subject.getSubjectName())
                 .credits(subject == null ? 0 : subject.getCredits())

@@ -27,20 +27,19 @@ public class PeopleAcademicFacadeImpl implements PeopleFacade.Academic {
         if (administrativeClass != null && administrativeClass.isDeleted()) administrativeClass = null;
         var cohort = administrativeClass == null ? null : administrativeClass.getCohort();
         if (cohort != null && cohort.isDeleted()) cohort = null;
-        var major = administrativeClass == null ? null : administrativeClass.getMajor();
-        Long majorId = major == null || major.isDeleted() ? null : major.getId();
-        String majorName = majorId == null
+        Long majorId = administrativeClass == null ? null : administrativeClass.getMajorId();
+        var major = majorId == null
                 ? null
                 : curriculumReferenceData.findMajorsByIds(Set.of(majorId)).stream()
+                        .filter(majorResponse -> !majorResponse.deleted())
                         .findFirst()
-                        .map(majorResponse -> majorResponse.majorName())
                         .orElse(null);
         return new StudentAcademicProfileResponse(
                 student.getId(),
                 student.getStudentCode(),
                 student.getFullName(),
-                majorId,
-                majorName,
+                major == null ? null : major.id(),
+                major == null ? null : major.majorName(),
                 cohort == null ? null : cohort.getId(),
                 cohort == null ? null : cohort.getCohortCode(),
                 administrativeClass == null ? null : administrativeClass.getClassName(),

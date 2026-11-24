@@ -27,7 +27,7 @@ class SchedulingGradingFacadeImplTest {
         when(lecturer.getId()).thenReturn(70L);
         var moduleClass = ModuleClass.builder()
                 .semester(semester)
-                .lecturer(lecturer)
+                .lecturerId(lecturer == null ? null : lecturer.getId())
                 .moduleClassCode("MC_100")
                 .status(ModuleClassStatus.COMPLETED)
                 .build();

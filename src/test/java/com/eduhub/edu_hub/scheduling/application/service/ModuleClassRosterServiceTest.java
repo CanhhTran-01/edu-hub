@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
-import com.eduhub.edu_hub.curriculum.domain.model.Subject;
 import com.eduhub.edu_hub.enrollment.application.EnrollmentFacade;
 import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
@@ -23,6 +22,7 @@ import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import jakarta.persistence.criteria.*;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -151,6 +151,7 @@ class ModuleClassRosterServiceTest {
         var request = new ModuleClassRosterSearchRequest();
         request.setKeyword(" CS_% ");
         request.setPage(2);
+        when(curriculum.findSubjectIdsByKeyword(" CS_% ")).thenReturn(Set.of(11L, 12L));
         when(classes.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(2, 20), 21));
 
@@ -165,12 +166,17 @@ class ModuleClassRosterServiceTest {
         var builder = mock(CriteriaBuilder.class);
         criteria.getValue().toPredicate(root, query, builder);
         verify(builder).equal(root.get("semester").get("id"), 7L);
-        verify(builder).equal(root.get("lecturer").get("id"), 201L);
+        verify(builder).equal(root.get("lecturerId"), 201L);
         verify(builder).isFalse(root.get("deleted"));
         verify(builder).isFalse(root.get("semester").get("deleted"));
         verify(builder).notEqual(root.get("status"), ModuleClassStatus.CANCELLED);
-        verify(builder, times(3)).like(any(), eq("%cs\\_\\%%"), eq('\\'));
-        verifyNoInteractions(curriculum, enrollment, classService);
+        verify(builder).like(any(), eq("%cs\\_\\%%"), eq('\\'));
+        verify(root.get("subjectId")).in(Set.of(11L, 12L));
+        verify(root, never()).get("subject");
+        verify(root, never()).get("lecturer");
+        verify(curriculum).findSubjectIdsByKeyword(" CS_% ");
+        verifyNoMoreInteractions(curriculum);
+        verifyNoInteractions(enrollment, classService);
     }
 
     @Test
@@ -190,7 +196,6 @@ class ModuleClassRosterServiceTest {
     void adminSearchIncludesUnassignedClassesAndMapsExistingSummaryWithoutLoadingRosters() {
         authenticateAs("ACADEMIC_ADMIN");
         var moduleClass = moduleClass(null, ModuleClassStatus.UNSCHEDULED);
-        moduleClass.getSubject().setId(11L);
         when(semesters.findByIdAndDeletedFalse(7L)).thenReturn(Optional.of(moduleClass.getSemester()));
         when(classes.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(moduleClass), PageRequest.of(0, 20), 1));
@@ -214,7 +219,7 @@ class ModuleClassRosterServiceTest {
         Root<ModuleClass> root = mock(Root.class, RETURNS_DEEP_STUBS);
         var builder = mock(CriteriaBuilder.class);
         criteria.getValue().toPredicate(root, mock(CriteriaQuery.class), builder);
-        var lecturerIdPath = root.get("lecturer").get("id");
+        var lecturerIdPath = root.get("lecturerId");
         verify(builder, never()).equal(eq(lecturerIdPath), any(Object.class));
         verifyNoInteractions(people, enrollment, classService);
     }
@@ -231,8 +236,8 @@ class ModuleClassRosterServiceTest {
         if (lecturer != null) lecturer.setId(lecturerId);
         var moduleClass = ModuleClass.builder()
                 .semester(semester)
-                .lecturer(lecturer)
-                .subject(Subject.builder().build())
+                .lecturerId(lecturer == null ? null : lecturer.getId())
+                .subjectId(11L)
                 .status(status)
                 .build();
         moduleClass.setId(100L);

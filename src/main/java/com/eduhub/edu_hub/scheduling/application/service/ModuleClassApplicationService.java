@@ -4,11 +4,9 @@ import static com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKe
 
 import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
-import com.eduhub.edu_hub.curriculum.domain.model.Subject;
 import com.eduhub.edu_hub.enrollment.application.facade.dto.ModuleClassUsageResponse;
 import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
-import com.eduhub.edu_hub.people.domain.model.Lecturer;
 import com.eduhub.edu_hub.scheduling.api.dto.request.CancelModuleClassRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.CreateModuleClassesRequest;
 import com.eduhub.edu_hub.scheduling.api.dto.request.ModuleClassSearchRequest;
@@ -197,8 +195,7 @@ public class ModuleClassApplicationService {
 
         // lấy dữ liệu học phần, giảng viên của lớp học phần, sức chứa
         var lecturerNamesById = loadLecturerNamesById(List.of(moduleClass));
-        var subjectsById = indexSubjectsById(curriculumFacade.findSubjectsByIds(
-                Set.of(moduleClass.getSubject().getId())));
+        var subjectsById = indexSubjectsById(curriculumFacade.findSubjectsByIds(Set.of(moduleClass.getSubjectId())));
         int oldCapacity = moduleClass.getMaxCapacity();
 
         requireScheduledRoomCapacity(moduleClassId, request.getMaxCapacity(), oldCapacity);
@@ -242,8 +239,7 @@ public class ModuleClassApplicationService {
 
         // lấy dữ liệu học phần, giảng viên của lớp học phần, trạng thái
         var lecturerNamesById = loadLecturerNamesById(List.of(moduleClass));
-        var subjectsById = indexSubjectsById(curriculumFacade.findSubjectsByIds(
-                Set.of(moduleClass.getSubject().getId())));
+        var subjectsById = indexSubjectsById(curriculumFacade.findSubjectsByIds(Set.of(moduleClass.getSubjectId())));
         var oldStatus = moduleClass.getStatus();
 
         // Hủy là trạng thái nghiệp vụ, vẫn giữ bản ghi/mã/STT và không thay đổi Enrollment hay điểm.
@@ -318,7 +314,7 @@ public class ModuleClassApplicationService {
 
         // gom dữ liệu subject: Map<Long, SubjectSimpleResponse>
         var subjectsById = indexSubjectsById(curriculumFacade.findSubjectsByIds(moduleClassPage.stream()
-                .map(moduleClass -> moduleClass.getSubject().getId())
+                .map(moduleClass -> moduleClass.getSubjectId())
                 .collect(Collectors.toSet())));
 
         // gom dữ liệu giảng viên: Map<Long, String>
@@ -337,8 +333,7 @@ public class ModuleClassApplicationService {
                 .orElseThrow(() -> new ModuleClassException(ErrorCode.MODULE_CLASS_NOT_FOUND));
 
         // lấy dữ liệu subject: Map<Long, SubjectSimpleResponse> của lớp học phần
-        var subjectsById = indexSubjectsById(curriculumFacade.findSubjectsByIds(
-                Set.of(moduleClass.getSubject().getId())));
+        var subjectsById = indexSubjectsById(curriculumFacade.findSubjectsByIds(Set.of(moduleClass.getSubjectId())));
 
         // lấy dữ liệu giảng viên: Map<Long, String> của lớp học phần
         var lecturerNamesById = loadLecturerNamesById(List.of(moduleClass));
@@ -353,9 +348,8 @@ public class ModuleClassApplicationService {
                         !moduleClass.isDeleted() && moduleClass.getStatus() != ModuleClassStatus.CANCELLED)
                 .toList();
         if (classes.isEmpty()) return List.of();
-        var subjectsById = indexSubjectsById(curriculumFacade.findSubjectsByIds(classes.stream()
-                .map(moduleClass -> moduleClass.getSubject().getId())
-                .collect(Collectors.toSet())));
+        var subjectsById = indexSubjectsById(curriculumFacade.findSubjectsByIds(
+                classes.stream().map(moduleClass -> moduleClass.getSubjectId()).collect(Collectors.toSet())));
         var lecturerNamesById = loadLecturerNamesById(classes);
         var schedulesByClassId = classScheduleQueryService.findSchedulesByClassIds(
                 classes.stream().map(ModuleClass::getId).toList());
@@ -413,9 +407,8 @@ public class ModuleClassApplicationService {
     private Map<Long, String> loadLecturerNamesById(Collection<ModuleClass> moduleClasses) {
 
         var lecturerIds = moduleClasses.stream()
-                .map(ModuleClass::getLecturer)
+                .map(ModuleClass::getLecturerId)
                 .filter(Objects::nonNull)
-                .map(Lecturer::getId)
                 .collect(Collectors.toSet());
 
         if (lecturerIds.isEmpty()) return Map.of();
@@ -428,8 +421,7 @@ public class ModuleClassApplicationService {
         // Theo quy ước "đã phát sinh": mọi lớp chưa hủy, kể cả lớp đã ẩn, vẫn phải xác nhận.
         return moduleClasses.stream()
                 .filter(moduleClass -> moduleClass.getStatus() != ModuleClassStatus.CANCELLED)
-                .collect(Collectors.groupingBy(
-                        moduleClass -> moduleClass.getSubject().getId(), Collectors.counting()));
+                .collect(Collectors.groupingBy(moduleClass -> moduleClass.getSubjectId(), Collectors.counting()));
     }
 
     private Map<Long, SubjectSimpleResponse> indexSubjectsById(List<SubjectSimpleResponse> subjectResponses) {
@@ -471,13 +463,12 @@ public class ModuleClassApplicationService {
         // Tìm số thứ tự lớn nhất hiện có của mỗi môn
         Map<Long, Integer> lastSequencesBySubjectId = new HashMap<>();
         historicalClasses.forEach(historicalClass -> lastSequencesBySubjectId.merge(
-                historicalClass.getSubject().getId(), historicalClass.getClassSequence(), Math::max));
+                historicalClass.getSubjectId(), historicalClass.getClassSequence(), Math::max));
 
         var createdClasses = new ArrayList<ModuleClass>();
         LocalDateTime createdAt = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
         for (var subjectRequest : request.getSubjects()) {
-            // Facade đã kiểm tra và khóa môn; reference chỉ dùng để gán quan hệ, không thay thế validation.
-            var subjectReference = entityManager.getReference(Subject.class, subjectRequest.getSubjectId());
+            // Facade đã kiểm tra và khóa môn; lớp chỉ giữ ID đã xác nhận, không tạo proxy liên module.
             for (var classRequest : subjectRequest.getClasses()) {
 
                 // môn chưa có key thì đặt giá trị 1; đã có thì cộng 1 vào giá trị cũ. merge trả về giá trị mới.
@@ -491,7 +482,7 @@ public class ModuleClassApplicationService {
                 // tạo mới entity
                 var moduleClass = ModuleClass.builder()
                         .semester(semester)
-                        .subject(subjectReference)
+                        .subjectId(subjectRequest.getSubjectId())
                         .moduleClassCode(moduleClassCode)
                         .classSequence(sequence)
                         .maxCapacity(

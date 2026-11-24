@@ -1,6 +1,7 @@
 package com.eduhub.edu_hub.people.application.facade;
 
 import com.eduhub.edu_hub.people.api.dto.response.AccountProfileContactResponse;
+import com.eduhub.edu_hub.people.api.dto.response.CohortResponse;
 import com.eduhub.edu_hub.people.api.dto.response.EnrollmentStudentResponse;
 import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
 import com.eduhub.edu_hub.people.api.dto.response.StudentAcademicProfileResponse;
@@ -12,6 +13,11 @@ import java.util.Optional;
 import java.util.Set;
 
 public interface PeopleFacade {
+    /** Đọc thông tin khóa chưa xóa theo lô; không áp điều kiện cấp mã hoặc nhập học mới. */
+    interface Cohorts {
+        List<CohortResponse> findCohortsByIds(Set<Long> cohortIds);
+    }
+
     interface Academic {
         StudentAcademicProfileResponse findStudentByUserId(Long userId);
     }

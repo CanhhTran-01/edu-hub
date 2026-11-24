@@ -38,7 +38,7 @@ public class TimetableSnapshotService {
     @Transactional(propagation = Propagation.MANDATORY)
     public TimetableProblem loadProblem(Semester semester, List<ModuleClass> classes, Set<Long> pinnedClassIds) {
         Set<Long> subjectIds = classes.stream()
-                .map(moduleClass -> moduleClass.getSubject().getId())
+                .map(moduleClass -> moduleClass.getSubjectId())
                 .collect(Collectors.toCollection(TreeSet::new));
         var subjectsById = curriculumFacade.requireOpenableSubjects(subjectIds).stream()
                 .collect(Collectors.toMap(SubjectSimpleResponse::getId, Function.identity()));
@@ -75,9 +75,7 @@ public class TimetableSnapshotService {
         return new TimetableProblem.ExistingSession(
                 schedule.getId(),
                 schedule.getModuleClass().getId(),
-                schedule.getModuleClass().getLecturer() == null
-                        ? null
-                        : schedule.getModuleClass().getLecturer().getId(),
+                schedule.getModuleClass().getLecturerId(),
                 schedule.getRoom().getId(),
                 schedule.getDayOfWeek(),
                 schedule.getLessonOrderStart(),
@@ -108,7 +106,7 @@ public class TimetableSnapshotService {
         List<TimetableProblem.ClassRequirement> requirements = new ArrayList<>();
         long totalSessions = 0;
         for (var moduleClass : classes) {
-            Long subjectId = moduleClass.getSubject().getId();
+            Long subjectId = moduleClass.getSubjectId();
             var subject = subjectsById.get(subjectId);
             if (subject == null
                     || subject.getTotalTeachingPeriods() == null
@@ -161,15 +159,13 @@ public class TimetableSnapshotService {
         return new TimetableProblem.ClassRequirement(
                 moduleClass.getId(),
                 moduleClass.getModuleClassCode(),
-                moduleClass.getSubject().getId(),
+                moduleClass.getSubjectId(),
                 subject.getSubjectCode(),
                 subject.getTotalTeachingPeriods(),
                 moduleClass.getMaxCapacity(),
                 moduleClass.getCurrentSize(),
                 moduleClass.getStatus(),
-                moduleClass.getLecturer() == null
-                        ? null
-                        : moduleClass.getLecturer().getId());
+                moduleClass.getLecturerId());
     }
 
     private List<TimetableProblem.ExistingSession> loadReplacedSessions(Set<Long> classIds) {

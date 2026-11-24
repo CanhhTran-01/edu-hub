@@ -91,7 +91,7 @@ class PeopleSchedulingFacadeImplTest {
         var administrativeClass = new AdministrativeClass();
         var major = Major.builder().build();
         major.setId(3L);
-        administrativeClass.setMajor(major);
+        administrativeClass.setMajorId(major.getId());
         administrativeClass.setCohort(cohort);
         administrativeClass.setTrainingType(TrainingType.CHINH_QUY);
         var student = new Student();

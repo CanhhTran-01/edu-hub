@@ -149,7 +149,7 @@ class PersonalTimetableQueryServiceTest {
         Root<ModuleClass> root = mock(Root.class, RETURNS_DEEP_STUBS);
         var builder = mock(CriteriaBuilder.class);
         scope.getValue().toPredicate(root, mock(CriteriaQuery.class), builder);
-        verify(builder).equal(root.get("lecturer").get("id"), 201L);
+        verify(builder).equal(root.get("lecturerId"), 201L);
         clearInvocations(moduleClassRepository);
         when(lecturerFacade.findLecturerIdByUserId(7L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.findPersonalTimetableForLecturer(principal, 2L, request("2026-11-16")))
@@ -181,7 +181,7 @@ class PersonalTimetableQueryServiceTest {
     private ModuleClass moduleClass(Long classId, Subject subject) {
         var moduleClass = ModuleClass.builder()
                 .semester(semester)
-                .subject(subject)
+                .subjectId(subject.getId())
                 .moduleClassCode("MC" + classId)
                 .status(ModuleClassStatus.SCHEDULED)
                 .build();

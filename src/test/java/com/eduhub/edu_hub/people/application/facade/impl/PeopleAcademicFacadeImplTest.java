@@ -3,8 +3,8 @@ package com.eduhub.edu_hub.people.application.facade.impl;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.eduhub.edu_hub.curriculum.api.dto.response.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
-import com.eduhub.edu_hub.curriculum.application.facade.dto.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.people.domain.model.*;
@@ -29,7 +29,7 @@ class PeopleAcademicFacadeImplTest {
         cohort.setId(3L);
         var administrativeClass = AdministrativeClass.builder()
                 .className("CT8A")
-                .major(major)
+                .majorId(major.getId())
                 .cohort(cohort)
                 .trainingType(TrainingType.CHINH_QUY)
                 .build();
@@ -45,7 +45,7 @@ class PeopleAcademicFacadeImplTest {
         student.setId(99L);
         when(studentRepository.findByUserIdAndDeletedFalse(7L)).thenReturn(Optional.of(student));
         when(referenceData.findMajorsByIds(Set.of(2L)))
-                .thenReturn(List.of(new MajorSimpleResponse(2L, "CNTT", "Công nghệ thông tin", null)));
+                .thenReturn(List.of(new MajorSimpleResponse(2L, "CNTT", "Công nghệ thông tin", null, false)));
         var profile = facade.findStudentByUserId(7L);
         assertThat(profile.studentId()).isEqualTo(99L);
         assertThat(profile.activityStatus()).isEqualTo(ActivityStatus.DEACTIVATED);
@@ -68,5 +68,21 @@ class PeopleAcademicFacadeImplTest {
         assertThat(profile.academicWarningStatus()).isNull();
         assertThat(profile.targetGpa()).isNull();
         verifyNoInteractions(referenceData);
+    }
+
+    @Test
+    void deletedMajorDoesNotBecomeAnAcademicAssignmentWhileItsIdRemainsStored() {
+        var administrativeClass = AdministrativeClass.builder().majorId(2L).build();
+        var student = Student.builder().administrativeClass(administrativeClass).build();
+        when(studentRepository.findByUserIdAndDeletedFalse(7L)).thenReturn(Optional.of(student));
+        when(referenceData.findMajorsByIds(Set.of(2L)))
+                .thenReturn(List.of(new MajorSimpleResponse(2L, "OLD", "Ngành lịch sử", null, true)));
+
+        var profile = facade.findStudentByUserId(7L);
+
+        assertThat(profile.majorId()).isNull();
+        assertThat(profile.majorName()).isNull();
+        assertThat(administrativeClass.getMajorId()).isEqualTo(2L);
+        verify(studentRepository, never()).save(any());
     }
 }

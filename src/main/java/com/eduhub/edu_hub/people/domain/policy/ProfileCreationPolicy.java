@@ -27,8 +27,8 @@ public final class ProfileCreationPolicy {
 
     public static void validateStudentClassScope(
             AdministrativeClass administrativeClass, Long majorId, Long cohortId, TrainingType trainingType) {
-        if (administrativeClass.getMajor() == null
-                || !administrativeClass.getMajor().getId().equals(majorId)
+        if (administrativeClass.getMajorId() == null
+                || !administrativeClass.getMajorId().equals(majorId)
                 || administrativeClass.getCohort() == null
                 || administrativeClass.getCohort().isDeleted()
                 || !administrativeClass.getCohort().getId().equals(cohortId)

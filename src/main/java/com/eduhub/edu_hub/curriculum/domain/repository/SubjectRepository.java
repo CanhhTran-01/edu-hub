@@ -10,6 +10,12 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 
 public interface SubjectRepository extends JpaRepository<Subject, Long>, JpaSpecificationExecutor<Subject> {
+    @org.springframework.data.jpa.repository.Query(
+            "select subject.id from Subject subject where lower(subject.subjectCode) like :keywordPattern escape '!' "
+                    + "or lower(subject.subjectName) like :keywordPattern escape '!'")
+    Set<Long> findSubjectIdsByKeyword(
+            @org.springframework.data.repository.query.Param("keywordPattern") String keywordPattern);
+
     // Sequence PostgreSQL cấp số nguyên tử; rollback hoặc xóa mềm không thu hồi STT đã lấy.
     @org.springframework.data.jpa.repository.Query(value = "select nextval('subject_code_seq')", nativeQuery = true)
     Long allocateNextSubjectSequence();

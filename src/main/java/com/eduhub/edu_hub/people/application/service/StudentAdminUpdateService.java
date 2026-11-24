@@ -1,7 +1,7 @@
 package com.eduhub.edu_hub.people.application.service;
 
+import com.eduhub.edu_hub.curriculum.api.dto.response.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
-import com.eduhub.edu_hub.curriculum.application.facade.dto.MajorSimpleResponse;
 import com.eduhub.edu_hub.identity.api.dto.response.UserAccountEmailResponse;
 import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
@@ -98,15 +98,9 @@ public class StudentAdminUpdateService {
     private StudentResponse mapStudentResponse(Student student) {
         AdministrativeClass administrativeClass = student.getAdministrativeClass();
         Map<Long, String> majorNamesById = Map.of();
-        if (administrativeClass != null
-                && administrativeClass.getMajor() != null
-                && administrativeClass.getMajor().getId() != null) {
-            majorNamesById =
-                    curriculumReferenceData
-                            .findMajorsByIds(
-                                    Set.of(administrativeClass.getMajor().getId()))
-                            .stream()
-                            .collect(Collectors.toMap(MajorSimpleResponse::id, MajorSimpleResponse::majorName));
+        if (administrativeClass != null && administrativeClass.getMajorId() != null) {
+            majorNamesById = curriculumReferenceData.findMajorsByIds(Set.of(administrativeClass.getMajorId())).stream()
+                    .collect(Collectors.toMap(MajorSimpleResponse::id, MajorSimpleResponse::majorName));
         }
         String accountEmail = student.getUserId() == null
                 ? null

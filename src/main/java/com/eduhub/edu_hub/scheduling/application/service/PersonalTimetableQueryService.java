@@ -69,7 +69,7 @@ public class PersonalTimetableQueryService {
         return loadTimetable(
                 semester,
                 request.getWeekStartDate(),
-                ModuleClassSpecification.matchesRosterCriteria(semesterId, lecturerId, null));
+                ModuleClassSpecification.matchesRosterCriteria(semesterId, lecturerId, null, Set.of()));
     }
 
     public WeeklyTimetableResponse findSemesterTimetable(
@@ -79,7 +79,7 @@ public class PersonalTimetableQueryService {
         return loadTimetable(
                 semester,
                 request.getWeekStartDate(),
-                ModuleClassSpecification.matchesRosterCriteria(semesterId, null, null));
+                ModuleClassSpecification.matchesRosterCriteria(semesterId, null, null, Set.of()));
     }
 
     private WeeklyTimetableResponse loadTimetable(
@@ -104,7 +104,7 @@ public class PersonalTimetableQueryService {
             addClassSessions(
                     moduleClass,
                     schedules,
-                    subjectsById.get(moduleClass.getSubject().getId()),
+                    subjectsById.get(moduleClass.getSubjectId()),
                     lecturerNamesById,
                     fromDate,
                     toDate,
@@ -153,7 +153,7 @@ public class PersonalTimetableQueryService {
                 ? Map.<Long, SubjectSimpleResponse>of()
                 : curriculumFacade
                         .findSubjectsByIds(classes.stream()
-                                .map(moduleClass -> moduleClass.getSubject().getId())
+                                .map(moduleClass -> moduleClass.getSubjectId())
                                 .collect(Collectors.toSet()))
                         .stream()
                         .collect(Collectors.toMap(SubjectSimpleResponse::getId, subject -> subject));
@@ -162,8 +162,8 @@ public class PersonalTimetableQueryService {
 
     private Map<Long, String> loadLecturerNamesById(List<ModuleClass> classes) {
         var lecturerIds = classes.stream()
-                .filter(moduleClass -> moduleClass.getLecturer() != null)
-                .map(moduleClass -> moduleClass.getLecturer().getId())
+                .filter(moduleClass -> moduleClass.getLecturerId() != null)
+                .map(moduleClass -> moduleClass.getLecturerId())
                 .collect(Collectors.toSet());
         var lecturerNamesById = lecturerIds.isEmpty()
                 ? Map.<Long, String>of()
@@ -180,9 +180,7 @@ public class PersonalTimetableQueryService {
             LocalDate fromDate,
             LocalDate toDate,
             List<WeeklySessionResponse> sessions) {
-        Long lecturerId = moduleClass.getLecturer() == null
-                ? null
-                : moduleClass.getLecturer().getId();
+        Long lecturerId = moduleClass.getLecturerId();
         for (var schedule : schedules) {
             var recurringSession = new ExistingSession(
                     schedule.getId(),
@@ -211,7 +209,7 @@ public class PersonalTimetableQueryService {
                 schedule.getId(),
                 moduleClass.getId(),
                 moduleClass.getModuleClassCode(),
-                moduleClass.getSubject().getId(),
+                moduleClass.getSubjectId(),
                 subject == null ? null : subject.getSubjectCode(),
                 subject == null ? null : subject.getSubjectName(),
                 lecturerId,

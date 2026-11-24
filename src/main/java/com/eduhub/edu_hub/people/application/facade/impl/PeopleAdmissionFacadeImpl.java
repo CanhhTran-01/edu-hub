@@ -1,25 +1,27 @@
 package com.eduhub.edu_hub.people.application.facade.impl;
 
+import com.eduhub.edu_hub.curriculum.api.dto.response.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
-import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.identity.api.dto.request.CreateStudentAccountRequest;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.people.application.code.AdministrativeClassNames;
+import com.eduhub.edu_hub.people.application.exception.ProfileCreationException;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.application.facade.dto.*;
 import com.eduhub.edu_hub.people.application.service.StudentCodeGenerator;
 import com.eduhub.edu_hub.people.domain.model.*;
 import com.eduhub.edu_hub.people.domain.repository.*;
 import com.eduhub.edu_hub.shared.enums.ActivityStatus;
-import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService;
 import com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKey;
 import com.eduhub.edu_hub.shared.systemconfig.domain.policy.CodePrefixMappingPolicy;
-import jakarta.persistence.EntityManager;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -35,14 +37,14 @@ public class PeopleAdmissionFacadeImpl implements PeopleFacade.Admission {
     private final CurriculumFacade.Majors majors;
     private final StudentCodeGenerator codes;
     private final IdentityFacade identity;
-    private final EntityManager entities;
+    private final CurriculumFacade.ReferenceData curriculumReferenceData;
     private final SystemConfigService systemConfigService;
 
     public AdmissionCohortInfo requireCohort(Long id) {
         Cohort cohort = cohorts.findByIdAndDeletedFalse(id)
-                .orElseThrow(() -> new BaseException(ErrorCode.INVALID_STUDENT_CODE_COHORT));
+                .orElseThrow(() -> new ProfileCreationException(ErrorCode.INVALID_STUDENT_CODE_COHORT));
         if (cohort.getCodeSequence() == null || cohort.getCodeSequence() < 1 || cohort.getCodeSequence() > 99)
-            throw new BaseException(ErrorCode.INVALID_STUDENT_CODE_COHORT);
+            throw new ProfileCreationException(ErrorCode.INVALID_STUDENT_CODE_COHORT);
         return AdmissionCohortInfo.builder()
                 .id(id)
                 .cohortCode(cohort.getCohortCode())
@@ -52,25 +54,22 @@ public class PeopleAdmissionFacadeImpl implements PeopleFacade.Admission {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void lockCohort(Long id) {
-        cohorts.findForUpdate(id).orElseThrow(() -> new BaseException(ErrorCode.INVALID_STUDENT_CODE_COHORT));
+        cohorts.findForUpdate(id)
+                .orElseThrow(() -> new ProfileCreationException(ErrorCode.INVALID_STUDENT_CODE_COHORT));
     }
 
     public List<AdmissionClassInfo> findClasses(Long majorId, Long cohortId) {
         // Giữ cả lớp đã xóa để không tái sử dụng số thứ tự định danh cũ.
-        return classes.findByMajor_IdAndCohort_IdOrderById(majorId, cohortId).stream()
-                .map(this::classInfo)
-                .toList();
+        return loadClassResponses(classes.findByMajorIdAndCohort_IdOrderById(majorId, cohortId));
     }
 
     public List<AdmissionClassInfo> findClassesByIds(Set<Long> ids) {
-        return ids.isEmpty()
-                ? List.of()
-                : classes.findAllById(ids).stream().map(this::classInfo).toList();
+        return ids.isEmpty() ? List.of() : loadClassResponses(classes.findAllById(ids));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public AdmissionClassInfo lockClass(Long id) {
-        return classInfo(lockedClass(id));
+        return loadClassResponse(lockedClass(id));
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -83,21 +82,21 @@ public class PeopleAdmissionFacadeImpl implements PeopleFacade.Admission {
                         .toList(),
                 SystemConfigKey.MAJOR_CODE_PREFIXES);
         Cohort cohort = cohorts.findByIdAndDeletedFalse(request.cohortId())
-                .orElseThrow(() -> new BaseException(ErrorCode.INVALID_STUDENT_CODE_COHORT));
+                .orElseThrow(() -> new ProfileCreationException(ErrorCode.INVALID_STUDENT_CODE_COHORT));
         AdministrativeClass value = AdministrativeClass.builder()
                 .className(AdministrativeClassNames.create(
                         major.majorName(),
                         cohort.getCodeSequence(),
                         request.sequence(),
                         systemConfigService.getSnapshot().getCodePrefixes(SystemConfigKey.MAJOR_CODE_PREFIXES)))
-                .major(entities.getReference(Major.class, request.majorId()))
+                .majorId(request.majorId())
                 .cohort(cohort)
                 .trainingType(TrainingType.CHINH_QUY)
                 .minCapacity(request.minimum())
                 .maxCapacity(request.maximum())
                 .reserveCapacity(request.reserve())
                 .build();
-        return classInfo(classes.saveAndFlush(value));
+        return mapClassResponse(classes.saveAndFlush(value), major.majorCode(), major.majorName());
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
@@ -106,7 +105,7 @@ public class PeopleAdmissionFacadeImpl implements PeopleFacade.Admission {
         value.setMinCapacity(minimum);
         value.setMaxCapacity(maximum);
         value.setReserveCapacity(reserve);
-        return classInfo(value);
+        return loadClassResponse(value);
     }
 
     public List<AdmissionClassPrefix> findClassPrefixes() {
@@ -140,7 +139,7 @@ public class PeopleAdmissionFacadeImpl implements PeopleFacade.Admission {
         AdministrativeClass target = lockedClass(request.classId());
         if (students.countByAdministrativeClass_IdAndDeletedFalse(target.getId())
                 >= target.getMaxCapacity() + target.getReserveCapacity())
-            throw new BaseException(ErrorCode.CLASS_CAPACITY_EXCEEDED);
+            throw new ProfileCreationException(ErrorCode.CLASS_CAPACITY_EXCEEDED);
         Student student =
                 students.findByCitizenIdAndDeletedFalse(request.citizenId()).orElse(null);
         boolean reused = student != null;
@@ -148,7 +147,7 @@ public class PeopleAdmissionFacadeImpl implements PeopleFacade.Admission {
         if (!reused) {
             String code = codes.generateStudentCode(target, codes.allocateNextStudentSequence(target));
             if (students.existsByStudentCode(code) || identity.existsByUsername(code))
-                throw new BaseException(ErrorCode.DUPLICATE_STUDENT_CODE);
+                throw new ProfileCreationException(ErrorCode.DUPLICATE_STUDENT_CODE);
             Long userId = identity.createStudentAccountWithoutNotification(
                     new CreateStudentAccountRequest(code, request.email()));
             student = Student.builder()
@@ -176,7 +175,7 @@ public class PeopleAdmissionFacadeImpl implements PeopleFacade.Admission {
 
     private AdministrativeClass lockedClass(Long id) {
         return classes.findByIdForStudentCodeUpdate(id)
-                .orElseThrow(() -> new BaseException(ErrorCode.ADMISSION_CLASS_UNAVAILABLE));
+                .orElseThrow(() -> new ProfileCreationException(ErrorCode.ADMISSION_CLASS_UNAVAILABLE));
     }
 
     private AdmissionStudentInfo studentInfo(Student s) {
@@ -190,26 +189,50 @@ public class PeopleAdmissionFacadeImpl implements PeopleFacade.Admission {
                 .build();
     }
 
-    private AdmissionClassInfo classInfo(AdministrativeClass c) {
+    private AdmissionClassInfo loadClassResponse(AdministrativeClass administrativeClass) {
+        return loadClassResponses(List.of(administrativeClass)).getFirst();
+    }
+
+    private List<AdmissionClassInfo> loadClassResponses(List<AdministrativeClass> administrativeClasses) {
+        Set<Long> majorIds = administrativeClasses.stream()
+                .map(AdministrativeClass::getMajorId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, MajorSimpleResponse> majorsById = majorIds.isEmpty()
+                ? Map.of()
+                : curriculumReferenceData.findMajorsByIds(majorIds).stream()
+                        .collect(Collectors.toMap(MajorSimpleResponse::id, major -> major));
+        return administrativeClasses.stream()
+                .map(administrativeClass -> {
+                    var major = majorsById.get(administrativeClass.getMajorId());
+                    if (major == null) throw new ProfileCreationException(ErrorCode.INVALID_STUDENT_CODE_MAJOR);
+                    return mapClassResponse(administrativeClass, major.majorCode(), major.majorName());
+                })
+                .toList();
+    }
+
+    private AdmissionClassInfo mapClassResponse(
+            AdministrativeClass administrativeClass, String majorCode, String majorName) {
         var sequence = AdministrativeClassNames.sequence(
-                c.getClassName(), c.getCohort().getCodeSequence());
+                administrativeClass.getClassName(),
+                administrativeClass.getCohort().getCodeSequence());
         return AdmissionClassInfo.builder()
-                .id(c.getId())
-                .className(c.getClassName())
-                .majorId(c.getMajor().getId())
-                .majorCode(c.getMajor().getMajorCode())
-                .majorName(c.getMajor().getMajorName())
-                .cohortId(c.getCohort().getId())
-                .cohortCode(c.getCohort().getCohortCode())
-                .cohortSequence(c.getCohort().getCodeSequence())
+                .id(administrativeClass.getId())
+                .className(administrativeClass.getClassName())
+                .majorId(administrativeClass.getMajorId())
+                .majorCode(majorCode)
+                .majorName(majorName)
+                .cohortId(administrativeClass.getCohort().getId())
+                .cohortCode(administrativeClass.getCohort().getCohortCode())
+                .cohortSequence(administrativeClass.getCohort().getCodeSequence())
                 .classSequence(sequence.isPresent() ? sequence.getAsInt() : null)
-                .trainingType(c.getTrainingType())
-                .minCapacity(c.getMinCapacity())
-                .maxCapacity(c.getMaxCapacity())
-                .reserveCapacity(c.getReserveCapacity())
-                .lastStudentSequence(c.getLastStudentSequence())
-                .currentSize(students.countByAdministrativeClass_IdAndDeletedFalse(c.getId()))
-                .deleted(c.isDeleted())
+                .trainingType(administrativeClass.getTrainingType())
+                .minCapacity(administrativeClass.getMinCapacity())
+                .maxCapacity(administrativeClass.getMaxCapacity())
+                .reserveCapacity(administrativeClass.getReserveCapacity())
+                .lastStudentSequence(administrativeClass.getLastStudentSequence())
+                .currentSize(students.countByAdministrativeClass_IdAndDeletedFalse(administrativeClass.getId()))
+                .deleted(administrativeClass.isDeleted())
                 .build();
     }
 }

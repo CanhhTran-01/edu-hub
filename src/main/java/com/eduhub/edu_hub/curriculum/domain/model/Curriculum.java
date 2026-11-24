@@ -2,7 +2,6 @@ package com.eduhub.edu_hub.curriculum.domain.model;
 
 import com.eduhub.edu_hub.curriculum.domain.enums.CatalogStatus;
 import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
-import com.eduhub.edu_hub.people.domain.model.Cohort;
 import com.eduhub.edu_hub.shared.common.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
@@ -30,9 +29,8 @@ public class Curriculum extends BaseEntity {
     private Major major;
 
     // CTĐT cũ chưa cấu hình khóa vẫn có thể để trống.
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "cohort_id")
-    private Cohort cohort;
+    @Column(name = "cohort_id")
+    private Long cohortId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "training_type", nullable = false)

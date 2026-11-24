@@ -1,7 +1,5 @@
 package com.eduhub.edu_hub.scheduling.domain.model;
 
-import com.eduhub.edu_hub.curriculum.domain.model.Subject;
-import com.eduhub.edu_hub.people.domain.model.Lecturer;
 import com.eduhub.edu_hub.scheduling.domain.enums.ModuleClassStatus;
 import com.eduhub.edu_hub.shared.common.BaseEntity;
 import jakarta.persistence.*;
@@ -28,13 +26,11 @@ public class ModuleClass extends BaseEntity {
     @JoinColumn(name = "semester_id", nullable = false)
     private Semester semester;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "subject_id", nullable = false)
-    private Subject subject;
+    @Column(name = "subject_id", nullable = false)
+    private Long subjectId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "lecturer_id")
-    private Lecturer lecturer;
+    @Column(name = "lecturer_id")
+    private Long lecturerId;
 
     @Column(name = "class_sequence", nullable = false)
     private int classSequence;
@@ -57,8 +53,8 @@ public class ModuleClass extends BaseEntity {
         this.status = ModuleClassStatus.CANCELLED;
     }
 
-    public void applyTeachingAssignment(Lecturer lecturer) {
-        this.lecturer = lecturer;
+    public void applyTeachingAssignment(Long lecturerId) {
+        this.lecturerId = lecturerId;
         this.status = ModuleClassStatus.SCHEDULED;
     }
 

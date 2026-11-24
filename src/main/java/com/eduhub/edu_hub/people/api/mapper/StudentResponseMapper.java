@@ -21,10 +21,9 @@ public class StudentResponseMapper {
                 .citizenId(student.getCitizenId())
                 .className(administrativeClass == null ? null : administrativeClass.getClassName())
                 .majorName(
-                        administrativeClass == null || administrativeClass.getMajor() == null
+                        administrativeClass == null || administrativeClass.getMajorId() == null
                                 ? null
-                                : majorNamesById.get(
-                                        administrativeClass.getMajor().getId()))
+                                : majorNamesById.get(administrativeClass.getMajorId()))
                 .cohortCode(
                         administrativeClass == null
                                 ? null

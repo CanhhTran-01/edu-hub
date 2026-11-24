@@ -202,7 +202,7 @@ public class ModuleClassPublicationService {
             if (moduleClass.getStatus() == ModuleClassStatus.SCHEDULED && moduleClass.getCurrentSize() != 0)
                 errors.add(classError(moduleClass.getId(), "Lớp chưa công bố phải có sĩ số bằng 0"));
 
-            if (moduleClass.getLecturer() == null)
+            if (moduleClass.getLecturerId() == null)
                 errors.add(classError(moduleClass.getId(), "Lớp chưa có giảng viên"));
         }
         rejectErrors(errors);
@@ -211,11 +211,11 @@ public class ModuleClassPublicationService {
     private void lockPublicationResources(List<ModuleClass> unpublishedClasses) {
         // Giữ cùng thứ tự tài nguyên với apply: kỳ → lớp → giảng viên → môn → phòng.
         peopleFacade.lockLecturersForTimetabling(unpublishedClasses.stream()
-                .map(moduleClass -> moduleClass.getLecturer().getId())
+                .map(moduleClass -> moduleClass.getLecturerId())
                 .collect(Collectors.toCollection(TreeSet::new)));
 
         curriculumFacade.requireOpenableSubjects(unpublishedClasses.stream()
-                .map(moduleClass -> moduleClass.getSubject().getId())
+                .map(moduleClass -> moduleClass.getSubjectId())
                 .collect(Collectors.toSet()));
 
         var classIds = unpublishedClasses.stream().map(ModuleClass::getId).toList();

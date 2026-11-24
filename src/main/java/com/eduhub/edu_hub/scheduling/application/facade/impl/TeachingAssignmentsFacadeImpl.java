@@ -43,7 +43,7 @@ public class TeachingAssignmentsFacadeImpl implements SchedulingFacade.TeachingA
                         ClassScheduleSpecification.unfinishedForLecturer(lecturerId, LocalDate.now(clock)),
                         Sort.by("id"))
                 .stream()
-                .map(schedule -> schedule.getModuleClass().getSubject().getId())
+                .map(schedule -> schedule.getModuleClass().getSubjectId())
                 .collect(Collectors.toSet());
     }
 }

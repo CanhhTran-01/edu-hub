@@ -5,8 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+import com.eduhub.edu_hub.curriculum.api.dto.response.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
-import com.eduhub.edu_hub.curriculum.application.facade.dto.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.identity.api.dto.response.UserAccountEmailResponse;
@@ -72,13 +72,13 @@ class StudentApplicationServiceTest {
         var administrativeClass = new AdministrativeClass();
         var major = Major.builder().build();
         major.setId(2L);
-        administrativeClass.setMajor(major);
+        administrativeClass.setMajorId(major.getId());
         administrativeClass.setCohort(new Cohort());
         administrativeClass.setTrainingType(TrainingType.CHINH_QUY);
         student.setAdministrativeClass(administrativeClass);
         when(students.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(student));
         when(curriculum.findMajorsByIds(Set.of(2L)))
-                .thenReturn(List.of(new MajorSimpleResponse(2L, "ATTT", "Tên ngành từ Curriculum", null)));
+                .thenReturn(List.of(new MajorSimpleResponse(2L, "ATTT", "Tên ngành từ Curriculum", null, false)));
 
         assertThat(service.findById(1L).getMajorName()).isEqualTo("Tên ngành từ Curriculum");
     }
@@ -188,7 +188,7 @@ class StudentApplicationServiceTest {
         verify(builder).like(studentCodeExpression, "% an %");
         verify(builder).like(fullNameExpression, "% an %");
         verify(builder).equal(administrativeClass.get("id"), 3L);
-        verify(builder).equal(administrativeClass.get("major").get("id"), 2L);
+        verify(builder).equal(administrativeClass.get("majorId"), 2L);
         verify(builder).equal(cohort.get("id"), 8L);
     }
 

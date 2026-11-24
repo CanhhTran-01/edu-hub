@@ -1,5 +1,6 @@
 package com.eduhub.edu_hub.curriculum.application.facade;
 
+import com.eduhub.edu_hub.curriculum.api.dto.response.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.api.dto.response.StudentCurriculumResponse;
 import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectPrerequisitesResponse;
 import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectResponse;
@@ -47,6 +48,9 @@ public interface CurriculumFacade {
 
     /** Read facet phục vụ mở lớp, không làm giả các capability chưa triển khai của Facade đầy đủ. */
     interface ClassOpening {
+        /** Tìm cả môn lịch sử theo mã/tên để Scheduling lọc lớp trước khi phân trang. */
+        Set<Long> findSubjectIdsByKeyword(String keyword);
+
         List<CurriculumOpeningSubjectResponse> findPlanningSubjects();
 
         List<SubjectSimpleResponse> findSubjectsByIds(Set<Long> ids);

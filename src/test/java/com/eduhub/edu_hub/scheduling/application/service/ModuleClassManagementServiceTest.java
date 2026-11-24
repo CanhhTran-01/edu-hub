@@ -134,7 +134,7 @@ class ModuleClassManagementServiceTest {
                         assertThat(detail.getMessage()).contains("30");
                     });
                 });
-        assertThat(item.getLecturer().getId()).isEqualTo(5001L);
+        assertThat(item.getLecturerId()).isEqualTo(5001L);
         assertThat(item.getMaxCapacity()).isEqualTo(80);
         verify(classes, never()).saveAndFlush(any());
         verifyNoInteractions(people, curriculum, moduleClassEnrollmentQueryService);
@@ -319,8 +319,8 @@ class ModuleClassManagementServiceTest {
         }
         var item = ModuleClass.builder()
                 .semester(semester)
-                .subject(subject)
-                .lecturer(lecturer)
+                .subjectId(subject.getId())
+                .lecturerId(lecturer == null ? null : lecturer.getId())
                 .moduleClassCode("MC_9_CS101_001")
                 .classSequence(1)
                 .maxCapacity(80)
@@ -336,13 +336,13 @@ class ModuleClassManagementServiceTest {
     }
 
     private void prepareResponse(ModuleClass item) {
-        if (item.getLecturer() != null)
-            when(people.findLecturersByIds(Set.of(item.getLecturer().getId())))
+        if (item.getLecturerId() != null)
+            when(people.findLecturersByIds(Set.of(item.getLecturerId())))
                     .thenReturn(List.of(LecturerResponse.builder()
-                            .id(item.getLecturer().getId())
+                            .id(item.getLecturerId())
                             .fullName("Giảng viên từ People")
                             .status(
-                                    item.getLecturer().getId().equals(5009L)
+                                    item.getLecturerId().equals(5009L)
                                             ? LecturerStatus.INACTIVE
                                             : LecturerStatus.ACTIVE)
                             .build()));

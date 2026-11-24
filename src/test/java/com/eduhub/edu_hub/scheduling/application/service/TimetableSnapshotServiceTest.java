@@ -107,7 +107,7 @@ class TimetableSnapshotServiceTest {
         subject.setId(1L);
         var moduleClass = ModuleClass.builder()
                 .semester(semester)
-                .subject(subject)
+                .subjectId(subject.getId())
                 .moduleClassCode("MC_7_CS1_001")
                 .maxCapacity(60)
                 .status(ModuleClassStatus.UNSCHEDULED)

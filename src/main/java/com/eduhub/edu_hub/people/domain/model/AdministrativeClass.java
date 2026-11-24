@@ -1,7 +1,6 @@
 package com.eduhub.edu_hub.people.domain.model;
 
 import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
-import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.shared.common.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -30,9 +29,8 @@ public class AdministrativeClass extends BaseEntity {
     @Column(name = "class_name", nullable = false)
     private String className;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "major_id", nullable = false)
-    private Major major;
+    @Column(name = "major_id", nullable = false)
+    private Long majorId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "cohort_id", nullable = false)

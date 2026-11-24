@@ -22,6 +22,7 @@ import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.mapper.PageMapper;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -59,8 +60,13 @@ public class ModuleClassRosterService {
                 .findByIdAndDeletedFalse(semesterId)
                 .orElseThrow(() -> new ModuleClassRosterException(ErrorCode.SEMESTER_NOT_FOUND));
 
+        String keyword = request.getKeyword();
+        // Tìm môn trong module sở hữu trước khi phân trang lớp; tổng số phần tử vẫn được tính tại DB.
+        Set<Long> matchingSubjectIds =
+                keyword == null || keyword.isBlank() ? Set.of() : curriculumFacade.findSubjectIdsByKeyword(keyword);
         var moduleClassPage = moduleClassRepository.findAll(
-                ModuleClassSpecification.matchesRosterCriteria(semesterId, actor.lecturerId(), request.getKeyword()),
+                ModuleClassSpecification.matchesRosterCriteria(
+                        semesterId, actor.lecturerId(), keyword, matchingSubjectIds),
                 PageRequest.of(request.getPage(), request.getSize(), Sort.by(Sort.Direction.DESC, "id")));
         if (moduleClassPage.isEmpty())
             return PageMapper.toPageResponse(
@@ -68,14 +74,12 @@ public class ModuleClassRosterService {
 
         var subjectsById = curriculumFacade
                 .findSubjectsByIds(moduleClassPage.stream()
-                        .map(moduleClass -> moduleClass.getSubject().getId())
+                        .map(moduleClass -> moduleClass.getSubjectId())
                         .collect(Collectors.toSet()))
                 .stream()
                 .collect(Collectors.toMap(SubjectSimpleResponse::getId, subject -> subject));
         var lecturerIds = moduleClassPage.stream()
-                .map(moduleClass -> moduleClass.getLecturer() == null
-                        ? null
-                        : moduleClass.getLecturer().getId())
+                .map(moduleClass -> moduleClass.getLecturerId())
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         var lecturerNamesById = lecturerIds.isEmpty()
@@ -92,9 +96,7 @@ public class ModuleClassRosterService {
         var moduleClass = moduleClassRepository
                 .findByIdAndDeletedFalse(moduleClassId)
                 .orElseThrow(() -> new ModuleClassRosterException(ErrorCode.MODULE_CLASS_NOT_FOUND));
-        Long assignedLecturerId = moduleClass.getLecturer() == null
-                ? null
-                : moduleClass.getLecturer().getId();
+        Long assignedLecturerId = moduleClass.getLecturerId();
         try {
             ModuleClassRosterAccessPolicy.requireClassAccess(actor.role(), actor.lecturerId(), assignedLecturerId);
         } catch (ModuleClassRosterException exception) {

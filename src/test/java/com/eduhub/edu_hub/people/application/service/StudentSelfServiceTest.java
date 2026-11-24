@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import com.eduhub.edu_hub.curriculum.api.dto.response.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
-import com.eduhub.edu_hub.curriculum.application.facade.dto.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
@@ -66,7 +66,7 @@ class StudentSelfServiceTest {
         var major = Major.builder().build();
         major.setId(2L);
         var administrativeClass = new AdministrativeClass();
-        administrativeClass.setMajor(major);
+        administrativeClass.setMajorId(major.getId());
         administrativeClass.setClassName("CT8A");
         administrativeClass.setTrainingType(TrainingType.CHINH_QUY);
         var cohort = new Cohort();
@@ -75,7 +75,7 @@ class StudentSelfServiceTest {
         student.setAdministrativeClass(administrativeClass);
         when(studentRepository.findByUserIdAndDeletedFalse(7L)).thenReturn(Optional.of(student));
         when(curriculumReferenceData.findMajorsByIds(Set.of(2L)))
-                .thenReturn(List.of(new MajorSimpleResponse(2L, "CNTT", "Công nghệ thông tin", null)));
+                .thenReturn(List.of(new MajorSimpleResponse(2L, "CNTT", "Công nghệ thông tin", null, false)));
 
         var response = studentSelfService.getMyProfile(authenticatedJwt);
 

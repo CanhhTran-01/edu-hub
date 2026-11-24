@@ -40,6 +40,8 @@ public enum ErrorCode {
     DUPLICATE_STUDENT_EMAIL(4113, "Email sinh viên đã tồn tại", HttpStatus.CONFLICT),
     DUPLICATE_STUDENT_CITIZEN_ID(4114, "CCCD sinh viên đã tồn tại", HttpStatus.CONFLICT),
     STUDENT_CLASS_MISMATCH(4115, "Ngành, hệ đào tạo hoặc khóa không khớp với lớp", HttpStatus.BAD_REQUEST),
+    COHORT_ALREADY_EXISTS(4124, "Khóa tuyển sinh đã tồn tại", HttpStatus.CONFLICT),
+    COHORT_CODE_SEQUENCE_EXCEEDED(4125, "Đã hết dải 99 mã khóa tuyển sinh", HttpStatus.CONFLICT),
     ADMISSION_PLAN_ALREADY_EXISTS(
             4141, "Ngành và khóa đã có phương án; hãy mở lại để nhập bổ sung", HttpStatus.CONFLICT),
     ADMISSION_APPLICANT_NOT_FOUND(4142, "Không tìm thấy hồ sơ trong phương án", HttpStatus.NOT_FOUND),

@@ -8,9 +8,11 @@ import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import com.eduhub.edu_hub.curriculum.domain.model.*;
 import com.eduhub.edu_hub.curriculum.domain.repository.CurriculumRepository;
 import com.eduhub.edu_hub.curriculum.domain.repository.CurriculumSubjectRepository;
-import com.eduhub.edu_hub.people.domain.model.Cohort;
+import com.eduhub.edu_hub.people.api.dto.response.CohortResponse;
+import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -25,6 +27,9 @@ class CurriculumCatalogFacadeImplTest {
     @Mock
     private CurriculumSubjectRepository links;
 
+    @Mock
+    private PeopleFacade.Cohorts peopleCohorts;
+
     @InjectMocks
     private CurriculumCatalogFacadeImpl facade;
 
@@ -32,13 +37,12 @@ class CurriculumCatalogFacadeImplTest {
     void catalogCreditsChangeWithSubjectsButGraduationRequirementRemainsIndependent() {
         var major = Major.builder().majorName("Ngành CNTT").build();
         major.setId(1L);
-        var cohort = new Cohort();
-        cohort.setId(5L);
-        cohort.setCohortCode("K2026");
+        when(peopleCohorts.findCohortsByIds(Set.of(5L)))
+                .thenReturn(List.of(new CohortResponse(5L, "K2026", null, null)));
         var curriculum = Curriculum.builder()
                 .curriculumCode("CNTT_2026")
                 .major(major)
-                .cohort(cohort)
+                .cohortId(5L)
                 .trainingType(TrainingType.CHINH_QUY)
                 .requiredGraduationCredits(120)
                 .build();
@@ -71,8 +75,8 @@ class CurriculumCatalogFacadeImplTest {
     @Test
     void lookupIncludesTrainingTypeAndMissingCurriculumDoesNotLoadSubjects() {
         assertThat(facade.findCurriculum(1L, 5L, TrainingType.LIEN_THONG)).isEmpty();
-        verify(curriculums).findByMajor_IdAndCohort_IdAndTrainingTypeAndDeletedFalse(1L, 5L, TrainingType.LIEN_THONG);
-        verifyNoInteractions(links);
+        verify(curriculums).findByMajor_IdAndCohortIdAndTrainingTypeAndDeletedFalse(1L, 5L, TrainingType.LIEN_THONG);
+        verifyNoInteractions(links, peopleCohorts);
     }
 
     @Test
@@ -85,14 +89,12 @@ class CurriculumCatalogFacadeImplTest {
         curriculum.setId(10L);
         when(curriculums.findByIdAndDeletedFalse(10L)).thenReturn(Optional.of(curriculum));
         assertThat(facade.findById(10L).orElseThrow().getCohortId()).isNull();
+        verifyNoInteractions(peopleCohorts);
 
-        var hidden = new Cohort();
-        hidden.setId(5L);
-        hidden.setCohortCode("HIDDEN");
-        hidden.setDeleted(true);
+        when(peopleCohorts.findCohortsByIds(Set.of(5L))).thenReturn(List.of());
         var historical = Curriculum.builder()
                 .major(curriculum.getMajor())
-                .cohort(hidden)
+                .cohortId(5L)
                 .trainingType(TrainingType.CHINH_QUY)
                 .requiredGraduationCredits(120)
                 .build();

@@ -1,7 +1,6 @@
 package com.eduhub.edu_hub.curriculum.domain.model;
 
 import com.eduhub.edu_hub.curriculum.domain.enums.CatalogStatus;
-import com.eduhub.edu_hub.people.domain.model.Faculty;
 import com.eduhub.edu_hub.shared.common.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
@@ -19,9 +18,8 @@ public class Major extends BaseEntity {
     @Column(name = "major_name", nullable = false, columnDefinition = "text")
     private String majorName;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "faculty_id")
-    private Faculty faculty;
+    @Column(name = "faculty_id")
+    private Long facultyId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
