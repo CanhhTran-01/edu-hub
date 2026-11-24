@@ -1,5 +1,5 @@
 -- Bộ dữ liệu giả lập cho database local được tạo mới; mốc nghiệp vụ cố định 2026-11-24.
--- Một khóa dùng chung cho các ngành. K1–K10 tương ứng 2017–2026; khoa AI mở từ 2021.
+-- Giữ năm khóa gần nhất K6–K10 (2022–2026); số khóa và mã đã dùng không đánh lại từ đầu.
 -- Chặn trước file đầu tiên để không ghi đè cấu hình hoặc trộn bộ demo vào database đang dùng.
 DO $$ BEGIN
     IF EXISTS (SELECT 1 FROM users) OR EXISTS (SELECT 1 FROM faculties) OR EXISTS (SELECT 1 FROM cohorts)
@@ -23,7 +23,7 @@ INSERT INTO cohorts (cohort_code, code_sequence, start_year, end_year, created_a
 SELECT 'K' || (admission_year - 2016), admission_year - 2016, admission_year, admission_year + 4,
        make_date(admission_year, 3, 1)::TIMESTAMP, make_date(admission_year, 3, 1)::TIMESTAMP,
        'demo-seed', 'demo-seed'
-FROM generate_series(2017, 2026) AS admission_year;
+FROM generate_series(2022, 2026) AS admission_year;
 
 -- Các giá trị sau chỉ là quy ước demo, không thay quy chế hoặc cấu hình của profile khác.
 -- Tắt gửi hàng đợi để có thể xem PENDING/retry mà không tự phát thư đến địa chỉ giả lập.

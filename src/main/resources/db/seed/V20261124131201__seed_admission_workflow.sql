@@ -109,7 +109,7 @@ SELECT scope.plan_id, scope.last_row_number + pending_position,
 FROM demo_pending_admission_scope scope CROSS JOIN generate_series(1,14) AS pending_position
 CROSS JOIN LATERAL (SELECT student.* FROM students student JOIN administrative_classes administrative_class ON administrative_class.id = student.class_id
                     JOIN cohorts cohort ON cohort.id = administrative_class.cohort_id
-                    WHERE cohort.start_year = 2018 AND NOT student.is_deleted ORDER BY student.id LIMIT 1) reused_student
+                    WHERE cohort.start_year = 2022 AND NOT student.is_deleted ORDER BY student.id LIMIT 1) reused_student
 JOIN users reused_account ON reused_account.id = reused_student.user_id
 CROSS JOIN LATERAL (SELECT student.* FROM students student WHERE student.class_id = scope.class_id AND NOT student.is_deleted ORDER BY student.id LIMIT 1) existing_student
 JOIN users existing_account ON existing_account.id = existing_student.user_id;
@@ -131,18 +131,18 @@ SET target_size = (SELECT count(*) FROM admission_applicants applicant WHERE app
 WHERE plan_class.plan_id IN (SELECT plan_id FROM demo_pending_admission_scope);
 
 DO $$ BEGIN
-    IF (SELECT count(*) FROM cohorts) <> 10 OR (SELECT count(*) FROM curriculums) <> 36
-    THEN RAISE EXCEPTION 'Bộ seed phải có 10 khóa và 36 CTĐT'; END IF;
+    IF (SELECT count(*) FROM cohorts) <> 5 OR (SELECT count(*) FROM curriculums) <> 20
+    THEN RAISE EXCEPTION 'Bộ seed phải có 5 khóa và 20 CTĐT'; END IF;
     -- Chốt quy mô để phát hiện việc tra mã thiếu hoặc JOIN làm mất/nhân bản dữ liệu mẫu.
-    IF (SELECT count(*) FROM students) <> 7425 OR (SELECT count(*) FROM administrative_classes) <> 158
+    IF (SELECT count(*) FROM students) <> 1850 OR (SELECT count(*) FROM administrative_classes) <> 40
        OR (SELECT count(*) FROM lecturers) <> 120 OR (SELECT count(*) FROM subjects) <> 124
-       OR (SELECT count(*) FROM module_classes) <> 5727 OR (SELECT count(*) FROM class_schedules) <> 86680
-       OR (SELECT count(*) FROM enrollments) <> 235725
+       OR (SELECT count(*) FROM module_classes) <> 1227 OR (SELECT count(*) FROM class_schedules) <> 18300
+       OR (SELECT count(*) FROM enrollments) <> 45975
     THEN RAISE EXCEPTION 'Quy mô bộ seed không khớp các khóa/ngành và lộ trình đã khai báo'; END IF;
     IF EXISTS (SELECT 1 FROM students student JOIN administrative_classes administrative_class ON administrative_class.id = student.class_id
                GROUP BY administrative_class.major_id, administrative_class.cohort_id
-               HAVING count(*) NOT BETWEEN 150 AND 250 OR count(*) FILTER (WHERE NOT student.is_deleted) < 150)
-    THEN RAISE EXCEPTION 'Sĩ số ngành/khóa không nằm trong khoảng 150–250'; END IF;
+               HAVING count(*) NOT BETWEEN 80 AND 100)
+    THEN RAISE EXCEPTION 'Sĩ số ngành/khóa không nằm trong khoảng 80–100'; END IF;
     IF EXISTS (SELECT 1 FROM administrative_classes administrative_class JOIN majors major ON major.id = administrative_class.major_id
                JOIN cohorts cohort ON cohort.id = administrative_class.cohort_id WHERE major.major_code = 'TTNT' AND cohort.start_year < 2021)
     THEN RAISE EXCEPTION 'Ngành AI chỉ bắt đầu sau bốn khóa đầu'; END IF;

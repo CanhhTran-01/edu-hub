@@ -1,12 +1,12 @@
--- Sĩ số mỗi ngành/khóa dao động 175–250, chia đều thành lớp 40–50 người.
+-- Sĩ số mỗi ngành/khóa dao động 80–100, chia đều thành hai lớp 40–50 người.
 -- last_student_sequence chốt số đã cấp; seed tài khoản kế tiếp tạo đủ hồ sơ tương ứng.
 WITH admission_targets AS (
     SELECT major.id AS major_id, major.major_code, cohort.id AS cohort_id, cohort.code_sequence, cohort.start_year,
            CASE major.major_code
-               WHEN 'CNTT' THEN 200 + ((cohort.code_sequence - 1) % 3) * 25
-               WHEN 'ATTT' THEN 175 + ((cohort.code_sequence - 1) % 3) * 25
-               WHEN 'DTVT' THEN 175 + (cohort.code_sequence % 3) * 25
-               ELSE 175 + ((cohort.code_sequence - 5) % 4) * 25 END AS student_count,
+               WHEN 'CNTT' THEN 80 + ((cohort.code_sequence - 5) % 3) * 10
+               WHEN 'ATTT' THEN 90 + ((cohort.code_sequence - 6) % 2) * 10
+               WHEN 'DTVT' THEN 100 - ((cohort.code_sequence - 6) % 3) * 10
+               ELSE 80 + ((cohort.code_sequence - 5) % 3) * 10 END AS student_count,
            CASE major.major_code WHEN 'CNTT' THEN 'CT' WHEN 'ATTT' THEN 'AT' WHEN 'DTVT' THEN 'DT' ELSE 'AI' END AS code_prefix
     FROM majors major CROSS JOIN cohorts cohort
     WHERE major.major_code <> 'TTNT' OR cohort.start_year >= 2021

@@ -48,6 +48,11 @@ SELECT NULL, subject.id, 2026, 2, semester.id, semester.start_date, semester.end
 FROM semesters semester CROSS JOIN subjects subject
 WHERE semester.semester_code = 'HK_2_2026_2027' AND subject.subject_code IN ('GEN103', 'MATH101');
 
+-- Các bảng tạm được tra lặp theo lớp/kỳ; index và thống kê chỉ tồn tại trong transaction seed.
+CREATE UNIQUE INDEX ON demo_class_openings (administrative_class_id, subject_id, academic_year, semester_number);
+CREATE UNIQUE INDEX ON demo_class_openings (module_class_code);
+ANALYZE demo_class_openings;
+
 CREATE TEMP TABLE demo_subject_phases ON COMMIT DROP AS
 WITH ranked_subjects AS (
     SELECT semester_id, subject_id, row_number() OVER (PARTITION BY semester_id ORDER BY subject_id) AS subject_position,
@@ -120,6 +125,10 @@ JOIN demo_lecturer_choices lecturer_choice ON lecturer_choice.faculty_code = req
         % lecturer_choice.eligible_lecturer_count)
 JOIN demo_semester_phases semester_phase ON semester_phase.semester_id = requirement.semester_id
 CROSS JOIN LATERAL generate_series(0, (requirement.total_teaching_periods + 2) / 3 - 1) AS session_index;
+
+CREATE INDEX ON demo_session_placements (semester_id);
+CREATE INDEX ON demo_session_placements (module_class_code);
+ANALYZE demo_session_placements;
 
 INSERT INTO module_classes (module_class_code, semester_id, subject_id, lecturer_id, class_sequence,
                            max_capacity, current_size, status, created_at, updated_at, created_by, updated_by)
@@ -235,6 +244,13 @@ DO $$ BEGIN
     THEN RAISE EXCEPTION 'Bộ seed có lịch trùng phòng hoặc giảng viên'; END IF;
 END $$;
 
+-- Ngày học cuối và số ca là thuộc tính của lớp: tổng hợp một lần, dùng lại cho lượt học và kiểm tra đủ lịch.
+CREATE TEMP TABLE demo_class_schedule_summaries ON COMMIT DROP AS
+SELECT module_class_id, max(end_date) AS last_teaching_date, count(*) AS session_count
+FROM class_schedules WHERE NOT is_deleted GROUP BY module_class_id;
+CREATE UNIQUE INDEX ON demo_class_schedule_summaries (module_class_id);
+ANALYZE demo_class_schedule_summaries;
+
 -- Dựng từng lượt học theo lớp vừa mở; không đổi kết quả cũ khi học lại hoặc hủy đăng ký.
 CREATE TEMP TABLE demo_learning_attempts ON COMMIT DROP AS
 WITH planned_attempts AS (
@@ -270,14 +286,14 @@ WITH planned_attempts AS (
 ), matched_attempts AS (
     SELECT attempt.*, module_class.id AS module_class_id, module_class.module_class_code,
            semester.id AS semester_id, semester.start_date, semester.registration_start,
-           subject.subject_code, subject.subject_name, subject.credits,
-           (SELECT max(schedule.end_date) FROM class_schedules schedule WHERE schedule.module_class_id = module_class.id) AS last_teaching_date
+           subject.subject_code, subject.subject_name, subject.credits, schedule_summary.last_teaching_date
     FROM planned_attempts attempt JOIN subjects subject ON subject.id = attempt.subject_id
     JOIN demo_class_openings opening ON opening.administrative_class_id = attempt.administrative_class_id
         AND opening.subject_id = attempt.subject_id AND opening.academic_year = attempt.academic_year
         AND opening.semester_number = attempt.semester_number
     JOIN module_classes module_class ON module_class.module_class_code = opening.module_class_code
     JOIN semesters semester ON semester.id = module_class.semester_id
+    JOIN demo_class_schedule_summaries schedule_summary ON schedule_summary.module_class_id = module_class.id
     -- Môn bỏ lỡ không có lượt học kỳ gốc; học bù chỉ xuất hiện ở kỳ 4.
     WHERE NOT (subject.subject_code = 'GEN103' AND NOT attempt.is_retake AND attempt.student_sequence % 29 = 0)
       -- Kỳ kế tiếp đang mở: chỉ đăng ký một phần để còn đủ chỗ thao tác qua API.
@@ -292,7 +308,7 @@ WITH planned_attempts AS (
            last_teaching_date + 3 <= DATE '2026-11-24'
                AND NOT (academic_year = 2026 AND semester_number = 1 AND subject_code = 'CS101' AND student_sequence % 11 = 0)
                AS has_published_grade,
-           CASE WHEN subject_code = 'CS101' AND academic_year = 2017 THEN 2 ELSE credits END AS snapshot_credits
+           CASE WHEN subject_code = 'CS101' AND academic_year = 2022 THEN 2 ELSE credits END AS snapshot_credits
     FROM matched_attempts
 )
 SELECT attempt_outcomes.*,
@@ -360,10 +376,39 @@ LEFT JOIN LATERAL (
 ) grade_band ON TRUE
 ORDER BY attempt.student_id, attempt.academic_year, attempt.semester_number, attempt.subject_code;
 
--- Sĩ số giữ mọi lượt còn hiệu lực, gồm cả kết quả đã công bố; hủy không chiếm chỗ.
-UPDATE module_classes module_class
-SET current_size = (SELECT count(*) FROM enrollments enrollment
-                    WHERE enrollment.module_class_id = module_class.id AND enrollment.status <> 'DROPPED' AND NOT enrollment.is_deleted);
+-- Tập gọn phục vụ cả sĩ số và đối chiếu lịch; giữ mọi lượt còn hiệu lực, kể cả kết quả đã công bố.
+CREATE TEMP TABLE demo_active_class_enrollments ON COMMIT DROP AS
+SELECT module_class_id, student_id FROM enrollments WHERE status <> 'DROPPED' AND NOT is_deleted;
+CREATE UNIQUE INDEX ON demo_active_class_enrollments (module_class_id, student_id);
+ANALYZE demo_active_class_enrollments;
+
+-- Lớp mới đều có sĩ số 0; chỉ cập nhật những lớp có người học và tổng hợp một lần cho mỗi lớp.
+UPDATE module_classes module_class SET current_size = class_sizes.active_student_count
+FROM (
+    SELECT module_class_id, count(*)::INTEGER AS active_student_count
+    FROM demo_active_class_enrollments GROUP BY module_class_id
+) class_sizes WHERE class_sizes.module_class_id = module_class.id;
+
+-- Buổi seed luôn là ngày thực tế và một ca cố định. Gom cặp lớp giao ca trước khi đối chiếu sinh viên chung;
+-- tránh nhân từng lượt học với mọi buổi rồi GROUP BY một tập trung gian lớn.
+-- Buổi trùng trong cùng một lớp đã bị chặn bởi kiểm tra phòng/giảng viên ở phía trên.
+CREATE TEMP TABLE demo_overlapping_module_classes ON COMMIT DROP AS
+SELECT DISTINCT first_schedule.module_class_id AS first_module_class_id,
+                second_schedule.module_class_id AS second_module_class_id
+FROM class_schedules first_schedule JOIN class_schedules second_schedule
+    ON first_schedule.module_class_id < second_schedule.module_class_id
+    AND first_schedule.start_date = second_schedule.start_date
+    AND first_schedule.lesson_order_start = second_schedule.lesson_order_start
+WHERE NOT first_schedule.is_deleted AND NOT second_schedule.is_deleted;
+CREATE UNIQUE INDEX ON demo_overlapping_module_classes (first_module_class_id, second_module_class_id);
+ANALYZE demo_overlapping_module_classes;
+
+-- Ngày đạt đầu tiên đủ để kiểm tra tiên quyết tại thời điểm đăng ký; không tính lại theo từng lượt học.
+CREATE TEMP TABLE demo_subject_pass_dates ON COMMIT DROP AS
+SELECT student_id, subject_id, min(grade_published_at) AS first_passed_at
+FROM enrollments WHERE status = 'COMPLETED' GROUP BY student_id, subject_id;
+CREATE UNIQUE INDEX ON demo_subject_pass_dates (student_id, subject_id);
+ANALYZE demo_subject_pass_dates;
 
 DO $$ BEGIN
     IF EXISTS (SELECT 1 FROM enrollments WHERE registered_at > TIMESTAMP '2026-11-24 23:59:59'
@@ -373,20 +418,24 @@ DO $$ BEGIN
                WHERE enrollment.registered_at < student.created_at + INTERVAL '7 hours')
     THEN RAISE EXCEPTION 'Lượt đăng ký không được có trước hồ sơ sinh viên'; END IF;
     IF EXISTS (
-        SELECT 1 FROM enrollments enrollment JOIN class_schedules schedule ON schedule.module_class_id = enrollment.module_class_id
-        WHERE enrollment.status <> 'DROPPED' AND NOT enrollment.is_deleted
-        GROUP BY enrollment.student_id, schedule.start_date, schedule.lesson_order_start HAVING count(*) > 1
+        SELECT 1 FROM demo_overlapping_module_classes overlapping_classes
+        JOIN demo_active_class_enrollments first_enrollment
+            ON first_enrollment.module_class_id = overlapping_classes.first_module_class_id
+        JOIN demo_active_class_enrollments second_enrollment
+            ON second_enrollment.module_class_id = overlapping_classes.second_module_class_id
+            AND second_enrollment.student_id = first_enrollment.student_id
     ) THEN RAISE EXCEPTION 'Bộ seed có thời khóa biểu sinh viên trùng ca'; END IF;
     IF EXISTS (
         SELECT 1 FROM enrollments enrollment JOIN subject_prerequisites prerequisite ON prerequisite.subject_id = enrollment.subject_id
-        WHERE NOT prerequisite.is_deleted AND NOT EXISTS (
-            SELECT 1 FROM enrollments previous_attempt WHERE previous_attempt.student_id = enrollment.student_id
-              AND previous_attempt.subject_id = prerequisite.prerequisite_subject_id AND previous_attempt.status = 'COMPLETED'
-              AND previous_attempt.grade_published_at < enrollment.registered_at)
+        LEFT JOIN demo_subject_pass_dates prerequisite_pass
+            ON prerequisite_pass.student_id = enrollment.student_id
+            AND prerequisite_pass.subject_id = prerequisite.prerequisite_subject_id
+        WHERE NOT prerequisite.is_deleted
+            AND (prerequisite_pass.first_passed_at IS NULL OR prerequisite_pass.first_passed_at >= enrollment.registered_at)
     ) THEN RAISE EXCEPTION 'Bộ seed có lượt học chưa đạt tiên quyết trước khi đăng ký'; END IF;
     IF EXISTS (SELECT 1 FROM module_classes module_class JOIN subjects subject ON subject.id = module_class.subject_id
+               LEFT JOIN demo_class_schedule_summaries schedule_summary ON schedule_summary.module_class_id = module_class.id
                WHERE module_class.status IN ('OPEN','SCHEDULED','CLOSED','COMPLETED')
-                 AND (SELECT count(*) FROM class_schedules schedule WHERE schedule.module_class_id = module_class.id AND NOT schedule.is_deleted)
-                     <> (subject.total_teaching_periods + 2) / 3)
+                 AND coalesce(schedule_summary.session_count, 0) <> (subject.total_teaching_periods + 2) / 3)
     THEN RAISE EXCEPTION 'Bộ seed có lớp đã xếp nhưng thiếu hoặc thừa số ca'; END IF;
 END $$;

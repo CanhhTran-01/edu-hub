@@ -1,4 +1,4 @@
--- Lịch sử học từ năm học 2017–2018 đến kỳ 1 năm học 2026–2027.
+-- Lịch sử học từ năm học 2022–2023 đến kỳ 1 năm học 2026–2027.
 -- Hai kỳ kế hoạch năm học 2026–2027 phục vụ đăng ký đang mở và xếp lịch trước ngày đăng ký;
 -- chỉ kế hoạch có ngày năm 2027, không tạo điểm hoặc sự kiện đã xảy ra sau 2026-11-24.
 INSERT INTO semesters (semester_code, semester_name, start_date, end_date, registration_start, registration_end,
@@ -13,7 +13,7 @@ SELECT 'HK_' || semester_number || '_' || academic_year || '_' || (academic_year
             WHEN academic_year = 2026 THEN DATE '2026-12-04' ELSE make_date(academic_year + 1, 1, 9) END,
        academic_year < 2026, make_date(academic_year, 3, 2)::TIMESTAMP,
        make_date(academic_year, 3, 2)::TIMESTAMP, 'demo-seed', 'demo-seed'
-FROM generate_series(2017, 2026) AS academic_year CROSS JOIN generate_series(1, 2) AS semester_number
+FROM generate_series(2022, 2026) AS academic_year CROSS JOIN generate_series(1, 2) AS semester_number
 ORDER BY academic_year, semester_number;
 
 -- Kỳ hè chỉ mở hai học phần 30 tiết, đủ thời lượng xếp hai đợt trong tám tuần.

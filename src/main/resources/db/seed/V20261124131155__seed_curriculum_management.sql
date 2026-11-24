@@ -1,5 +1,5 @@
--- 36 CTĐT ngành–khóa–hệ, mỗi CTĐT 8 kỳ và 40 môn bắt buộc.
--- Ba ngành đầu có đủ K1–K10; AI bắt đầu K5 (2021), sau bốn khóa của ba ngành còn lại.
+-- 20 CTĐT ngành–khóa–hệ, mỗi CTĐT 8 kỳ và 40 môn bắt buộc.
+-- Bốn ngành có đủ K6–K10; mốc mở ngành AI năm 2021 vẫn được giữ trong danh mục khoa.
 INSERT INTO majors (major_code, major_name, faculty_id, status, created_at, updated_at, created_by, updated_by)
 SELECT major_code, major_name, faculty.id, 'ACTIVE', faculty.created_at, faculty.updated_at, 'demo-seed', 'demo-seed'
 FROM (VALUES ('CNTT', 'Công nghệ thông tin'), ('ATTT', 'An toàn thông tin'),
@@ -178,7 +178,9 @@ INSERT INTO curriculums (curriculum_code, curriculum_name, major_id, cohort_id, 
 SELECT 'CTDT-' || CASE major.major_code WHEN 'CNTT' THEN 'CT' WHEN 'ATTT' THEN 'AT'
                        WHEN 'DTVT' THEN 'DT' ELSE 'AI' END || '-' || cohort.cohort_code || '-CQ',
        'Chương trình ' || major.major_name || ' khóa ' || cohort.start_year,
-       major.id, cohort.id, 'CHINH_QUY', 8, graduation.required_credits, 'ACTIVE',
+       -- Khóa 2022 chốt ngưỡng khi CS101 còn 2 tín chỉ; danh mục hiện tại đã tăng lên 3 tín chỉ.
+       major.id, cohort.id, 'CHINH_QUY', 8,
+       graduation.required_credits - CASE WHEN cohort.start_year = 2022 THEN 1 ELSE 0 END, 'ACTIVE',
        make_date(cohort.start_year, 6, 1)::TIMESTAMP, make_date(cohort.start_year, 6, 1)::TIMESTAMP,
        'demo-seed', 'demo-seed'
 FROM majors major CROSS JOIN cohorts cohort
