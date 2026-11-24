@@ -7,6 +7,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.eduhub.edu_hub.identity.api.controller.AuthController;
+import com.eduhub.edu_hub.identity.api.dto.request.RefreshTokenRequest;
+import com.eduhub.edu_hub.identity.api.dto.response.RefreshTokenResponse;
 import com.eduhub.edu_hub.identity.application.exception.IdentityAuthenticationException;
 import com.eduhub.edu_hub.identity.application.exception.PasswordValidationException;
 import com.eduhub.edu_hub.identity.application.service.AuthApplicationService;
@@ -131,5 +133,51 @@ class IdentityExceptionHandlerTest {
         context.setAuthentication(new JwtAuthenticationToken(authenticatedJwt));
         SecurityContextHolder.setContext(context);
         return authenticatedJwt;
+    }
+
+    @Test
+    void refreshAcceptsRefreshTokenWithoutAnAccessTokenAndPreventsCaching() throws Exception {
+        when(authService.refreshTokens(any()))
+                .thenReturn(RefreshTokenResponse.builder()
+                        .accessToken("next-access")
+                        .refreshToken("next-refresh")
+                        .expiresIn(900)
+                        .requirePasswordChange(true)
+                        .build());
+        mvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"previous-refresh\"}"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.data.accessToken").value("next-access"))
+                .andExpect(jsonPath("$.data.refreshToken").value("next-refresh"))
+                .andExpect(jsonPath("$.data.requirePasswordChange").value(true))
+                .andExpect(jsonPath("$.data.tokenType").value("Bearer"));
+        var request = org.mockito.ArgumentCaptor.forClass(RefreshTokenRequest.class);
+        verify(authService).refreshTokens(request.capture());
+        org.assertj.core.api.Assertions.assertThat(request.getValue().getRefreshToken())
+                .isEqualTo("previous-refresh");
+    }
+
+    @Test
+    void refreshRequiresANonblankRefreshToken() throws Exception {
+        mvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\" \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(1001));
+        verifyNoInteractions(authService);
+    }
+
+    @Test
+    void refreshAuthenticationFailureKeepsTheModuleErrorEnvelope() throws Exception {
+        when(authService.refreshTokens(any()))
+                .thenThrow(new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED));
+        mvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"revoked-refresh\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(4000))
+                .andExpect(jsonPath("$.path").value("/api/v1/auth/refresh"));
     }
 }

@@ -1,6 +1,7 @@
 package com.eduhub.edu_hub.aiassistant.api.controller;
 
 import com.eduhub.edu_hub.aiassistant.api.dto.request.*;
+import com.eduhub.edu_hub.aiassistant.api.dto.response.KnowledgeSourceDownloadResponse;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.KnowledgeSourceResponse;
 import com.eduhub.edu_hub.aiassistant.application.service.KnowledgeSourceService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
@@ -8,9 +9,14 @@ import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
+import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
@@ -49,6 +55,23 @@ public class KnowledgeSourceController {
     public ApiResponse<KnowledgeSourceResponse> activateSource(
             @AuthenticationPrincipal Jwt authenticatedJwt, @Positive @PathVariable Long sourceId) {
         return apiResponseFactory.success(sourceService.activateSource(authenticatedJwt, sourceId));
+    }
+
+    @GetMapping("/{sourceId}/download")
+    public ResponseEntity<byte[]> downloadSourceFile(
+            @AuthenticationPrincipal Jwt authenticatedJwt, @Positive @PathVariable Long sourceId) {
+        KnowledgeSourceDownloadResponse download = sourceService.downloadSourceFile(authenticatedJwt, sourceId);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .contentType(MediaType.parseMediaType(download.contentType()))
+                .contentLength(download.fileBytes().length)
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename(download.filename(), StandardCharsets.UTF_8)
+                                .build()
+                                .toString())
+                .body(download.fileBytes());
     }
 
     @PostMapping("/{sourceId}/deactivate")

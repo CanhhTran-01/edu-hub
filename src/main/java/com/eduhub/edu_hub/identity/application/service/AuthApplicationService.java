@@ -4,7 +4,9 @@ import static com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKe
 
 import com.eduhub.edu_hub.identity.api.dto.request.ChangePasswordRequest;
 import com.eduhub.edu_hub.identity.api.dto.request.LoginRequest;
+import com.eduhub.edu_hub.identity.api.dto.request.RefreshTokenRequest;
 import com.eduhub.edu_hub.identity.api.dto.response.LoginResponse;
+import com.eduhub.edu_hub.identity.api.dto.response.RefreshTokenResponse;
 import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
 import com.eduhub.edu_hub.identity.application.exception.IdentityAuthenticationException;
 import com.eduhub.edu_hub.identity.domain.enums.RoleName;
@@ -20,6 +22,7 @@ import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import com.eduhub.edu_hub.shared.systemconfig.api.dto.response.SystemConfigSnapshotResponse;
 import com.eduhub.edu_hub.shared.systemconfig.application.service.SystemConfigService;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -51,6 +54,8 @@ public class AuthApplicationService {
     private final Clock clock;
 
     private record LoginAttempt(LoginResponse response, ErrorCode error) {}
+
+    private record RefreshAttempt(RefreshTokenResponse response, ErrorCode error) {}
 
     private LoginAttempt authenticate(LoginRequest request) {
 
@@ -105,13 +110,90 @@ public class AuthApplicationService {
         return attempt.response();
     }
 
+    public RefreshTokenResponse refreshTokens(RefreshTokenRequest request) {
+        if (request == null
+                || request.getRefreshToken() == null
+                || request.getRefreshToken().isBlank()) {
+            throw new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED);
+        }
+        String tokenHash = tokenService.hash(request.getRefreshToken());
+        RefreshAttempt attempt = new TransactionTemplate(transactionManager)
+                .execute(status -> rotateRefreshTokenInTransaction(tokenHash));
+
+        // Thu hồi do dùng lại token phải commit trước khi trả 401, không ném lỗi trong callback để rollback việc thu
+        // hồi.
+        if (attempt == null) throw new IdentityAuthenticationException(ErrorCode.UNEXPECTED_ERROR);
+        if (attempt.error() != null) throw new IdentityAuthenticationException(attempt.error());
+        return attempt.response();
+    }
+
+    private RefreshAttempt rotateRefreshTokenInTransaction(String tokenHash) {
+        Long userId = refreshTokenRepository
+                .findUserIdByTokenHash(tokenHash)
+                .orElseThrow(() -> new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED));
+
+        // Khóa User trước token, cùng thứ tự với đổi/reset mật khẩu và logout; đọc lại token sau khi chờ khóa.
+        User user = userRepository
+                .findByIdForUpdate(userId)
+                .orElseThrow(() -> new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED));
+        RefreshToken currentToken = refreshTokenRepository
+                .findByTokenHashForUpdate(tokenHash)
+                .orElseThrow(() -> new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED));
+        Instant issuedAt = clock.instant();
+        LocalDateTime now = LocalDateTime.ofInstant(issuedAt, clock.getZone());
+        if (!currentToken.getUser().getId().equals(userId)
+                || currentToken.isDeleted()
+                || !now.isBefore(currentToken.getExpiresAt())) {
+            throw new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED);
+        }
+        if (currentToken.isRevoked()) {
+            refreshTokenRepository
+                    .findByTokenFamilyIdAndRevokedFalse(currentToken.getTokenFamilyId())
+                    .forEach(token -> token.setRevoked(true));
+            return new RefreshAttempt(null, ErrorCode.UNAUTHENTICATED);
+        }
+        if (user.isDeleted()
+                || user.getStatus() != UserStatus.ACTIVE
+                || (user.getLockedUntil() != null && now.isBefore(user.getLockedUntil()))) {
+            throw new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED);
+        }
+
+        var authenticationConfiguration = systemConfigService.getSnapshot();
+        String refreshToken = tokenService.newRefreshToken();
+        RefreshToken nextToken = new RefreshToken();
+        nextToken.setUser(user);
+        nextToken.setTokenHash(tokenService.hash(refreshToken));
+        nextToken.setTokenFamilyId(currentToken.getTokenFamilyId());
+        nextToken.setExpiresAt(currentToken.getExpiresAt());
+        currentToken.setRevoked(true);
+        nextToken = refreshTokenRepository.saveAndFlush(nextToken);
+
+        // Không kéo dài phiên khi xoay token; JWT mới cũng không vượt hạn phiên còn lại.
+        Instant expiresAt = issuedAt.plus(authenticationConfiguration.getDuration(ACCESS_TOKEN_LIFETIME));
+        Instant sessionExpiresAt =
+                currentToken.getExpiresAt().atZone(clock.getZone()).toInstant();
+        if (expiresAt.isAfter(sessionExpiresAt)) expiresAt = sessionExpiresAt;
+        return new RefreshAttempt(
+                RefreshTokenResponse.builder()
+                        .accessToken(tokenService.generateAccessToken(user, nextToken.getId(), issuedAt, expiresAt))
+                        .refreshToken(refreshToken)
+                        .expiresIn(Duration.between(issuedAt, expiresAt).toSeconds())
+                        // TokenService đọc firstLogin/role hiện tại trong DB; refresh không nâng quyền JWT hạn chế.
+                        .requirePasswordChange(user.isFirstLogin())
+                        .build(),
+                null);
+    }
+
     public void logout(Jwt authenticatedJwt, String refreshToken) {
 
         TokenService.TokenClaims claims = tokenService.requireAuthenticatedClaims(authenticatedJwt);
 
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            userRepository
+                    .findByIdIncludingDeletedForUpdate(claims.userId())
+                    .orElseThrow(() -> new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED));
             RefreshToken token = refreshTokenRepository
-                    .findByTokenHash(tokenService.hash(refreshToken))
+                    .findByTokenHashForUpdate(tokenService.hash(refreshToken))
                     .orElseThrow(() -> new IdentityAuthenticationException(ErrorCode.UNAUTHENTICATED));
 
             if (!LocalDateTime.now(clock).isBefore(token.getExpiresAt())) {
@@ -124,6 +206,11 @@ public class AuthApplicationService {
 
             token.setRevoked(true);
             refreshTokenRepository.save(token);
+            // Logout bằng cặp token cũ còn hạn cũng chấm dứt các token đã xoay trong cùng phiên, không ảnh hưởng phiên
+            // khác.
+            refreshTokenRepository
+                    .findByTokenFamilyIdAndRevokedFalse(token.getTokenFamilyId())
+                    .forEach(session -> session.setRevoked(true));
 
             // TODO(ACCESS_TOKEN_REVOCATION): Cân nhắc phát jti và lưu jti bị thu hồi vào Redis với TTL còn lại;
             //  kiểm tra danh sách thu hồi trong xác thực JWT.
@@ -181,8 +268,7 @@ public class AuthApplicationService {
         session.setExpiresAt(now.plus(authenticationConfiguration.getDuration(REFRESH_TOKEN_LIFETIME)));
         session = refreshTokenRepository.saveAndFlush(session);
 
-        // TODO(REFRESH_TOKEN): Khi bổ sung API refresh, phải đọc lại first-Login trong DB để giữ JWT hạn chế;
-        //  không được dùng refresh token của lần đăng nhập đầu tiên để bỏ qua bước đổi mật khẩu.
+        // API refresh đọc lại firstLogin trong DB để giữ JWT hạn chế, không bỏ qua bước đổi mật khẩu.
 
         UserInfoResponse info = UserInfoResponse.builder()
                 .id(user.getId())

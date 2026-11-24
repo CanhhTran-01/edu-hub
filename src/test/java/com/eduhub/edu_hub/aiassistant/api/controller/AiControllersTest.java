@@ -14,10 +14,13 @@ import com.eduhub.edu_hub.aiassistant.application.service.*;
 import com.eduhub.edu_hub.aiassistant.domain.enums.KnowledgeSourceStatus;
 import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.exception.*;
+import java.nio.charset.StandardCharsets;
 import java.time.*;
 import java.util.List;
 import org.junit.jupiter.api.*;
 import org.mockito.ArgumentCaptor;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -128,5 +131,34 @@ class AiControllersTest {
                 .andExpect(status().isTooManyRequests())
                 .andExpect(header().string("Retry-After", "60"))
                 .andExpect(jsonPath("$.code").value(4606));
+    }
+
+    @Test
+    void downloadReturnsBinaryFileWithUnicodeFilenameAndNoCache() throws Exception {
+        byte[] fileBytes = "Quy chế đào tạo".getBytes(StandardCharsets.UTF_8);
+        when(sources.downloadSourceFile(principal, 8L))
+                .thenReturn(new KnowledgeSourceDownloadResponse("Quy chế.txt", "text/plain;charset=UTF-8", fileBytes));
+        var response = mvc.perform(get("/api/v1/ai/documents/8/download"))
+                .andExpect(status().isOk())
+                .andExpect(content().bytes(fileBytes))
+                .andExpect(content().contentType("text/plain;charset=UTF-8"))
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(header().longValue(HttpHeaders.CONTENT_LENGTH, fileBytes.length))
+                .andReturn()
+                .getResponse();
+        var disposition = ContentDisposition.parse(response.getHeader(HttpHeaders.CONTENT_DISPOSITION));
+        assertThat(disposition.isAttachment()).isTrue();
+        assertThat(disposition.getFilename()).isEqualTo("Quy chế.txt");
+        verify(sources).downloadSourceFile(principal, 8L);
+    }
+
+    @Test
+    void downloadWithoutAnOriginalFileReturnsJsonErrorInsteadOfAnEmptyFile() throws Exception {
+        when(sources.downloadSourceFile(principal, 8L))
+                .thenThrow(new AiAssistantException(ErrorCode.KNOWLEDGE_SOURCE_FILE_NOT_FOUND));
+        mvc.perform(get("/api/v1/ai/documents/8/download"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(4610))
+                .andExpect(jsonPath("$.success").value(false));
     }
 }

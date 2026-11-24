@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 
 import com.eduhub.edu_hub.identity.api.dto.request.ChangePasswordRequest;
 import com.eduhub.edu_hub.identity.api.dto.request.LoginRequest;
+import com.eduhub.edu_hub.identity.api.dto.request.RefreshTokenRequest;
 import com.eduhub.edu_hub.identity.application.exception.IdentityAuthenticationException;
 import com.eduhub.edu_hub.identity.application.exception.PasswordValidationException;
 import com.eduhub.edu_hub.identity.domain.enums.UserStatus;
@@ -30,6 +31,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -124,19 +126,22 @@ class AuthApplicationServiceTest {
     void logoutRevokesMatchingRefreshTokenWithoutDecodingJwtAgain(boolean alreadyRevoked) {
         RefreshToken session = session(7L, 9L);
         session.setRevoked(alreadyRevoked);
-        when(refreshTokens.findByTokenHash(anyString())).thenReturn(Optional.of(session));
+        allowLogout(session);
         service.logout(authenticatedJwt, "refresh-token");
         assertThat(session.isRevoked()).isTrue();
         verify(refreshTokens).save(session);
         verify(transactionManager).commit(any());
-        verifyNoInteractions(jwtEncoder, users);
+        var lockOrder = inOrder(users, refreshTokens);
+        lockOrder.verify(users).findByIdIncludingDeletedForUpdate(7L);
+        lockOrder.verify(refreshTokens).findByTokenHashForUpdate(anyString());
+        verifyNoInteractions(jwtEncoder);
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void logoutRejectsRefreshTokenOfAnotherUserOrSession(boolean differentUser) {
         RefreshToken session = differentUser ? session(8L, 9L) : session(7L, 10L);
-        when(refreshTokens.findByTokenHash(anyString())).thenReturn(Optional.of(session));
+        allowLogout(session);
         assertThatThrownBy(() -> service.logout(authenticatedJwt, "refresh-token"))
                 .isInstanceOfSatisfying(
                         IdentityAuthenticationException.class,
@@ -151,7 +156,7 @@ class AuthApplicationServiceTest {
     void logoutRetainsExistingRefreshExpiryCheck() {
         RefreshToken session = session(7L, 9L);
         session.setExpiresAt(LocalDateTime.now(CLOCK).minusMinutes(1));
-        when(refreshTokens.findByTokenHash(anyString())).thenReturn(Optional.of(session));
+        allowLogout(session);
         assertThatThrownBy(() -> service.logout(authenticatedJwt, "refresh-token"))
                 .isInstanceOf(IdentityAuthenticationException.class);
         assertThat(session.isRevoked()).isFalse();
@@ -176,6 +181,188 @@ class AuthApplicationServiceTest {
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.UNAUTHENTICATED));
         verifyNoInteractions(users, refreshTokens, jwtEncoder);
         verify(transactionManager, never()).getTransaction(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void refreshRotatesTheSecretAndReadsCurrentFirstLoginAndRole(boolean firstLogin) {
+        RefreshToken currentToken = allowRefresh(firstLogin);
+        LocalDateTime originalExpiry = currentToken.getExpiresAt();
+
+        var response = service.refreshTokens(refreshRequest());
+
+        var nextToken = ArgumentCaptor.forClass(RefreshToken.class);
+        verify(refreshTokens).saveAndFlush(nextToken.capture());
+        assertThat(currentToken.isRevoked()).isTrue();
+        assertThat(nextToken.getValue().getId()).isEqualTo(10L);
+        assertThat(nextToken.getValue().getTokenFamilyId()).isEqualTo(currentToken.getTokenFamilyId());
+        assertThat(nextToken.getValue().getExpiresAt()).isEqualTo(originalExpiry);
+        assertThat(nextToken.getValue().isRevoked()).isFalse();
+        assertThat(response.getRefreshToken()).isNotEqualTo("refresh-token");
+        assertThat(nextToken.getValue().getTokenHash()).isEqualTo(tokens.hash(response.getRefreshToken()));
+        assertThat(response.getAccessToken()).isEqualTo("new-access-token");
+        assertThat(response.getTokenType()).isEqualTo("Bearer");
+        assertThat(response.getExpiresIn()).isEqualTo(900);
+        assertThat(response.isRequirePasswordChange()).isEqualTo(firstLogin);
+        var parameters = ArgumentCaptor.forClass(JwtEncoderParameters.class);
+        verify(jwtEncoder).encode(parameters.capture());
+        var claims = parameters.getValue().getClaims();
+        assertThat(claims.<Long>getClaim("sid")).isEqualTo(10L);
+        assertThat(claims.<Long>getClaim("uid")).isEqualTo(7L);
+        assertThat(claims.getClaimAsString("token_use")).isEqualTo(firstLogin ? "PASSWORD_CHANGE" : "ACCESS");
+        assertThat(claims.getClaimAsString("role")).isEqualTo(firstLogin ? null : "LECTURER");
+        assertThat(claims.getIssuedAt()).isEqualTo(CLOCK.instant());
+        var lockOrder = inOrder(refreshTokens, users);
+        lockOrder.verify(refreshTokens).findUserIdByTokenHash(tokens.hash("refresh-token"));
+        lockOrder.verify(users).findByIdForUpdate(7L);
+        lockOrder.verify(refreshTokens).findByTokenHashForUpdate(tokens.hash("refresh-token"));
+        verify(transactionManager).commit(any());
+        verifyNoInteractions(authenticationManager);
+    }
+
+    @Test
+    void refreshCapsJwtExpiryAtTheRemainingAbsoluteSessionLifetime() {
+        RefreshToken currentToken = allowRefresh(false);
+        currentToken.setExpiresAt(LocalDateTime.now(CLOCK).plusSeconds(40));
+        var response = service.refreshTokens(refreshRequest());
+        assertThat(response.getExpiresIn()).isEqualTo(40);
+        var parameters = ArgumentCaptor.forClass(JwtEncoderParameters.class);
+        verify(jwtEncoder).encode(parameters.capture());
+        assertThat(parameters.getValue().getClaims().getExpiresAt())
+                .isEqualTo(CLOCK.instant().plusSeconds(40));
+    }
+
+    @Test
+    void reusingRevokedTokenCommitsFamilyRevocationBeforeReturningUnauthorized() {
+        RefreshToken previousToken = allowRefresh(false);
+        previousToken.setRevoked(true);
+        RefreshToken activeToken = session(7L, 10L);
+        activeToken.setTokenFamilyId(previousToken.getTokenFamilyId());
+        when(refreshTokens.findByTokenFamilyIdAndRevokedFalse(previousToken.getTokenFamilyId()))
+                .thenReturn(List.of(activeToken));
+
+        assertThatThrownBy(() -> service.refreshTokens(refreshRequest()))
+                .isInstanceOfSatisfying(
+                        IdentityAuthenticationException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.UNAUTHENTICATED));
+
+        assertThat(activeToken.isRevoked()).isTrue();
+        verify(refreshTokens, never()).findByUser_IdAndRevokedFalse(any());
+        verify(refreshTokens, never()).saveAndFlush(any());
+        verify(transactionManager).commit(any());
+        verify(transactionManager, never()).rollback(any());
+        verifyNoInteractions(jwtEncoder);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"-1", "0"})
+    void refreshRejectsExpiredTokensIncludingTheExactExpiryBoundary(long secondsUntilExpiry) {
+        RefreshToken currentToken = allowRefresh(false);
+        currentToken.setExpiresAt(LocalDateTime.now(CLOCK).plusSeconds(secondsUntilExpiry));
+        assertThatThrownBy(() -> service.refreshTokens(refreshRequest()))
+                .isInstanceOf(IdentityAuthenticationException.class);
+        assertThat(currentToken.isRevoked()).isFalse();
+        verify(refreshTokens, never()).saveAndFlush(any());
+        verifyNoInteractions(jwtEncoder);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"LOCKED", "DISABLED", "DELETED", "TEMPORARILY_LOCKED"})
+    void refreshRejectsUnavailableAccounts(String accountState) {
+        RefreshToken currentToken = allowRefresh(false);
+        User account = currentToken.getUser();
+        switch (accountState) {
+            case "DELETED" -> account.setDeleted(true);
+            case "TEMPORARILY_LOCKED" -> account.setLockedUntil(
+                    LocalDateTime.now(CLOCK).plusMinutes(1));
+            default -> account.setStatus(UserStatus.valueOf(accountState));
+        }
+        assertThatThrownBy(() -> service.refreshTokens(refreshRequest()))
+                .isInstanceOf(IdentityAuthenticationException.class);
+        assertThat(currentToken.isRevoked()).isFalse();
+        verify(refreshTokens, never()).saveAndFlush(any());
+        verifyNoInteractions(jwtEncoder);
+    }
+
+    @Test
+    void refreshRejectsUnknownTokenBeforeLockingAnyUser() {
+        assertThatThrownBy(() -> service.refreshTokens(refreshRequest()))
+                .isInstanceOf(IdentityAuthenticationException.class);
+        verifyNoInteractions(users, jwtEncoder);
+    }
+
+    @Test
+    void refreshRejectsMissingRequestAndBlankSecretBeforeDatabaseAccess() {
+        assertThatThrownBy(() -> service.refreshTokens(null)).isInstanceOf(IdentityAuthenticationException.class);
+        RefreshTokenRequest request = new RefreshTokenRequest();
+        request.setRefreshToken(" ");
+        assertThatThrownBy(() -> service.refreshTokens(request)).isInstanceOf(IdentityAuthenticationException.class);
+        verifyNoInteractions(users, refreshTokens, jwtEncoder, transactionManager);
+    }
+
+    @Test
+    void jwtIssuingFailureRollsBackRotationAndIsNotReportedAsInvalidCredentials() {
+        allowRefresh(false);
+        when(jwtEncoder.encode(any()))
+                .thenThrow(new org.springframework.security.oauth2.jwt.JwtEncodingException("failed"));
+        assertThatThrownBy(() -> service.refreshTokens(refreshRequest()))
+                .isInstanceOfSatisfying(
+                        IdentityAuthenticationException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.UNEXPECTED_ERROR));
+        verify(transactionManager).rollback(any());
+        verify(transactionManager, never()).commit(any());
+    }
+
+    @Test
+    void logoutWithAnOlderPairAlsoRevokesTheRotatedTokenInThatFamily() {
+        RefreshToken previousToken = session(7L, 9L);
+        previousToken.setRevoked(true);
+        allowLogout(previousToken);
+        RefreshToken activeToken = session(7L, 10L);
+        activeToken.setTokenFamilyId(previousToken.getTokenFamilyId());
+        when(refreshTokens.findByTokenFamilyIdAndRevokedFalse(previousToken.getTokenFamilyId()))
+                .thenReturn(List.of(activeToken));
+        service.logout(authenticatedJwt, "refresh-token");
+        assertThat(activeToken.isRevoked()).isTrue();
+        verify(refreshTokens, never()).findByUser_IdAndRevokedFalse(any());
+    }
+
+    private RefreshTokenRequest refreshRequest() {
+        RefreshTokenRequest request = new RefreshTokenRequest();
+        request.setRefreshToken("refresh-token");
+        return request;
+    }
+
+    private RefreshToken allowRefresh(boolean firstLogin) {
+        RefreshToken currentToken = session(7L, 9L);
+        currentToken.getUser().setUsername("account");
+        currentToken.getUser().setStatus(UserStatus.ACTIVE);
+        currentToken.getUser().setFirstLogin(firstLogin);
+        Role currentRole = new Role();
+        currentRole.setRoleName("LECTURER");
+        currentToken.getUser().setRole(currentRole);
+        when(refreshTokens.findUserIdByTokenHash(tokens.hash("refresh-token"))).thenReturn(Optional.of(7L));
+        when(users.findByIdForUpdate(7L)).thenReturn(Optional.of(currentToken.getUser()));
+        when(refreshTokens.findByTokenHashForUpdate(tokens.hash("refresh-token")))
+                .thenReturn(Optional.of(currentToken));
+        when(refreshTokens.saveAndFlush(any())).thenAnswer(invocation -> {
+            RefreshToken nextToken = invocation.getArgument(0);
+            nextToken.setId(10L);
+            return nextToken;
+        });
+        when(jwtEncoder.encode(any()))
+                .thenReturn(Jwt.withTokenValue("new-access-token")
+                        .header("alg", "HS256")
+                        .subject("account")
+                        .build());
+        return currentToken;
+    }
+
+    private void allowLogout(RefreshToken session) {
+        User account = new User();
+        account.setId(7L);
+        when(users.findByIdIncludingDeletedForUpdate(7L)).thenReturn(Optional.of(account));
+        when(refreshTokens.findByTokenHashForUpdate(anyString())).thenReturn(Optional.of(session));
     }
 
     @Test

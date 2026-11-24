@@ -16,6 +16,9 @@ import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.time.*;
 import java.util.*;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.oauth2.jwt.Jwt;
 
@@ -91,5 +94,77 @@ class KnowledgeSourceServiceTest {
         request.setDocumentType("Quy chế");
         request.setEffectiveDate(LocalDate.of(2026, 1, 1));
         return request;
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = KnowledgeSourceStatus.class,
+            names = {"PROCESSING", "ACTIVE", "INACTIVE", "FAILED"})
+    void downloadReturnsOriginalBytesEvenWhenSourceIsInactiveFailedOrExpired(KnowledgeSourceStatus status) {
+        KnowledgeSource source = KnowledgeSource.builder()
+                .originalFilename("Quy chế đào tạo.PDF")
+                .status(status)
+                .expiryDate(LocalDate.of(2025, 1, 1))
+                .build();
+        byte[] originalFile = new byte[] {0, 1, -1, 2};
+        when(sources.findByIdAndDeletedFalse(8L)).thenReturn(Optional.of(source));
+        when(sources.findOriginalFile(8L)).thenReturn(originalFile);
+        var download = service.downloadSourceFile(principal, 8L);
+        assertThat(download.filename()).isEqualTo("Quy chế đào tạo.PDF");
+        assertThat(download.contentType()).isEqualTo("application/pdf");
+        assertThat(download.fileBytes()).containsExactly(originalFile);
+        verify(accessService).requireAcademicAdmin(principal);
+        verifyNoInteractions(chunks);
+        verify(sources, never()).save(any());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "document.docx, application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "document.txt, text/plain;charset=UTF-8",
+        "document.bin, application/octet-stream"
+    })
+    void downloadUsesTheFileFormatRatherThanTheBusinessDocumentType(String filename, String contentType) {
+        KnowledgeSource source = KnowledgeSource.builder()
+                .originalFilename(filename)
+                .documentType("Quy chế")
+                .build();
+        when(sources.findByIdAndDeletedFalse(8L)).thenReturn(Optional.of(source));
+        when(sources.findOriginalFile(8L)).thenReturn(new byte[] {1});
+        assertThat(service.downloadSourceFile(principal, 8L).contentType()).isEqualTo(contentType);
+    }
+
+    @Test
+    void downloadRemovesPathsAndHeaderControlCharactersFromTheFilename() {
+        KnowledgeSource source = KnowledgeSource.builder()
+                .originalFilename("C:\\uploads\\Quy chế\r\n.pdf")
+                .build();
+        when(sources.findByIdAndDeletedFalse(8L)).thenReturn(Optional.of(source));
+        when(sources.findOriginalFile(8L)).thenReturn(new byte[] {1});
+        assertThat(service.downloadSourceFile(principal, 8L).filename()).isEqualTo("Quy chế__.pdf");
+    }
+
+    @Test
+    void downloadRejectsMissingOrDeletedSourceBeforeReadingTheFile() {
+        assertThatThrownBy(() -> service.downloadSourceFile(principal, 8L))
+                .isInstanceOfSatisfying(AiAssistantException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.KNOWLEDGE_SOURCE_NOT_FOUND));
+        verify(sources, never()).findOriginalFile(any());
+    }
+
+    @Test
+    void downloadReportsLegacySourcesWithoutOriginalFilesAsNotFound() {
+        when(sources.findByIdAndDeletedFalse(8L))
+                .thenReturn(Optional.of(KnowledgeSource.builder().build()));
+        assertThatThrownBy(() -> service.downloadSourceFile(principal, 8L))
+                .isInstanceOfSatisfying(AiAssistantException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.KNOWLEDGE_SOURCE_FILE_NOT_FOUND));
+    }
+
+    @Test
+    void downloadChecksAccessBeforeAnyFileOrMetadataRead() {
+        when(accessService.requireAcademicAdmin(principal)).thenThrow(new AiAssistantException(ErrorCode.UNAUTHORIZED));
+        assertThatThrownBy(() -> service.downloadSourceFile(principal, 8L)).isInstanceOf(AiAssistantException.class);
+        verifyNoInteractions(sources, chunks);
     }
 }
