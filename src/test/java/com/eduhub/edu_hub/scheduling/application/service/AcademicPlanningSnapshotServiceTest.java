@@ -3,12 +3,12 @@ package com.eduhub.edu_hub.scheduling.application.service;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.eduhub.edu_hub.curriculum.api.dto.response.CurriculumAssignmentResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
-import com.eduhub.edu_hub.curriculum.application.facade.dto.CurriculumAssignmentResponse;
 import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
-import com.eduhub.edu_hub.enrollment.application.EnrollmentFacade;
-import com.eduhub.edu_hub.enrollment.application.facade.dto.LearningAttemptResponse;
-import com.eduhub.edu_hub.enrollment.application.facade.dto.LearningHistoryResponse;
+import com.eduhub.edu_hub.enrollment.api.dto.response.LearningAttemptResponse;
+import com.eduhub.edu_hub.enrollment.api.dto.response.LearningHistoryResponse;
+import com.eduhub.edu_hub.enrollment.application.facade.EnrollmentFacade;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.people.application.facade.dto.StudentPlanningResponse;
 import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;

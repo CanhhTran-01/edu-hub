@@ -1,4 +1,4 @@
-package com.eduhub.edu_hub.curriculum.application;
+package com.eduhub.edu_hub.curriculum.application.service;
 
 import com.eduhub.edu_hub.curriculum.api.dto.request.CreateSubjectRequest;
 import com.eduhub.edu_hub.curriculum.api.dto.request.SetPrerequisiteRequest;

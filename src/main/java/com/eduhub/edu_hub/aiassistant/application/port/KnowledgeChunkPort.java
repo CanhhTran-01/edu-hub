@@ -19,13 +19,12 @@ public interface KnowledgeChunkPort {
 
     boolean hasCompleteIndex(Long sourceId);
 
-    record ChunkContent(String content, String sectionTitle, Integer pageNumber, int tokenCount) {}
+    record ChunkContent(String content, Integer pageNumber, int tokenCount) {}
 
     record RetrievedChunk(
             Long chunkId,
             Long sourceId,
             String sourceTitle,
-            String sectionTitle,
             Integer pageNumber,
             String content,
             int tokenCount,

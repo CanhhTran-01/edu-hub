@@ -1,10 +1,10 @@
 package com.eduhub.edu_hub.curriculum.application.service;
 
 import com.eduhub.edu_hub.curriculum.api.dto.response.*;
+import com.eduhub.edu_hub.curriculum.api.dto.response.CurriculumSubjectResponse;
 import com.eduhub.edu_hub.curriculum.api.dto.response.StudentCurriculumResponse.*;
 import com.eduhub.edu_hub.curriculum.application.exception.StudentCurriculumException;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
-import com.eduhub.edu_hub.curriculum.application.facade.dto.CurriculumSubjectResponse;
 import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import com.eduhub.edu_hub.curriculum.domain.repository.SubjectPrerequisiteRepository;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;

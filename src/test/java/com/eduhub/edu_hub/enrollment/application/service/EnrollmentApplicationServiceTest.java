@@ -6,7 +6,6 @@ import static org.mockito.Mockito.*;
 
 import com.eduhub.edu_hub.curriculum.api.dto.response.*;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
-import com.eduhub.edu_hub.curriculum.application.facade.dto.*;
 import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import com.eduhub.edu_hub.enrollment.api.dto.request.RegisterModuleClassRequest;
 import com.eduhub.edu_hub.enrollment.application.exception.EnrollmentException;

@@ -99,7 +99,7 @@ class ChatHistoryServiceTest {
             savedMessage.setId(99L);
             return savedMessage;
         });
-        var chunk = new RetrievedChunk(21L, 5L, "Quy chế", null, null, "Nội dung", 10, 0.9, LocalDate.of(2026, 1, 1));
+        var chunk = new RetrievedChunk(21L, 5L, "Quy chế", null, "Nội dung", 10, 0.9, LocalDate.of(2026, 1, 1));
         var response = service.recordExchange(
                 principal,
                 new ChatHistoryService.ConversationContext(3L, null, List.of()),

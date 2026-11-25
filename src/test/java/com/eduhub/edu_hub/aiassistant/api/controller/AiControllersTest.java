@@ -11,6 +11,8 @@ import com.eduhub.edu_hub.aiassistant.api.dto.response.*;
 import com.eduhub.edu_hub.aiassistant.api.exception.AiAssistantExceptionHandler;
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
 import com.eduhub.edu_hub.aiassistant.application.service.*;
+import com.eduhub.edu_hub.aiassistant.domain.enums.AiIntent;
+import com.eduhub.edu_hub.aiassistant.domain.enums.ChatMessageRole;
 import com.eduhub.edu_hub.aiassistant.domain.enums.KnowledgeSourceStatus;
 import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.exception.*;
@@ -95,12 +97,54 @@ class AiControllersTest {
     void sessionDetailUsesPrincipalAndDisablesBrowserCaching() throws Exception {
         when(history.getSessionById(principal, "3"))
                 .thenReturn(new ChatSessionDetailResponse(
-                        "3", "Học lại", "KNOWLEDGE", LocalDateTime.now(clock), List.of()));
+                        "3",
+                        "Học lại",
+                        "KNOWLEDGE",
+                        LocalDateTime.now(clock),
+                        List.of(new ChatHistoryMessageResponse(
+                                "11",
+                                ChatMessageRole.ASSISTANT,
+                                "Theo quy chế [K21].",
+                                AiIntent.KNOWLEDGE,
+                                LocalDateTime.now(clock),
+                                List.of(citationResponse())))));
         mvc.perform(get("/api/v1/ai/sessions/3").param("userId", "999"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", "no-store"))
-                .andExpect(jsonPath("$.data.title").value("Học lại"));
+                .andExpect(jsonPath("$.data.title").value("Học lại"))
+                .andExpect(jsonPath("$.data.messages[0].citations[0].referenceCode")
+                        .value("K21"))
+                .andExpect(
+                        jsonPath("$.data.messages[0].citations[0].sourceTitle").value("Quy chế"))
+                .andExpect(
+                        jsonPath("$.data.messages[0].citations[0].pageNumber").value(2))
+                .andExpect(
+                        jsonPath("$.data.messages[0].citations[0].sectionTitle").doesNotHaveJsonPath());
         verify(history).getSessionById(principal, "3");
+    }
+
+    @Test
+    void chatReturnsSourceAndPageCitationsWithoutSectionTitles() throws Exception {
+        when(chat.chat(eq(principal), any()))
+                .thenReturn(ChatResponse.builder()
+                        .sessionId("3")
+                        .messageId("11")
+                        .content("Theo quy chế [K21].")
+                        .intent(AiIntent.KNOWLEDGE)
+                        .citations(List.of(citationResponse()))
+                        .build());
+        mvc.perform(
+                        post("/api/v1/ai/chat")
+                                .contentType("application/json")
+                                .content(
+                                        """
+                                {"message":"Quy chế học lại?"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.citations[0].referenceCode").value("K21"))
+                .andExpect(jsonPath("$.data.citations[0].sourceTitle").value("Quy chế"))
+                .andExpect(jsonPath("$.data.citations[0].pageNumber").value(2))
+                .andExpect(jsonPath("$.data.citations[0].sectionTitle").doesNotHaveJsonPath());
     }
 
     @Test
@@ -160,5 +204,17 @@ class AiControllersTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value(4610))
                 .andExpect(jsonPath("$.success").value(false));
+    }
+
+    private CitationResponse citationResponse() {
+        return CitationResponse.builder()
+                .referenceCode("K21")
+                .chunkId(21L)
+                .sourceId(8L)
+                .sourceTitle("Quy chế")
+                .pageNumber(2)
+                .snippet("Nội dung quy chế.")
+                .sourceAvailable(true)
+                .build();
     }
 }

@@ -1,8 +1,8 @@
 package com.eduhub.edu_hub.enrollment.application.facade.impl;
 
+import com.eduhub.edu_hub.enrollment.api.dto.response.*;
 import com.eduhub.edu_hub.enrollment.api.dto.response.EnrollmentScopeResponse;
-import com.eduhub.edu_hub.enrollment.application.EnrollmentFacade;
-import com.eduhub.edu_hub.enrollment.application.facade.dto.*;
+import com.eduhub.edu_hub.enrollment.application.facade.EnrollmentFacade;
 import com.eduhub.edu_hub.enrollment.domain.enums.EnrollmentStatus;
 import com.eduhub.edu_hub.enrollment.domain.repository.EnrollmentRepository;
 import com.eduhub.edu_hub.enrollment.infrastructure.config.EnrollmentRegistrationSettings;

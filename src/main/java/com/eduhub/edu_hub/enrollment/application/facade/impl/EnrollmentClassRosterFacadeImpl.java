@@ -2,7 +2,7 @@ package com.eduhub.edu_hub.enrollment.application.facade.impl;
 
 import com.eduhub.edu_hub.enrollment.api.dto.response.ModuleClassStudentResponse;
 import com.eduhub.edu_hub.enrollment.api.mapper.ModuleClassStudentResponseMapper;
-import com.eduhub.edu_hub.enrollment.application.EnrollmentFacade;
+import com.eduhub.edu_hub.enrollment.application.facade.EnrollmentFacade;
 import com.eduhub.edu_hub.enrollment.domain.enums.EnrollmentStatus;
 import com.eduhub.edu_hub.enrollment.domain.repository.EnrollmentRepository;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;

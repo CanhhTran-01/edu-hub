@@ -26,9 +26,6 @@ public class MessageChunkReference extends BaseEntity {
     @Column(name = "source_title")
     private String sourceTitle;
 
-    @Column(name = "section_title")
-    private String sectionTitle;
-
     @Column(name = "page_number")
     private Integer pageNumber;
 

@@ -1,4 +1,4 @@
-package com.eduhub.edu_hub.curriculum.application;
+package com.eduhub.edu_hub.curriculum.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

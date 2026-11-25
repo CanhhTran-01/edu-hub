@@ -1,4 +1,4 @@
-package com.eduhub.edu_hub.enrollment.application.facade.dto;
+package com.eduhub.edu_hub.enrollment.api.dto.response;
 
 public record ModuleClassUsageResponse(
         boolean historyComplete, long enrollmentCount, long studentCount, String dataSource) {}

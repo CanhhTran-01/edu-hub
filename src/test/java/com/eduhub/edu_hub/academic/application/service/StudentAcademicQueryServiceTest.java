@@ -9,7 +9,7 @@ import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import com.eduhub.edu_hub.enrollment.api.dto.response.StudentLearningHistoryResponse;
 import com.eduhub.edu_hub.enrollment.api.dto.response.StudentLearningHistoryResponse.LearningRecordResponse;
-import com.eduhub.edu_hub.enrollment.application.EnrollmentFacade;
+import com.eduhub.edu_hub.enrollment.application.facade.EnrollmentFacade;
 import com.eduhub.edu_hub.enrollment.domain.enums.EnrollmentStatus;
 import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;

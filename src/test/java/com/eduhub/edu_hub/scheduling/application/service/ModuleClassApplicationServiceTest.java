@@ -4,9 +4,9 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import com.eduhub.edu_hub.curriculum.api.dto.response.CurriculumOpeningSubjectResponse;
 import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
-import com.eduhub.edu_hub.curriculum.application.facade.dto.CurriculumOpeningSubjectResponse;
 import com.eduhub.edu_hub.curriculum.domain.model.Subject;
 import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;

@@ -3,9 +3,9 @@ package com.eduhub.edu_hub.curriculum.application.service;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.eduhub.edu_hub.curriculum.api.dto.response.*;
 import com.eduhub.edu_hub.curriculum.application.exception.StudentCurriculumException;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
-import com.eduhub.edu_hub.curriculum.application.facade.dto.*;
 import com.eduhub.edu_hub.curriculum.domain.enums.*;
 import com.eduhub.edu_hub.curriculum.domain.model.*;
 import com.eduhub.edu_hub.curriculum.domain.repository.SubjectPrerequisiteRepository;
@@ -38,7 +38,14 @@ class StudentCurriculumQueryServiceTest {
                 .thenReturn(UserInfoResponse.builder().id(7L).build());
         when(peopleFacade.findStudentByUserId(7L))
                 .thenReturn(new EnrollmentStudentResponse(
-                        99L, "SV99", "Sinh viên", 2L, 3L, TrainingType.LIEN_THONG, 2026, StudentActivityStatus.STUDYING));
+                        99L,
+                        "SV99",
+                        "Sinh viên",
+                        2L,
+                        3L,
+                        TrainingType.LIEN_THONG,
+                        2026,
+                        StudentActivityStatus.STUDYING));
         when(catalog.findCurriculum(2L, 3L, TrainingType.LIEN_THONG)).thenReturn(Optional.of(curriculum(10)));
         var response = service.findMyCurriculum(principal);
         assertThat(response.semesters()).hasSize(10);

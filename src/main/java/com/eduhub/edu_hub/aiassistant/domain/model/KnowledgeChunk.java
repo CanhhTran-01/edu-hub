@@ -23,5 +23,4 @@ public class KnowledgeChunk extends BaseEntity {
     private String embeddingModelVersion;
     private Integer tokenCount;
     private Integer pageNumber;
-    private String sectionTitle;
 }

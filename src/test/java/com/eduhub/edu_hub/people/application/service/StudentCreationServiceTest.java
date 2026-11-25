@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import com.eduhub.edu_hub.curriculum.api.dto.response.MajorReferenceResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
-import com.eduhub.edu_hub.curriculum.application.facade.dto.MajorResponse;
 import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import com.eduhub.edu_hub.curriculum.domain.model.Major;
 import com.eduhub.edu_hub.identity.api.dto.request.CreateStudentAccountRequest;
@@ -232,7 +232,8 @@ class StudentCreationServiceTest {
 
     private void prepareCreation(boolean emailSent, String emailError) {
         when(classRepository.findByIdForStudentCodeUpdate(1L)).thenReturn(Optional.of(administrativeClass));
-        when(curriculumMajors.requireMajor(10L)).thenReturn(new MajorResponse(10L, "CNTT", "Công nghệ thông tin"));
+        when(curriculumMajors.requireMajor(10L))
+                .thenReturn(new MajorReferenceResponse(10L, "CNTT", "Công nghệ thông tin"));
         when(studentCodeGenerator.allocateNextStudentSequence(administrativeClass))
                 .thenReturn(1);
         when(studentCodeGenerator.generateStudentCode(administrativeClass, 1)).thenReturn("CNTT080101");

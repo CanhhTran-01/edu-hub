@@ -1,5 +1,6 @@
 package com.eduhub.edu_hub.scheduling.api.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -83,7 +84,7 @@ class RoomControllerTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"null", "0", "-1", "80.5", "80.0", "\"80\"", "true", "2147483648"})
+    @ValueSource(strings = {"null", "0", "-1", "0.5", "\"invalid\"", "true", "2147483648"})
     void rejectsInvalidCapacityOnCreateAndUpdate(String capacity) throws Exception {
         String invalid = BODY.replace("\"capacity\":80", "\"capacity\":" + capacity);
         mvc.perform(post("/api/v1/rooms")
@@ -97,6 +98,30 @@ class RoomControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(1001));
         verifyNoInteractions(service);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"80.5", "80.0", "\"80\""})
+    void convertsCapacityToIntegerOnCreateAndUpdate(String capacity) throws Exception {
+        when(service.createRoom(any(CreateRoomRequest.class))).thenReturn(room());
+        when(service.updateRoom(eq(1L), any(UpdateRoomRequest.class))).thenReturn(room());
+        String body = BODY.replace("\"capacity\":80", "\"capacity\":" + capacity);
+        mvc.perform(post("/api/v1/rooms")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.capacity").value(80));
+        mvc.perform(put("/api/v1/rooms/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.capacity").value(80));
+        var createRequest = ArgumentCaptor.forClass(CreateRoomRequest.class);
+        var updateRequest = ArgumentCaptor.forClass(UpdateRoomRequest.class);
+        verify(service).createRoom(createRequest.capture());
+        verify(service).updateRoom(eq(1L), updateRequest.capture());
+        assertThat(createRequest.getValue().getCapacity()).isEqualTo(80);
+        assertThat(updateRequest.getValue().getCapacity()).isEqualTo(80);
     }
 
     @ParameterizedTest

@@ -6,7 +6,7 @@ import static org.mockito.Mockito.*;
 
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
 import com.eduhub.edu_hub.curriculum.domain.model.Subject;
-import com.eduhub.edu_hub.enrollment.application.EnrollmentFacade;
+import com.eduhub.edu_hub.enrollment.application.facade.EnrollmentFacade;
 import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;

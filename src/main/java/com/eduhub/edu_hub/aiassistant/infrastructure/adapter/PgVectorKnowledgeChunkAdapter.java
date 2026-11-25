@@ -57,7 +57,6 @@ public class PgVectorKnowledgeChunkAdapter implements KnowledgeChunkPort {
                     properties.getEmbeddingModelVersion(),
                     chunk.tokenCount(),
                     chunk.pageNumber(),
-                    chunk.sectionTitle(),
                     auditTimestamp,
                     auditTimestamp,
                     sourceId,
@@ -68,8 +67,8 @@ public class PgVectorKnowledgeChunkAdapter implements KnowledgeChunkPort {
             jdbcTemplate.batchUpdate(
                     """
                     insert into knowledge_chunks(source_id, chunk_index, content, embedding, embedding_model,
-                        embedding_model_version, token_count, page_number, section_title, created_at, updated_at, is_deleted)
-                    select ?, ?, ?, ?::vector, ?, ?, ?, ?, ?, ?, ?, false
+                        embedding_model_version, token_count, page_number, created_at, updated_at, is_deleted)
+                    select ?, ?, ?, ?::vector, ?, ?, ?, ?, ?, ?, false
                     from knowledge_sources source
                     where source.id = ? and source.status = 'PROCESSING' and not source.is_deleted
                       and source.processing_token = ?
@@ -97,7 +96,7 @@ public class PgVectorKnowledgeChunkAdapter implements KnowledgeChunkPort {
         parameters.put("topK", properties.getTopK());
         return namedJdbcTemplate.query(
                 """
-                select chunk.id, chunk.source_id, source.title, chunk.section_title, chunk.page_number,
+                select chunk.id, chunk.source_id, source.title, chunk.page_number,
                     chunk.content, chunk.token_count, source.effective_date,
                     1 - (chunk.embedding <=> cast(:embedding as vector)) as relevance_score
                 from knowledge_chunks chunk join knowledge_sources source on source.id = chunk.source_id
@@ -112,7 +111,6 @@ public class PgVectorKnowledgeChunkAdapter implements KnowledgeChunkPort {
                         record.getLong("id"),
                         record.getLong("source_id"),
                         record.getString("title"),
-                        record.getString("section_title"),
                         record.getObject("page_number", Integer.class),
                         record.getString("content"),
                         record.getInt("token_count"),

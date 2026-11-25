@@ -1,11 +1,11 @@
-package com.eduhub.edu_hub.enrollment.application;
+package com.eduhub.edu_hub.enrollment.application.facade;
 
 import com.eduhub.edu_hub.enrollment.api.dto.response.EnrollmentResponse;
 import com.eduhub.edu_hub.enrollment.api.dto.response.EnrollmentScopeResponse;
+import com.eduhub.edu_hub.enrollment.api.dto.response.LearningHistoryResponse;
 import com.eduhub.edu_hub.enrollment.api.dto.response.ModuleClassStudentResponse;
+import com.eduhub.edu_hub.enrollment.api.dto.response.ModuleClassUsageResponse;
 import com.eduhub.edu_hub.enrollment.api.dto.response.StudentLearningHistoryResponse;
-import com.eduhub.edu_hub.enrollment.application.facade.dto.LearningHistoryResponse;
-import com.eduhub.edu_hub.enrollment.application.facade.dto.ModuleClassUsageResponse;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -20,7 +20,7 @@ public interface EnrollmentFacade {
         List<ModuleClassStudentResponse> findStudentsByModuleClassId(Long moduleClassId);
     }
 
-    /** Contract đọc cho scheduling; chưa đăng ký bean cho tới khi có nguồn Enrollment thật. */
+    /** Đọc phạm vi và lịch sử cho Scheduling qua EnrollmentPlanningFacadeImpl. */
     interface Planning {
         EnrollmentScopeResponse findScope();
         /** Toàn bộ lịch sử theo môn/kỳ, kể cả DROPPED/đã ẩn. COMPLETED nghĩa là đã đạt. */
@@ -34,6 +34,8 @@ public interface EnrollmentFacade {
         long countActiveRegistrations(Long moduleClassId);
     }
 
+    // TODO(ENROLLMENT_FACADE_QUERIES): Các truy vấn trực tiếp dưới đây chưa có implementation hoặc consumer;
+    // chỉ bổ sung khi có use-case thực tế, các consumer hiện tại dùng những capability bên trên.
     Optional<EnrollmentResponse> findById(Long enrollmentId);
 
     List<EnrollmentResponse> findByStudentAndSemester(Long studentId, Long semesterId);

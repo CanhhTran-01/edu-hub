@@ -145,7 +145,7 @@ class StudentCodeGeneratorTest {
         value.setMajorId(major.getId());
         org.mockito.Mockito.lenient()
                 .when(majors.requireMajor(id))
-                .thenReturn(new com.eduhub.edu_hub.curriculum.application.facade.dto.MajorResponse(
+                .thenReturn(new com.eduhub.edu_hub.curriculum.api.dto.response.MajorReferenceResponse(
                         id,
                         canonical,
                         java.util.Map.of(

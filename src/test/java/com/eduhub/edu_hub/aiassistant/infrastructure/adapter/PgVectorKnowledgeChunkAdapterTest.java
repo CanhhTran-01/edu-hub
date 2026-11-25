@@ -60,7 +60,7 @@ class PgVectorKnowledgeChunkAdapterTest {
     @SuppressWarnings({"rawtypes", "unchecked"})
     void insertKeepsSourceProcessingTokenAndVectorsOnTheSameChunkRow() {
         when(model.call(any())).thenReturn(response());
-        adapter.storeChunks(9L, "attempt", List.of(new ChunkContent("Nội dung quy chế.", "Điều 1", 2, 10)));
+        adapter.storeChunks(9L, "attempt", List.of(new ChunkContent("Nội dung quy chế.", 2, 10)));
         var sql = ArgumentCaptor.forClass(String.class);
         var parameters = ArgumentCaptor.forClass(List.class);
         verify(jdbc).batchUpdate(sql.capture(), parameters.capture());
@@ -69,11 +69,16 @@ class PgVectorKnowledgeChunkAdapterTest {
                         "insert into knowledge_chunks",
                         "source.status = 'PROCESSING'",
                         "source.processing_token = ?",
-                        "for share of source");
+                        "for share of source")
+                .doesNotContain("section_title");
         Object[] chunkParameters = (Object[]) parameters.getValue().getFirst();
+        assertThat(chunkParameters).hasSize(12);
         assertThat(chunkParameters[0]).isEqualTo(9L);
         assertThat(chunkParameters[4]).isEqualTo(properties.getEmbeddingModel());
-        assertThat(chunkParameters[12]).isEqualTo("attempt");
+        assertThat(chunkParameters[6]).isEqualTo(10);
+        assertThat(chunkParameters[7]).isEqualTo(2);
+        assertThat(chunkParameters[10]).isEqualTo(9L);
+        assertThat(chunkParameters[11]).isEqualTo("attempt");
         var request = ArgumentCaptor.forClass(EmbeddingRequest.class);
         verify(model).call(request.capture());
         assertThat(((GoogleGenAiTextEmbeddingOptions) request.getValue().getOptions()).getTaskType())

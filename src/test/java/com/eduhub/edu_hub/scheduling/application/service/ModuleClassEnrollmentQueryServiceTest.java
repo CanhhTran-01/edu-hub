@@ -3,8 +3,8 @@ package com.eduhub.edu_hub.scheduling.application.service;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import com.eduhub.edu_hub.enrollment.application.EnrollmentFacade;
-import com.eduhub.edu_hub.enrollment.application.facade.dto.ModuleClassUsageResponse;
+import com.eduhub.edu_hub.enrollment.api.dto.response.ModuleClassUsageResponse;
+import com.eduhub.edu_hub.enrollment.application.facade.EnrollmentFacade;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 

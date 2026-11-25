@@ -1,8 +1,9 @@
 package com.eduhub.edu_hub.curriculum.application.facade.impl;
 
+import com.eduhub.edu_hub.curriculum.api.dto.response.CurriculumOpeningSubjectResponse;
 import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
+import com.eduhub.edu_hub.curriculum.application.exception.SubjectException;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
-import com.eduhub.edu_hub.curriculum.application.facade.dto.CurriculumOpeningSubjectResponse;
 import com.eduhub.edu_hub.curriculum.domain.enums.*;
 import com.eduhub.edu_hub.curriculum.domain.model.*;
 import com.eduhub.edu_hub.curriculum.domain.repository.*;
@@ -71,9 +72,9 @@ public class CurriculumClassOpeningFacadeImpl implements CurriculumFacade.ClassO
         if (ids.isEmpty()) return List.of();
         // Giữ khóa đọc đến khi transaction mở lớp kết thúc, tránh ngừng sử dụng môn giữa lúc lưu.
         var subjects = subjectRepository.findAllByIdInAndDeletedFalseOrderByIdAsc(ids);
-        if (subjects.size() != ids.size()) throw new BaseException(ErrorCode.SUBJECT_NOT_FOUND);
+        if (subjects.size() != ids.size()) throw new SubjectException(ErrorCode.SUBJECT_NOT_FOUND);
         if (subjects.stream().anyMatch(subject -> subject.getStatus() != SubjectStatus.ACTIVE))
-            throw new BaseException(ErrorCode.SUBJECT_NOT_OPENABLE);
+            throw new SubjectException(ErrorCode.SUBJECT_NOT_OPENABLE);
         return subjects.stream().map(this::toResponse).toList();
     }
 

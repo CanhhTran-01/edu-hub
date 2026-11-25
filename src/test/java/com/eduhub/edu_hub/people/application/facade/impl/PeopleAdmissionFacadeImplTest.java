@@ -4,9 +4,9 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+import com.eduhub.edu_hub.curriculum.api.dto.response.MajorReferenceResponse;
 import com.eduhub.edu_hub.curriculum.api.dto.response.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
-import com.eduhub.edu_hub.curriculum.application.facade.dto.MajorResponse;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.people.application.facade.dto.AdmissionClassRequest;
 import com.eduhub.edu_hub.people.application.service.StudentCodeGenerator;
@@ -31,7 +31,7 @@ class PeopleAdmissionFacadeImplTest {
     @Test
     void createsClassUsingConfiguredPrefixInsteadOfInferringOneFromTheName() {
         var facade = facade("{\"CNTT\":\"IT\"}");
-        var major = new MajorResponse(1L, "CNTT", "Công nghệ thông tin");
+        var major = new MajorReferenceResponse(1L, "CNTT", "Công nghệ thông tin");
         when(majors.requireMajor(1L)).thenReturn(major);
         when(majors.findMajorsForClassNaming()).thenReturn(List.of(major));
         var cohort = new Cohort();
@@ -61,7 +61,7 @@ class PeopleAdmissionFacadeImplTest {
     @Test
     void missingMappingIsVisibleWhenReadingPrefixesButPreventsCreatingANewClass() {
         var facade = facade("{}");
-        var major = new MajorResponse(1L, "CNTT", "Công nghệ thông tin");
+        var major = new MajorReferenceResponse(1L, "CNTT", "Công nghệ thông tin");
         when(majors.findMajorsForClassNaming()).thenReturn(List.of(major));
         assertThat(facade.findClassPrefixes()).singleElement().satisfies(prefix -> {
             assertThat(prefix.majorName()).isEqualTo("Công nghệ thông tin");

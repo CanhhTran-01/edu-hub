@@ -1,7 +1,7 @@
 package com.eduhub.edu_hub.scheduling.application.service;
 
-import com.eduhub.edu_hub.enrollment.application.EnrollmentFacade;
-import com.eduhub.edu_hub.enrollment.application.facade.dto.ModuleClassUsageResponse;
+import com.eduhub.edu_hub.enrollment.api.dto.response.ModuleClassUsageResponse;
+import com.eduhub.edu_hub.enrollment.application.facade.EnrollmentFacade;
 import com.eduhub.edu_hub.scheduling.application.exception.ModuleClassException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;

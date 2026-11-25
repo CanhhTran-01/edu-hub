@@ -1,11 +1,6 @@
 package com.eduhub.edu_hub.curriculum.application.facade;
 
-import com.eduhub.edu_hub.curriculum.api.dto.response.MajorSimpleResponse;
-import com.eduhub.edu_hub.curriculum.api.dto.response.StudentCurriculumResponse;
-import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectPrerequisitesResponse;
-import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectResponse;
-import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
-import com.eduhub.edu_hub.curriculum.application.facade.dto.*;
+import com.eduhub.edu_hub.curriculum.api.dto.response.*;
 import com.eduhub.edu_hub.curriculum.domain.enums.TrainingType;
 import java.util.List;
 import java.util.Optional;
@@ -41,9 +36,9 @@ public interface CurriculumFacade {
     }
 
     interface Majors {
-        MajorResponse requireMajor(Long id);
+        MajorReferenceResponse requireMajor(Long majorId);
 
-        List<MajorResponse> findMajorsForClassNaming();
+        List<MajorReferenceResponse> findMajorsForClassNaming();
     }
 
     /** Read facet phục vụ mở lớp, không làm giả các capability chưa triển khai của Facade đầy đủ. */

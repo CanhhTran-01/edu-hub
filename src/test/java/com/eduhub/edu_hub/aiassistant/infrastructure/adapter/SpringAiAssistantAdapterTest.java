@@ -42,8 +42,7 @@ class SpringAiAssistantAdapterTest {
                 JsonMapper.builder().findAndAddModules().build(),
                 properties,
                 new AiTokenCounter());
-        var chunk = new RetrievedChunk(
-                21L, 3L, "Quy chế", "Điều 1", 2, "Nội dung quy chế.", 10, 0.9, LocalDate.of(2026, 1, 1));
+        var chunk = new RetrievedChunk(21L, 3L, "Quy chế", 2, "Nội dung quy chế.", 10, 0.9, LocalDate.of(2026, 1, 1));
         var answer = adapter.answer("Quy chế?", List.of(), List.of(chunk));
         assertThat(answer.content()).isEqualTo("Theo quy chế [K21].");
         assertThat(answer.citationIds()).containsExactly(21L);
@@ -51,7 +50,8 @@ class SpringAiAssistantAdapterTest {
         verify(model).call(prompt.capture());
         assertThat(prompt.getValue().getSystemMessage().getText()).isEqualTo(properties.getSystemPrompt());
         assertThat(prompt.getValue().getUserMessage().getText())
-                .contains("K21", "2026-01-01", "Điều 1", "UNTRUSTED_DATA_JSON");
+                .contains("K21", "2026-01-01", "\"sourceTitle\":\"Quy chế\"", "\"pageNumber\":2", "UNTRUSTED_DATA_JSON")
+                .doesNotContain("\"sectionTitle\"");
     }
 
     @Test

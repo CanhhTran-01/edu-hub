@@ -4,7 +4,7 @@ import static com.eduhub.edu_hub.shared.systemconfig.domain.enums.SystemConfigKe
 
 import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
-import com.eduhub.edu_hub.enrollment.application.facade.dto.ModuleClassUsageResponse;
+import com.eduhub.edu_hub.enrollment.api.dto.response.ModuleClassUsageResponse;
 import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import com.eduhub.edu_hub.scheduling.api.dto.request.CancelModuleClassRequest;

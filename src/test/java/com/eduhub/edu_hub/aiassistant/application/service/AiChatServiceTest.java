@@ -154,7 +154,6 @@ class AiChatServiceTest {
     }
 
     private RetrievedChunk chunk(Long chunkId) {
-        return new RetrievedChunk(
-                chunkId, 1L, "Quy chế", "Điều 1", null, "Quy định học lại.", 20, 0.9, LocalDate.of(2026, 1, 1));
+        return new RetrievedChunk(chunkId, 1L, "Quy chế", null, "Quy định học lại.", 20, 0.9, LocalDate.of(2026, 1, 1));
     }
 }

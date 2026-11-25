@@ -130,11 +130,8 @@ public class AiChatService {
         List<RetrievedChunk> selectedChunks = new ArrayList<>();
         int contextTokens = 0;
         for (RetrievedChunk chunk : candidates) {
-            int chunkTokens = tokenCounter.countTokens(chunk.content()
-                            + chunk.sourceTitle()
-                            + Objects.toString(chunk.sectionTitle(), "")
-                            + chunk.effectiveDate())
-                    + 64;
+            int chunkTokens =
+                    tokenCounter.countTokens(chunk.content() + chunk.sourceTitle() + chunk.effectiveDate()) + 64;
             if (selectedChunks.size() >= properties.getMaximumContextChunks()) break;
             if (contextTokens + chunkTokens > properties.getContextTokenLimit()) continue;
             selectedChunks.add(chunk);

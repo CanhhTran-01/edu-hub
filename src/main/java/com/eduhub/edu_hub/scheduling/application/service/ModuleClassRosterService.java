@@ -2,7 +2,7 @@ package com.eduhub.edu_hub.scheduling.application.service;
 
 import com.eduhub.edu_hub.curriculum.api.dto.response.SubjectSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
-import com.eduhub.edu_hub.enrollment.application.EnrollmentFacade;
+import com.eduhub.edu_hub.enrollment.application.facade.EnrollmentFacade;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
 import com.eduhub.edu_hub.identity.domain.enums.AccessTokenPurpose;
 import com.eduhub.edu_hub.people.api.dto.response.LecturerResponse;

@@ -1,4 +1,4 @@
-package com.eduhub.edu_hub.curriculum.application.facade.dto;
+package com.eduhub.edu_hub.curriculum.api.dto.response;
 
 import java.util.List;
 import lombok.Builder;

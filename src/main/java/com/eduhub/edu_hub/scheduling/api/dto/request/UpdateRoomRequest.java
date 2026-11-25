@@ -1,13 +1,11 @@
 package com.eduhub.edu_hub.scheduling.api.dto.request;
 
-import com.eduhub.edu_hub.scheduling.api.serialization.ClassCapacityDeserializer;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
-import tools.jackson.databind.annotation.JsonDeserialize;
 
 @Data
 public class UpdateRoomRequest {
@@ -32,6 +30,5 @@ public class UpdateRoomRequest {
 
     @NotNull(message = "Sức chứa không được để trống")
     @Min(value = 1, message = "Sức chứa phải lớn hơn 0")
-    @JsonDeserialize(using = ClassCapacityDeserializer.class)
     private Integer capacity;
 }

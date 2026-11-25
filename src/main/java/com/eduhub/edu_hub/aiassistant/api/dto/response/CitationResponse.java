@@ -10,7 +10,6 @@ public class CitationResponse {
     private Long chunkId;
     private Long sourceId;
     private String sourceTitle;
-    private String sectionTitle;
     private Integer pageNumber;
     private String snippet;
     private boolean sourceAvailable;

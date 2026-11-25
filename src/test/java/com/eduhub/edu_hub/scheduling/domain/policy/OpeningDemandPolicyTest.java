@@ -2,7 +2,7 @@ package com.eduhub.edu_hub.scheduling.domain.policy;
 
 import static org.assertj.core.api.Assertions.*;
 
-import com.eduhub.edu_hub.curriculum.application.facade.dto.CurriculumOpeningSubjectResponse;
+import com.eduhub.edu_hub.curriculum.api.dto.response.CurriculumOpeningSubjectResponse;
 import com.eduhub.edu_hub.people.domain.enums.StudentActivityStatus;
 import com.eduhub.edu_hub.scheduling.api.dto.response.OpeningSubjectResponse;
 import com.eduhub.edu_hub.scheduling.api.mapper.OpeningSubjectResponseMapper;

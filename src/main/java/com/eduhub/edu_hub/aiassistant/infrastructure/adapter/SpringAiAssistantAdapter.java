@@ -63,7 +63,6 @@ public class SpringAiAssistantAdapter implements AiAssistantPort {
                 .map(chunk -> new ContextPassage(
                         "K" + chunk.chunkId(),
                         chunk.sourceTitle(),
-                        chunk.sectionTitle(),
                         chunk.pageNumber(),
                         chunk.effectiveDate(),
                         chunk.content()))
@@ -91,10 +90,5 @@ public class SpringAiAssistantAdapter implements AiAssistantPort {
     }
 
     private record ContextPassage(
-            String referenceCode,
-            String sourceTitle,
-            String sectionTitle,
-            Integer pageNumber,
-            LocalDate effectiveDate,
-            String content) {}
+            String referenceCode, String sourceTitle, Integer pageNumber, LocalDate effectiveDate, String content) {}
 }

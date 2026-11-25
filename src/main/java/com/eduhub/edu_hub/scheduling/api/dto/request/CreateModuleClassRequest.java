@@ -1,16 +1,13 @@
 package com.eduhub.edu_hub.scheduling.api.dto.request;
 
-import com.eduhub.edu_hub.scheduling.api.serialization.ClassCapacityDeserializer;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
 import lombok.Data;
-import tools.jackson.databind.annotation.JsonDeserialize;
 
 @Data
 public class CreateModuleClassRequest {
     @Min(1)
-    @JsonDeserialize(using = ClassCapacityDeserializer.class)
     private Integer maxCapacity;
 
     @JsonIgnore

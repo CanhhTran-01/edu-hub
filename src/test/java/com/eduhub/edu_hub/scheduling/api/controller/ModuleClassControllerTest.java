@@ -107,7 +107,7 @@ class ModuleClassControllerTest {
                 "{\"subjects\":[{\"subjectId\":1,\"classes\":[]}]}",
                 "{\"subjects\":[{\"subjectId\":1,\"classes\":[null]}]}",
                 "{\"subjects\":[{\"subjectId\":1,\"classes\":[{\"maxCapacity\":null}]}]}",
-                "{\"subjects\":[{\"subjectId\":1,\"classes\":[{\"maxCapacity\":10.5}]}]}"
+                "{\"subjects\":[{\"subjectId\":1,\"classes\":[{\"maxCapacity\":0.5}]}]}"
             })
     void validatesEveryNestedItemBeforeCallingService(String body) throws Exception {
         mvc.perform(post("/api/v1/semesters/7/module-classes/batch")
@@ -116,6 +116,33 @@ class ModuleClassControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(1001));
         verifyNoInteractions(service);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"10.5", "10.0", "\"10\""})
+    void convertsCapacityToIntegerForBatchCreationAndUpdate(String capacity) throws Exception {
+        when(service.createModuleClasses(eq(7L), any())).thenReturn(List.of());
+        when(service.updateModuleClassCapacity(eq(101L), any()))
+                .thenReturn(
+                        ModuleClassResponse.builder().id(101L).maxCapacity(10).build());
+        mvc.perform(post("/api/v1/semesters/7/module-classes/batch")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"subjects\":[{\"subjectId\":1,\"classes\":[{\"maxCapacity\":" + capacity + "}]}]}"))
+                .andExpect(status().isCreated());
+        mvc.perform(patch("/api/v1/module-classes/101")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"maxCapacity\":" + capacity + ",\"reason\":\"Điều chỉnh quy mô\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.maxCapacity").value(10));
+        var createRequest = ArgumentCaptor.forClass(CreateModuleClassesRequest.class);
+        var updateRequest = ArgumentCaptor.forClass(UpdateModuleClassRequest.class);
+        verify(service).createModuleClasses(eq(7L), createRequest.capture());
+        verify(service).updateModuleClassCapacity(eq(101L), updateRequest.capture());
+        var requestedClass =
+                createRequest.getValue().getSubjects().getFirst().getClasses().getFirst();
+        assertThat(requestedClass.getMaxCapacity()).isEqualTo(10);
+        assertThat(requestedClass.isMaxCapacityPresent()).isTrue();
+        assertThat(updateRequest.getValue().getMaxCapacity()).isEqualTo(10);
     }
 
     @Test
@@ -193,7 +220,7 @@ class ModuleClassControllerTest {
                 "{\"maxCapacity\":60}",
                 "{\"maxCapacity\":60,\"reason\":\"   \"}",
                 "{\"maxCapacity\":null,\"reason\":\"Đổi sức chứa\"}",
-                "{\"maxCapacity\":10.5,\"reason\":\"Đổi sức chứa\"}",
+                "{\"maxCapacity\":0.5,\"reason\":\"Đổi sức chứa\"}",
                 "{\"maxCapacity\":0,\"reason\":\"Đổi sức chứa\"}"
             })
     void patchRequiresValidCapacityAndReason(String body) throws Exception {

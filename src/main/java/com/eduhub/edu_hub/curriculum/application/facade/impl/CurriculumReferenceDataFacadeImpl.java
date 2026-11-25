@@ -1,8 +1,8 @@
 package com.eduhub.edu_hub.curriculum.application.facade.impl;
 
+import com.eduhub.edu_hub.curriculum.api.dto.response.CurriculumAssignmentResponse;
 import com.eduhub.edu_hub.curriculum.api.dto.response.MajorSimpleResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
-import com.eduhub.edu_hub.curriculum.application.facade.dto.CurriculumAssignmentResponse;
 import com.eduhub.edu_hub.curriculum.domain.enums.CatalogStatus;
 import com.eduhub.edu_hub.curriculum.domain.repository.CurriculumRepository;
 import com.eduhub.edu_hub.curriculum.domain.repository.MajorRepository;

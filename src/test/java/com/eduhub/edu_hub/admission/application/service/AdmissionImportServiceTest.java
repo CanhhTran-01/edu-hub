@@ -22,8 +22,8 @@ import com.eduhub.edu_hub.admission.domain.repository.StudentAdmissionRepository
 import com.eduhub.edu_hub.admission.infrastructure.spreadsheet.AdmissionSpreadsheetApplicant;
 import com.eduhub.edu_hub.admission.infrastructure.spreadsheet.AdmissionSpreadsheetReader;
 import com.eduhub.edu_hub.admission.infrastructure.spreadsheet.AdmissionSpreadsheetScope;
+import com.eduhub.edu_hub.curriculum.api.dto.response.MajorReferenceResponse;
 import com.eduhub.edu_hub.curriculum.application.facade.CurriculumFacade;
-import com.eduhub.edu_hub.curriculum.application.facade.dto.MajorResponse;
 import com.eduhub.edu_hub.identity.api.dto.response.StudentAccountResponse;
 import com.eduhub.edu_hub.identity.application.exception.IdentityAccountException;
 import com.eduhub.edu_hub.identity.application.facade.IdentityFacade;
@@ -91,7 +91,8 @@ class AdmissionImportServiceTest {
     void preparePlanAndCaptureSavedApplicants() {
         plan.setId(7L);
         when(planLockService.lockPlanAtRevision(7L, 5)).thenReturn(plan);
-        when(majorCatalogFacade.requireMajor(1L)).thenReturn(new MajorResponse(1L, "CNTT", "Công nghệ thông tin"));
+        when(majorCatalogFacade.requireMajor(1L))
+                .thenReturn(new MajorReferenceResponse(1L, "CNTT", "Công nghệ thông tin"));
         when(peopleAdmissionFacade.requireCohort(8L)).thenReturn(new AdmissionCohortInfo(8L, "K08", 8));
         when(applicantRepository.findByPlan_IdAndDeletedFalseOrderByRowNumber(7L))
                 .thenReturn(new ArrayList<>());

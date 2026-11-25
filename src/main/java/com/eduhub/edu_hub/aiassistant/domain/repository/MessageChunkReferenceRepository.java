@@ -13,7 +13,6 @@ public interface MessageChunkReferenceRepository extends JpaRepository<MessageCh
                     """
             select reference.message_id as "messageId", reference.chunk_id as "chunkId",
                    source.id as "sourceId", coalesce(source.title, reference.source_title) as "sourceTitle",
-                   coalesce(chunk.section_title, reference.section_title) as "sectionTitle",
                    coalesce(chunk.page_number, reference.page_number) as "pageNumber",
                    coalesce(chunk.content, reference.snippet) as snippet,
                    (source.status = 'ACTIVE' and not source.is_deleted and not chunk.is_deleted
@@ -44,8 +43,6 @@ public interface MessageChunkReferenceRepository extends JpaRepository<MessageCh
         Long getSourceId();
 
         String getSourceTitle();
-
-        String getSectionTitle();
 
         Integer getPageNumber();
 
