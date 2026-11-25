@@ -96,7 +96,6 @@ public class ChatHistoryService {
                                 message.getId().toString(),
                                 message.getRole(),
                                 message.getContent(),
-                                message.getIntent(),
                                 message.getSentAt(),
                                 references.getOrDefault(message.getId(), List.of()).stream()
                                         .map(this::citationResponse)
@@ -120,8 +119,10 @@ public class ChatHistoryService {
         List<ConversationMessage> conversation = new ArrayList<>();
         for (ChatMessage message : messages) {
             var messageReferences = references.getOrDefault(message.getId(), List.of());
+            // Memory RAG chỉ dùng lại câu trả lời còn đủ nguồn; lời đáp không có nguồn vẫn giữ trong lịch sử hiển thị.
+            // TODO(ADVISOR_MEMORY_PROVENANCE): Khi có kết quả tool/artifact, bổ sung kiểm tra snapshot của
+            // kết quả học vụ; hiện chưa có payload này nên không coi text không nguồn là dữ liệu đã xác minh.
             if (message.getRole() == ChatMessageRole.ASSISTANT
-                    && message.getIntent() == AiIntent.KNOWLEDGE
                     && (messageReferences.isEmpty()
                             || messageReferences.stream()
                                     .anyMatch(reference -> !Boolean.TRUE.equals(reference.getSourceAvailable()))))
@@ -136,7 +137,6 @@ public class ChatHistoryService {
             Jwt principal,
             ConversationContext context,
             String question,
-            AiIntent intent,
             String proposedContent,
             List<RetrievedChunk> citedChunks) {
         Long userId = accessService.requireStudent(principal).getId();
@@ -156,9 +156,9 @@ public class ChatHistoryService {
         }
         // Chỉ service này ghi lịch sử. Cả cặp message và tham chiếu cùng commit; gọi AI đã hoàn tất bên ngoài
         // transaction.
-        messageRepository.save(new ChatMessage(session, ChatMessageRole.USER, question, intent, now));
+        messageRepository.save(new ChatMessage(session, ChatMessageRole.USER, question, now));
         ChatMessage assistantMessage =
-                messageRepository.save(new ChatMessage(session, ChatMessageRole.ASSISTANT, content, intent, now));
+                messageRepository.save(new ChatMessage(session, ChatMessageRole.ASSISTANT, content, now));
         if (!referencesToSave.isEmpty()) {
             referenceRepository.saveAll(referencesToSave.stream()
                     .map(chunk -> new MessageChunkReference(assistantMessage, chunk.chunkId(), chunk.relevanceScore()))
@@ -169,7 +169,6 @@ public class ChatHistoryService {
                 .sessionId(session.getId().toString())
                 .messageId(assistantMessage.getId().toString())
                 .content(content)
-                .intent(intent)
                 .citations(referencesToSave.stream()
                         .map(this::retrievedCitationResponse)
                         .toList())

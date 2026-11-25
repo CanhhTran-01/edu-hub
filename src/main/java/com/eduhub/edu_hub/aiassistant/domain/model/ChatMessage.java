@@ -1,6 +1,5 @@
 package com.eduhub.edu_hub.aiassistant.domain.model;
 
-import com.eduhub.edu_hub.aiassistant.domain.enums.AiIntent;
 import com.eduhub.edu_hub.aiassistant.domain.enums.ChatMessageRole;
 import com.eduhub.edu_hub.shared.common.BaseEntity;
 import jakarta.persistence.Column;
@@ -31,22 +30,16 @@ public class ChatMessage extends BaseEntity {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
-    @Enumerated(EnumType.STRING)
-    @Column(length = 32)
-    private AiIntent intent;
-
     private LocalDateTime sentAt;
 
-    public ChatMessage(ChatSession session, ChatMessageRole role, String content, AiIntent intent) {
+    public ChatMessage(ChatSession session, ChatMessageRole role, String content) {
         this.session = session;
         this.role = role;
         this.content = content;
-        this.intent = intent;
     }
 
-    public ChatMessage(
-            ChatSession session, ChatMessageRole role, String content, AiIntent intent, LocalDateTime sentAt) {
-        this(session, role, content, intent);
+    public ChatMessage(ChatSession session, ChatMessageRole role, String content, LocalDateTime sentAt) {
+        this(session, role, content);
         this.sentAt = sentAt;
     }
 }

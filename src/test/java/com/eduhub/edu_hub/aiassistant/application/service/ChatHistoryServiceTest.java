@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
+import com.eduhub.edu_hub.aiassistant.application.port.AiAssistantPort.ConversationMessage;
 import com.eduhub.edu_hub.aiassistant.application.port.KnowledgeChunkPort;
 import com.eduhub.edu_hub.aiassistant.application.port.KnowledgeChunkPort.RetrievedChunk;
 import com.eduhub.edu_hub.aiassistant.domain.enums.*;
@@ -80,8 +81,7 @@ class ChatHistoryServiceTest {
                         eq(3L), eq(7L), any()))
                 .thenReturn(List.of(message(12L, "Tin mới")));
         var context = new ChatHistoryService.ConversationContext(3L, 11L, List.of());
-        assertThatThrownBy(() -> service.recordExchange(
-                        principal, context, "Hỏi tiếp", AiIntent.KNOWLEDGE, "Trả lời", List.of()))
+        assertThatThrownBy(() -> service.recordExchange(principal, context, "Hỏi tiếp", "Trả lời", List.of()))
                 .isInstanceOfSatisfying(AiAssistantException.class, exception -> assertThat(exception.getErrorCode())
                         .isEqualTo(ErrorCode.CHAT_SESSION_CHANGED));
         verify(messages, never()).save(any());
@@ -104,7 +104,6 @@ class ChatHistoryServiceTest {
                 principal,
                 new ChatHistoryService.ConversationContext(3L, null, List.of()),
                 "Học lại?",
-                AiIntent.KNOWLEDGE,
                 "Theo quy chế [K21].",
                 List.of(chunk));
         assertThat(response.getContent()).isEqualTo("Chưa đủ căn cứ.");
@@ -112,9 +111,42 @@ class ChatHistoryServiceTest {
         verify(references, never()).saveAll(any());
     }
 
+    @Test
+    void memoryKeepsUserQuestionAndOnlyAnswersWithAllReferencesAvailable() {
+        when(sessions.findByIdAndUserIdAndDeletedFalse(3L, 7L)).thenReturn(Optional.of(session));
+        var userQuestion = new ChatMessage(session, ChatMessageRole.USER, "Quy chế học lại?", LocalDateTime.now(clock));
+        userQuestion.setId(10L);
+        var answerWithoutReferences = message(11L, "Chưa đủ căn cứ.");
+        var answerWithUnavailableSource = message(12L, "Quy chế cũ [K21] [K22].");
+        var answerWithAvailableSource = message(13L, "Quy chế hiện hành [K23].");
+        when(messages.findBySessionIdAndSessionUserIdAndSessionDeletedFalseAndDeletedFalseOrderByIdDesc(
+                        eq(3L), eq(7L), any()))
+                .thenReturn(List.of(
+                        answerWithAvailableSource, answerWithUnavailableSource, answerWithoutReferences, userQuestion));
+        var availableOldReference = mock(MessageChunkReferenceRepository.ReferenceProjection.class);
+        when(availableOldReference.getMessageId()).thenReturn(12L);
+        when(availableOldReference.getSourceAvailable()).thenReturn(true);
+        var unavailableReference = mock(MessageChunkReferenceRepository.ReferenceProjection.class);
+        when(unavailableReference.getMessageId()).thenReturn(12L);
+        when(unavailableReference.getSourceAvailable()).thenReturn(false);
+        var availableReference = mock(MessageChunkReferenceRepository.ReferenceProjection.class);
+        when(availableReference.getMessageId()).thenReturn(13L);
+        when(availableReference.getSourceAvailable()).thenReturn(true);
+        when(references.findOwnedReferences(eq(7L), eq(List.of(13L, 12L, 11L, 10L)), any()))
+                .thenReturn(List.of(availableOldReference, unavailableReference, availableReference));
+
+        var context = service.loadConversation(7L, "3");
+
+        assertThat(context.lastMessageId()).isEqualTo(13L);
+        assertThat(context.messages())
+                .containsExactly(
+                        new ConversationMessage("USER", userQuestion.getContent()),
+                        new ConversationMessage("ASSISTANT", answerWithAvailableSource.getContent()));
+        verify(messages, never()).save(any());
+    }
+
     private ChatMessage message(Long id, String content) {
-        var message = new ChatMessage(
-                session, ChatMessageRole.ASSISTANT, content, AiIntent.KNOWLEDGE, LocalDateTime.now(clock));
+        var message = new ChatMessage(session, ChatMessageRole.ASSISTANT, content, LocalDateTime.now(clock));
         message.setId(id);
         return message;
     }

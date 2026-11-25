@@ -26,7 +26,11 @@ public record AcademicPlanningSnapshot(
     }
 
     public record PlanningStudent(
-            long id, String studentCode, String curriculumCode, int admissionYear, StudentActivityStatus activityStatus) {}
+            long id,
+            String studentCode,
+            String curriculumCode,
+            int admissionYear,
+            StudentActivityStatus activityStatus) {}
 
     public record LearningAttempt(
             long studentId, String subjectCode, int academicYearStart, int semesterNumber, LearningOutcome status) {

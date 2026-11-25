@@ -11,7 +11,6 @@ import com.eduhub.edu_hub.aiassistant.api.dto.response.*;
 import com.eduhub.edu_hub.aiassistant.api.exception.AiAssistantExceptionHandler;
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
 import com.eduhub.edu_hub.aiassistant.application.service.*;
-import com.eduhub.edu_hub.aiassistant.domain.enums.AiIntent;
 import com.eduhub.edu_hub.aiassistant.domain.enums.ChatMessageRole;
 import com.eduhub.edu_hub.aiassistant.domain.enums.KnowledgeSourceStatus;
 import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
@@ -105,13 +104,13 @@ class AiControllersTest {
                                 "11",
                                 ChatMessageRole.ASSISTANT,
                                 "Theo quy chế [K21].",
-                                AiIntent.KNOWLEDGE,
                                 LocalDateTime.now(clock),
                                 List.of(citationResponse())))));
         mvc.perform(get("/api/v1/ai/sessions/3").param("userId", "999"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", "no-store"))
                 .andExpect(jsonPath("$.data.title").value("Học lại"))
+                .andExpect(jsonPath("$.data.messages[0].intent").doesNotHaveJsonPath())
                 .andExpect(jsonPath("$.data.messages[0].citations[0].referenceCode")
                         .value("K21"))
                 .andExpect(
@@ -130,7 +129,6 @@ class AiControllersTest {
                         .sessionId("3")
                         .messageId("11")
                         .content("Theo quy chế [K21].")
-                        .intent(AiIntent.KNOWLEDGE)
                         .citations(List.of(citationResponse()))
                         .build());
         mvc.perform(
@@ -141,6 +139,7 @@ class AiControllersTest {
                                 {"message":"Quy chế học lại?"}
                                 """))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.intent").doesNotHaveJsonPath())
                 .andExpect(jsonPath("$.data.citations[0].referenceCode").value("K21"))
                 .andExpect(jsonPath("$.data.citations[0].sourceTitle").value("Quy chế"))
                 .andExpect(jsonPath("$.data.citations[0].pageNumber").value(2))

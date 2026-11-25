@@ -48,10 +48,6 @@ public class AiRagProperties {
     }
 
     @NotBlank
-    private String outOfScopeMessage =
-            "Hiện tôi hỗ trợ tra cứu quy chế, quy định và thủ tục đào tạo. Bạn có thể xem điểm và GPA cá nhân tại mục Học vụ.";
-
-    @NotBlank
     private String embeddingModel = "gemini-embedding-001";
 
     @NotBlank

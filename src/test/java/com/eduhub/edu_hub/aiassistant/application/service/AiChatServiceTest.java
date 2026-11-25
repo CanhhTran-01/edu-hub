@@ -8,8 +8,8 @@ import com.eduhub.edu_hub.aiassistant.api.dto.request.ChatRequest;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.ChatResponse;
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
 import com.eduhub.edu_hub.aiassistant.application.port.*;
+import com.eduhub.edu_hub.aiassistant.application.port.AiAssistantPort.ConversationMessage;
 import com.eduhub.edu_hub.aiassistant.application.port.KnowledgeChunkPort.RetrievedChunk;
-import com.eduhub.edu_hub.aiassistant.domain.enums.AiIntent;
 import com.eduhub.edu_hub.aiassistant.infrastructure.adapter.AiTokenCounter;
 import com.eduhub.edu_hub.aiassistant.infrastructure.config.AiRagProperties;
 import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
@@ -50,9 +50,7 @@ class AiChatServiceTest {
             task.run();
             return task;
         });
-        when(assistantPort.analyzeQuestion(anyString(), anyList()))
-                .thenReturn(new AiAssistantPort.QuestionAnalysis(AiIntent.KNOWLEDGE, "Quy chế học lại?"));
-        when(historyService.recordExchange(any(), any(), anyString(), any(), anyString(), anyList()))
+        when(historyService.recordExchange(any(), any(), anyString(), anyString(), anyList()))
                 .thenReturn(ChatResponse.builder().content("Đã lưu").build());
         service = new AiChatService(
                 accessService, assistantPort, chunkPort, historyService, properties, tokenCounter, clock, executor);
@@ -63,10 +61,8 @@ class AiChatServiceTest {
         when(chunkPort.findRelevantChunks(anyString(), eq(LocalDate.of(2026, 11, 19))))
                 .thenReturn(List.of());
         service.chat(principal, request("Học lại thế nào?"));
-        verify(assistantPort, never()).answer(anyString(), anyList(), anyList());
-        verify(historyService)
-                .recordExchange(
-                        principal, context, "Học lại thế nào?", AiIntent.KNOWLEDGE, "Chưa đủ căn cứ.", List.of());
+        verifyNoInteractions(assistantPort);
+        verify(historyService).recordExchange(principal, context, "Học lại thế nào?", "Chưa đủ căn cứ.", List.of());
     }
 
     @Test
@@ -78,13 +74,7 @@ class AiChatServiceTest {
                 .thenReturn(new AiAssistantPort.Answer("Theo quy chế [K13].", List.of(13L)));
         service.chat(principal, request("Học lại thế nào?"));
         verify(historyService)
-                .recordExchange(
-                        principal,
-                        context,
-                        "Học lại thế nào?",
-                        AiIntent.KNOWLEDGE,
-                        "Theo quy chế [K13].",
-                        List.of(second));
+                .recordExchange(principal, context, "Học lại thế nào?", "Theo quy chế [K13].", List.of(second));
     }
 
     @Test
@@ -93,18 +83,16 @@ class AiChatServiceTest {
         when(assistantPort.answer(anyString(), anyList(), anyList()))
                 .thenReturn(new AiAssistantPort.Answer("Theo nguồn [K999].", List.of(999L)));
         service.chat(principal, request("Học lại thế nào?"));
-        verify(historyService)
-                .recordExchange(
-                        principal, context, "Học lại thế nào?", AiIntent.KNOWLEDGE, "Chưa đủ căn cứ.", List.of());
+        verify(historyService).recordExchange(principal, context, "Học lại thế nào?", "Chưa đủ căn cứ.", List.of());
     }
 
     @Test
-    void outOfScopeQuestionDoesNotSearchVectorStore() {
-        when(assistantPort.analyzeQuestion(anyString(), anyList()))
-                .thenReturn(new AiAssistantPort.QuestionAnalysis(AiIntent.OUT_OF_SCOPE, ""));
-        service.chat(principal, request("Dự báo chứng khoán?"));
-        verifyNoInteractions(chunkPort);
-        verify(assistantPort, never()).answer(anyString(), anyList(), anyList());
+    void retrievalAndHistoryReceiveOnlyNormalizedAndRedactedQuestion() {
+        service.chat(principal, request("  Quy chế   cho email sinhvien@example.com, CCCD 012345678901?  "));
+        String redactedQuestion = "Quy chế cho email [đã ẩn email], CCCD [đã ẩn định danh]?";
+        verify(chunkPort).findRelevantChunks(redactedQuestion, LocalDate.of(2026, 11, 19));
+        verify(historyService).recordExchange(principal, context, redactedQuestion, "Chưa đủ căn cứ.", List.of());
+        verifyNoInteractions(assistantPort);
     }
 
     @Test
@@ -117,7 +105,7 @@ class AiChatServiceTest {
                 .isInstanceOfSatisfying(AiAssistantException.class, exception -> assertThat(exception.getErrorCode())
                         .isEqualTo(ErrorCode.AI_SERVICE_UNAVAILABLE));
         verify(timedOutTask).cancel(true);
-        verify(historyService, never()).recordExchange(any(), any(), anyString(), any(), anyString(), anyList());
+        verify(historyService, never()).recordExchange(any(), any(), anyString(), anyString(), anyList());
     }
 
     @Test
@@ -138,19 +126,28 @@ class AiChatServiceTest {
     }
 
     @Test
-    void unresolvedFollowUpAsksForClarificationWithoutSearchingOrGuessing() {
-        when(assistantPort.analyzeQuestion(anyString(), anyList()))
-                .thenReturn(new AiAssistantPort.QuestionAnalysis(AiIntent.KNOWLEDGE, ""));
-        service.chat(principal, request("Còn môn đó thì sao?"));
-        verifyNoInteractions(chunkPort);
+    void followUpSearchesCurrentQuestionAndPassesConversationToAnswerModel() {
+        var conversation = List.of(
+                new ConversationMessage("USER", "Quy chế học lại?"),
+                new ConversationMessage("ASSISTANT", "Theo quy chế [K12]."));
+        var existingContext = new ChatHistoryService.ConversationContext(3L, 11L, conversation);
+        when(historyService.loadConversation(7L, null)).thenReturn(existingContext);
+        var retrievedChunk = chunk(12L);
+        when(chunkPort.findRelevantChunks(anyString(), any())).thenReturn(List.of(retrievedChunk));
+        when(assistantPort.answer(anyString(), anyList(), anyList()))
+                .thenReturn(new AiAssistantPort.Answer("Học phí theo quy chế [K12].", List.of(12L)));
+
+        service.chat(principal, request("Còn học phí?"));
+
+        verify(chunkPort).findRelevantChunks("Còn học phí?", LocalDate.of(2026, 11, 19));
+        verify(assistantPort).answer("Còn học phí?", conversation, List.of(retrievedChunk));
         verify(historyService)
                 .recordExchange(
-                        eq(principal),
-                        eq(context),
-                        eq("Còn môn đó thì sao?"),
-                        eq(AiIntent.KNOWLEDGE),
-                        contains("nêu rõ"),
-                        eq(List.of()));
+                        principal,
+                        existingContext,
+                        "Còn học phí?",
+                        "Học phí theo quy chế [K12].",
+                        List.of(retrievedChunk));
     }
 
     private RetrievedChunk chunk(Long chunkId) {

@@ -21,7 +21,9 @@ public class AiConfiguration {
     private static final int MAXIMUM_QUEUED_CHAT_REQUESTS = 16;
 
     /**
-     * Lịch sử và ngữ cảnh được application cung cấp tường minh; ChatClient chỉ gọi model.
+     * Lịch sử và ngữ cảnh được application cung cấp tường minh từ dữ liệu DB.
+     * ChatClient chỉ gọi model.
+     * Chưa dùng chatMemory hay memory advisor của Spring AI.
      */
     @Bean
     ChatClient aiAssistantChatClient(ChatClient.Builder builder) {

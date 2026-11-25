@@ -192,8 +192,8 @@ public class AdmissionConfirmationService {
             // Trường hợp dưới mức tối thiểu phải cung cấp thêm lý do.
             if ((projectedClassSize > plan.getMaxCapacity() && !request.acceptReserve())
                     || (projectedClassSize < plan.getMinCapacity()
-                    && (!request.acceptBelowMinimum()
-                    || TextsNormalizer.normalizeOptionalText(request.reason()) == null)))
+                            && (!request.acceptBelowMinimum()
+                                    || TextsNormalizer.normalizeOptionalText(request.reason()) == null)))
                 throw new AdmissionEnrollmentException(ErrorCode.ADMISSION_WARNING_CONFIRMATION_REQUIRED);
         }
     }
@@ -211,13 +211,13 @@ public class AdmissionConfirmationService {
             boolean hasPendingApplicants = planApplicants.stream().anyMatch(AdmissionApplicant::isPendingEnrollment);
             boolean hasUnderfilledClasses = !request.acceptBelowMinimum()
                     && planClassRepository.findByPlan_IdOrderByPosition(planId).stream()
-                    .anyMatch(plannedClass -> planApplicants.stream()
-                            .filter(AdmissionApplicant::isIncludedInPlan)
-                            .filter(applicant -> plannedClass
-                                    .getAdministrativeClassId()
-                                    .equals(applicant.getAdministrativeClassId()))
-                            .count()
-                            < plan.getMinCapacity());
+                            .anyMatch(plannedClass -> planApplicants.stream()
+                                            .filter(AdmissionApplicant::isIncludedInPlan)
+                                            .filter(applicant -> plannedClass
+                                                    .getAdministrativeClassId()
+                                                    .equals(applicant.getAdministrativeClassId()))
+                                            .count()
+                                    < plan.getMinCapacity());
 
             // 4. Xác định trạng thái cuối cùng: xác nhận một phần hoặc xác nhận hoàn tất.
             plan.setState(
