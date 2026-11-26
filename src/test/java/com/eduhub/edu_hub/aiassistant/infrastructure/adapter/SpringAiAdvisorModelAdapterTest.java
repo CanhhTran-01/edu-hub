@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import com.eduhub.edu_hub.academic.api.dto.response.AdvisorAcademicProfileResponse;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.AdvisorEventResponse;
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
 import com.eduhub.edu_hub.aiassistant.application.port.AiAdvisorModelPort.ConversationMessage;
@@ -12,11 +13,13 @@ import com.eduhub.edu_hub.aiassistant.application.service.AdvisorChatExecution.A
 import com.eduhub.edu_hub.aiassistant.domain.enums.AdvisorRequestState;
 import com.eduhub.edu_hub.aiassistant.infrastructure.config.AiAdvisorProperties;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import java.math.BigDecimal;
 import java.time.*;
 import java.util.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
@@ -161,6 +164,135 @@ class SpringAiAdvisorModelAdapterTest {
         assertThat(eventNames).isEmpty();
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "{\"query\":null}",
+        "{\"query\":123}",
+        "{\"query\":true}",
+        "{\"query\":[]}",
+        "{\"query\":\" \"}",
+        "{\"query\":\"Quy chế\",\"studentId\":999}",
+        "[]"
+    })
+    void invalidKnowledgeArgumentsAreRejectedBeforeMethodBindingAndToolTrace(String arguments) {
+        when(model.call(any(Prompt.class)))
+                .thenReturn(responseWithTool("k1", "searchAcademicKnowledge", arguments), finalResponse());
+
+        assertThat(adapter.answer(execution, List.of()).content()).isEqualTo("Đã tra cứu.");
+
+        verifyNoInteractions(tools);
+        assertThat(eventNames).isEmpty();
+        assertThat(execution.getStatus().toolCalls()).isZero();
+    }
+
+    @Test
+    void annotatedToolSchemasExposeOnlyBusinessArguments() {
+        when(model.call(any(Prompt.class))).thenReturn(finalResponse());
+
+        adapter.answer(execution, List.of());
+
+        var prompts = ArgumentCaptor.forClass(Prompt.class);
+        verify(model).call(prompts.capture());
+        var callbacks = ((ToolCallingChatOptions) prompts.getValue().getOptions()).getToolCallbacks();
+        assertThat(callbacks)
+                .extracting(callback -> callback.getToolDefinition().name())
+                .containsExactlyInAnyOrder("getAcademicProfile", "searchAcademicKnowledge");
+        var jsonMapper = JsonMapper.builder().build();
+        for (var callback : callbacks) {
+            var definition = callback.getToolDefinition();
+            var schema = jsonMapper.readTree(definition.inputSchema());
+            assertThat(definition.inputSchema()).doesNotContain("execution", "principal", "studentId", "userId");
+            if (definition.name().equals("getAcademicProfile")) {
+                assertThat(schema.get("properties").isEmpty()).isTrue();
+            } else {
+                assertThat(schema.get("properties").size()).isEqualTo(1);
+                assertThat(schema.at("/properties/query/type").asString()).isEqualTo("string");
+                assertThat(schema.get("required").get(0).asString()).isEqualTo("query");
+            }
+        }
+    }
+
+    @Test
+    void annotatedProfileToolKeepsNumericNullAndTimestampValuesInItsJsonResponse() {
+        var observedAt = LocalDateTime.of(2026, 11, 27, 10, 0);
+        when(tools.getAcademicProfile(execution))
+                .thenReturn(new AdvisorAcademicProfileResponse(
+                        11L,
+                        "Học kỳ hiện tại",
+                        new BigDecimal("3.25"),
+                        null,
+                        60,
+                        120,
+                        18,
+                        new BigDecimal("3.20"),
+                        6,
+                        0,
+                        true,
+                        null,
+                        observedAt));
+        when(model.call(any(Prompt.class)))
+                .thenReturn(responseWithTool("p1", "getAcademicProfile", "{}"), finalResponse());
+
+        adapter.answer(execution, List.of());
+
+        var prompts = ArgumentCaptor.forClass(Prompt.class);
+        verify(model, times(2)).call(prompts.capture());
+        var profileResponse = prompts.getAllValues().getLast().getInstructions().stream()
+                .filter(ToolResponseMessage.class::isInstance)
+                .map(ToolResponseMessage.class::cast)
+                .flatMap(message -> message.getResponses().stream())
+                .findFirst()
+                .orElseThrow();
+        var profileJson = JsonMapper.builder().build().readTree(profileResponse.responseData());
+        assertThat(profileJson.isObject()).isTrue();
+        assertThat(profileJson.get("cumulativeGpa").isNumber()).isTrue();
+        assertThat(profileJson.get("cumulativeGpa").decimalValue()).isEqualByComparingTo("3.25");
+        assertThat(profileJson.get("currentSemesterGpa").isNull()).isTrue();
+        assertThat(profileJson.get("observedAt").asString()).isEqualTo("2026-11-27T10:00:00");
+        verify(tools).getAcademicProfile(execution);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = ErrorCode.class,
+            names = {"UNAUTHENTICATED", "UNAUTHORIZED", "FIRST_LOGIN_REQUIRED"})
+    void authorizationFailureFromAnnotatedToolStopsTheAgentWithItsOriginalTraceCode(ErrorCode errorCode) {
+        when(tools.getAcademicProfile(execution)).thenThrow(new AiAssistantException(errorCode));
+        when(model.call(any(Prompt.class))).thenReturn(responseWithTool("p1", "getAcademicProfile", "{}"));
+
+        assertThatThrownBy(() -> adapter.answer(execution, List.of()))
+                .isInstanceOfSatisfying(AiAssistantException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.UNAUTHENTICATED));
+
+        verify(model).call(any(Prompt.class));
+        assertThat(eventNames).containsExactly("tool.started", "tool.failed");
+        assertThat(((Map<?, ?>) events.getLast().data()).get("code")).isEqualTo(errorCode.getCode());
+    }
+
+    @Test
+    void businessFailureFromAnnotatedToolKeepsItsOriginalCodeAndAllowsTheModelToContinue() {
+        when(tools.getAcademicProfile(execution))
+                .thenThrow(new AiAssistantException(ErrorCode.ENROLLMENT_DATA_INCOMPLETE));
+        when(model.call(any(Prompt.class)))
+                .thenReturn(responseWithTool("p1", "getAcademicProfile", "{}"), finalResponse());
+
+        assertThat(adapter.answer(execution, List.of()).content()).isEqualTo("Đã tra cứu.");
+
+        assertThat(eventNames).containsExactly("tool.started", "tool.failed");
+        assertThat(((Map<?, ?>) events.getLast().data()).get("code"))
+                .isEqualTo(ErrorCode.ENROLLMENT_DATA_INCOMPLETE.getCode());
+        var prompts = ArgumentCaptor.forClass(Prompt.class);
+        verify(model, times(2)).call(prompts.capture());
+        assertThat(prompts.getAllValues().getLast().getInstructions().stream()
+                        .filter(ToolResponseMessage.class::isInstance)
+                        .map(ToolResponseMessage.class::cast)
+                        .flatMap(message -> message.getResponses().stream())
+                        .findFirst()
+                        .orElseThrow()
+                        .responseData())
+                .contains("\"code\":" + ErrorCode.ENROLLMENT_DATA_INCOMPLETE.getCode());
+    }
+
     @Test
     void unknownToolNeverExecutesAnyBusinessService() {
         when(model.call(any(Prompt.class))).thenReturn(responseWithTool("x1", "executeSql", "{}"));
@@ -189,6 +321,21 @@ class SpringAiAdvisorModelAdapterTest {
                 .isInstanceOf(AdvisorExecutionStoppedException.class);
         verifyNoInteractions(tools);
         assertThat(eventNames).containsExactly("agent.cancelled");
+    }
+
+    @Test
+    void cancellationDuringAnnotatedToolDiscardsItsLateResponse() {
+        when(model.call(any(Prompt.class))).thenReturn(responseWithTool("p1", "getAcademicProfile", "{}"));
+        when(tools.getAcademicProfile(execution)).thenAnswer(invocation -> {
+            execution.cancel("USER_REQUEST");
+            return null;
+        });
+
+        assertThatThrownBy(() -> adapter.answer(execution, List.of()))
+                .isInstanceOf(AdvisorExecutionStoppedException.class);
+
+        verify(model).call(any(Prompt.class));
+        assertThat(eventNames).containsExactly("tool.started", "agent.cancelled");
     }
 
     @Test

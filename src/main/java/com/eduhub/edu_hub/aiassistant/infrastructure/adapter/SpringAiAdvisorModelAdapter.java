@@ -1,5 +1,8 @@
 package com.eduhub.edu_hub.aiassistant.infrastructure.adapter;
 
+import static com.eduhub.edu_hub.aiassistant.infrastructure.adapter.AcademicAdvisorTools.KNOWLEDGE_TOOL;
+import static com.eduhub.edu_hub.aiassistant.infrastructure.adapter.AcademicAdvisorTools.PROFILE_TOOL;
+
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
 import com.eduhub.edu_hub.aiassistant.application.port.AiAdvisorModelPort;
 import com.eduhub.edu_hub.aiassistant.application.port.AiAdvisorModelPort.*;
@@ -17,8 +20,11 @@ import org.springframework.ai.chat.model.*;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
+import org.springframework.ai.support.ToolCallbacks;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
+import org.springframework.ai.tool.execution.ToolExecutionException;
+import org.springframework.ai.tool.metadata.ToolMetadata;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
@@ -28,8 +34,6 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Component
 public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
-    private static final String PROFILE_TOOL = "getAcademicProfile";
-    private static final String KNOWLEDGE_TOOL = "searchAcademicKnowledge";
     private final ChatModel chatModel;
     private final AdvisorToolService toolService;
     private final ObjectMapper objectMapper;
@@ -58,21 +62,9 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
 
         // 2. Khởi tạo hàng đợi Tool Call và đăng ký các Tool cho AI.
         Deque<AssistantMessage.ToolCall> pendingCalls = new ArrayDeque<>();
-        var tools = List.<ToolCallback>of(
-                new AdvisorToolCallback(
-                        PROFILE_TOOL,
-                        "Đọc GPA, tín chỉ, mục tiêu và độ đầy đủ lịch sử của chính sinh viên hiện tại. Không nhận danh tính.",
-                        "{\"type\":\"object\",\"properties\":{},\"additionalProperties\":false}",
-                        execution,
-                        pendingCalls),
-                new AdvisorToolCallback(
-                        KNOWLEDGE_TOOL,
-                        "Tra cứu quy chế, quy định và thủ tục học vụ, trả đoạn trích cùng mã nguồn. "
-                                + "Dựng query đầy đủ từ ngữ cảnh; thiếu đối tượng thì hỏi rõ, không tự đoán.",
-                        "{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"maxLength\":2000}},"
-                                + "\"required\":[\"query\"],\"additionalProperties\":false}",
-                        execution,
-                        pendingCalls));
+        var tools = Arrays.stream(ToolCallbacks.from(new AcademicAdvisorTools(toolService, execution)))
+                .<ToolCallback>map(toolCallback -> new AdvisorToolCallback(toolCallback, execution, pendingCalls))
+                .toList();
 
         // 3. Bắt đầu vòng lặp thực thi AI Agent.
         while (true) {
@@ -185,28 +177,27 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
     }
 
     private final class AdvisorToolCallback implements ToolCallback {
-        private final ToolDefinition definition;
+        private final ToolCallback toolCallback;
         private final AdvisorChatExecution execution;
         private final Deque<AssistantMessage.ToolCall> pendingCalls;
 
         private AdvisorToolCallback(
-                String name,
-                String description,
-                String schema,
+                ToolCallback toolCallback,
                 AdvisorChatExecution execution,
                 Deque<AssistantMessage.ToolCall> pendingCalls) {
-            this.definition = ToolDefinition.builder()
-                    .name(name)
-                    .description(description)
-                    .inputSchema(schema)
-                    .build();
+            this.toolCallback = toolCallback;
             this.execution = execution;
             this.pendingCalls = pendingCalls;
         }
 
         @Override
         public @NonNull ToolDefinition getToolDefinition() {
-            return definition;
+            return toolCallback.getToolDefinition();
+        }
+
+        @Override
+        public @NonNull ToolMetadata getToolMetadata() {
+            return toolCallback.getToolMetadata();
         }
 
         @Override
@@ -214,7 +205,8 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
             // 1. Kiểm tra trạng thái thực thi và đối chiếu Tool Call với hàng đợi.
             execution.checkCanContinue();
             var call = pendingCalls.removeFirst();
-            if (!definition.name().equals(call.name()))
+            String toolName = getToolDefinition().name();
+            if (!toolName.equals(call.name()))
                 throw new AiAssistantException(ErrorCode.AI_SERVICE_UNAVAILABLE);
 
             // 2. Validate arguments do AI cung cấp theo schema của từng Tool.
@@ -225,7 +217,7 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
                 if (!parsedArguments.isObject()) throw new IllegalArgumentException();
 
                 // PROFILE_TOOL không nhận tham số, KNOWLEDGE_TOOL yêu cầu query hợp lệ.
-                if (PROFILE_TOOL.equals(definition.name())) {
+                if (PROFILE_TOOL.equals(toolName)) {
                     if (!parsedArguments.isEmpty()) throw new IllegalArgumentException();
                     query = null;
                 } else {
@@ -247,20 +239,16 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
             String canonicalArguments = query == null ? "{}" : objectMapper.writeValueAsString(Map.of("query", query));
             execution.startTool(
                     traceCallId,
-                    definition.name(),
+                    toolName,
                     canonicalArguments,
                     query == null ? "Đang tra cứu hồ sơ học vụ cá nhân…" : "Đang tra cứu tài liệu học vụ…");
 
             // 4. Thực thi Tool tương ứng để lấy dữ liệu học vụ.
             try {
-                Object toolResponse = query == null
-                        ? toolService.getAcademicProfile(execution)
-                        : toolService.searchAcademicKnowledge(execution, query);
-
                 // 5. Kiểm tra trạng thái, serialize kết quả và ghi nhận Tool hoàn thành.
+                String toolJson = toolCallback.call(canonicalArguments);
                 execution.checkCanContinue();
-                String toolJson = objectMapper.writeValueAsString(toolResponse);
-                execution.completeTool(traceCallId, definition.name());
+                execution.completeTool(traceCallId, toolName);
                 return toolJson;
 
                 // 6. Lan truyền exception nếu Agent bị yêu cầu dừng thực thi.
@@ -270,10 +258,16 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
                 // 7. Xử lý lỗi trong quá trình thực thi Tool và ghi nhận Tool thất bại.
             } catch (RuntimeException exception) {
                 execution.checkCanContinue();
-                int code = exception instanceof BaseException businessException
+                // Spring AI bọc lỗi từ method @Tool; lấy lại nguyên nhân để giữ mã lỗi và quy tắc dừng hiện có.
+                Throwable toolFailure = exception;
+                while (toolFailure instanceof ToolExecutionException && toolFailure.getCause() != null) {
+                    toolFailure = toolFailure.getCause();
+                }
+                if (toolFailure instanceof AdvisorExecutionStoppedException stoppedException) throw stoppedException;
+                int code = toolFailure instanceof BaseException businessException
                         ? businessException.getErrorCode().getCode()
                         : ErrorCode.AI_SERVICE_UNAVAILABLE.getCode();
-                execution.failTool(traceCallId, definition.name(), code);
+                execution.failTool(traceCallId, toolName, code);
 
                 // 8. Dừng Agent nếu gặp lỗi xác thực hoặc phân quyền.
                 if (code == ErrorCode.UNAUTHENTICATED.getCode()
