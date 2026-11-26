@@ -1,12 +1,10 @@
 package com.eduhub.edu_hub.aiassistant.infrastructure.config;
 
-import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantConfigurationException;
 import jakarta.validation.constraints.*;
 import java.time.Duration;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.util.StringUtils;
 import org.springframework.util.unit.DataSize;
 import org.springframework.validation.annotation.Validated;
 
@@ -37,21 +35,6 @@ public class AiRagProperties {
     private String fallbackMessage;
 
     @NotBlank
-    private String systemPrompt;
-
-    /** Chặn cấu hình thiếu tại ranh giới gọi model, không gửi yêu cầu trả lời thiếu chỉ dẫn hệ thống. */
-    public String requireSystemPrompt() {
-        if (!StringUtils.hasText(systemPrompt)) {
-            throw new AiAssistantConfigurationException("Thiếu hoặc trống cấu hình eduhub.ai.rag.system-prompt");
-        }
-        return systemPrompt;
-    }
-
-    @NotBlank
-    private String outOfScopeMessage =
-            "Hiện tôi hỗ trợ tra cứu quy chế, quy định và thủ tục đào tạo. Bạn có thể xem điểm và GPA cá nhân tại mục Học vụ.";
-
-    @NotBlank
     private String embeddingModel = "gemini-embedding-001";
 
     @NotBlank
@@ -66,9 +49,6 @@ public class AiRagProperties {
 
     @Min(100)
     private int memoryTokenLimit = 2000;
-
-    @Min(1000)
-    private int promptTokenLimit = 10000;
 
     @Min(1)
     private int questionsPerMinute = 10;
@@ -89,9 +69,7 @@ public class AiRagProperties {
     @NotNull
     private Duration ingestionTimeout = Duration.ofMinutes(10);
 
-    @AssertTrue(
-            message =
-                    "Thời hạn AI phải dương, dung lượng tệp phải từ 1 byte đến 20 MB và ngân sách ngữ cảnh phải phù hợp")
+    @AssertTrue(message = "Thời hạn AI phải dương và dung lượng tệp phải từ 1 byte đến 20 MB")
     public boolean isResourceConfigurationValid() {
         return requestTimeout != null
                 && !requestTimeout.isNegative()
@@ -104,7 +82,6 @@ public class AiRagProperties {
                 && ingestionTimeout.toMillis() >= 1
                 && maxFileSize != null
                 && maxFileSize.toBytes() > 0
-                && maxFileSize.toBytes() <= DataSize.ofMegabytes(20).toBytes()
-                && contextTokenLimit + memoryTokenLimit < promptTokenLimit;
+                && maxFileSize.toBytes() <= DataSize.ofMegabytes(20).toBytes();
     }
 }

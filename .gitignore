@@ -1,5 +1,7 @@
 HELP.md
 AGENTS.md
+/docs/
+/samples/
 target/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
@@ -37,8 +39,3 @@ build/
 
 ### VS Code ###
 .vscode/
-
-
-/docs/
-/postman/
-/samples/

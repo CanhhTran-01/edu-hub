@@ -17,7 +17,8 @@ import org.springframework.data.jpa.domain.Specification;
 public final class StudentSpecification {
     private StudentSpecification() {}
 
-    public static Specification<Student> fromRequest(StudentSearchRequest request, StudentActivityStatus activityStatus) {
+    public static Specification<Student> fromRequest(
+            StudentSearchRequest request, StudentActivityStatus activityStatus) {
         return Specification.allOf(
                 notDeleted(),
                 matchesKeyword(request.getKeyword()),

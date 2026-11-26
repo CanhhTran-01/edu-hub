@@ -1,9 +1,15 @@
 package com.eduhub.edu_hub.academic.application.facade;
 
+import com.eduhub.edu_hub.academic.api.dto.response.AdvisorAcademicProfileResponse;
 import com.eduhub.edu_hub.academic.api.dto.response.StudentAcademicSummaryResponse;
 import java.math.BigDecimal;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 public interface AcademicFacade {
+    /** Chỉ đọc học vụ của principal đã xác thực, không nhận Student ID từ model hoặc client. */
+    interface Advisor {
+        AdvisorAcademicProfileResponse findMyAcademicProfile(Jwt principal);
+    }
 
     /** Tính GPA tích lũy hiện tại */
     BigDecimal calculateCumulativeGpa(Long studentId);

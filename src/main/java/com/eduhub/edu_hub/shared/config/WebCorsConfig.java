@@ -14,7 +14,7 @@ public class WebCorsConfig implements WebMvcConfigurer {
                 .allowedOriginPatterns("*") // 2. Chỉ định rõ các domain FE được phép gọi API
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS") // 3. Các HTTP Method được phép gọi
                 .allowedHeaders("*") // 4. Cho phép tất cả các header trong request
-                .exposedHeaders(HttpHeaders.CONTENT_DISPOSITION)
+                .exposedHeaders(HttpHeaders.CONTENT_DISPOSITION, HttpHeaders.RETRY_AFTER)
                 .allowCredentials(true) // 5. Cho phép Frontend gửi thông tin xác thực
                 .maxAge(3600); // 6. Time lưu cache cho "Preflight Request"
     }

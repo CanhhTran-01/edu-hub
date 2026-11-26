@@ -4,7 +4,6 @@ import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantConfigura
 import com.google.genai.Client;
 import com.google.genai.types.HttpOptions;
 import com.google.genai.types.HttpRetryOptions;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.google.genai.embedding.GoogleGenAiEmbeddingConnectionDetails;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -15,19 +14,8 @@ import org.springframework.scheduling.concurrent.*;
 
 @Configuration
 @EnableScheduling
-@EnableConfigurationProperties(AiRagProperties.class)
+@EnableConfigurationProperties({AiRagProperties.class, AiAdvisorProperties.class})
 public class AiConfiguration {
-    private static final int MAXIMUM_CHAT_WORKERS = 8;
-    private static final int MAXIMUM_QUEUED_CHAT_REQUESTS = 16;
-
-    /**
-     * Lịch sử và ngữ cảnh được application cung cấp tường minh; ChatClient chỉ gọi model.
-     */
-    @Bean
-    ChatClient aiAssistantChatClient(ChatClient.Builder builder) {
-        return builder.build();
-    }
-
     @Bean(destroyMethod = "close")
     Client googleGenAiClient(@Value("${spring.ai.google.genai.api-key:}") String apiKey, AiRagProperties properties) {
         if (apiKey == null || apiKey.isBlank()) {
@@ -50,14 +38,23 @@ public class AiConfiguration {
     }
 
     @Bean
-    ThreadPoolTaskExecutor aiRequestExecutor() {
+    ThreadPoolTaskExecutor aiAdvisorExecutor(AiAdvisorProperties properties) {
         var executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(MAXIMUM_CHAT_WORKERS);
-        executor.setMaxPoolSize(MAXIMUM_CHAT_WORKERS);
-        executor.setQueueCapacity(MAXIMUM_QUEUED_CHAT_REQUESTS);
-        executor.setThreadNamePrefix("ai-request-");
+        executor.setCorePoolSize(properties.getMaximumConcurrentRequests());
+        executor.setMaxPoolSize(properties.getMaximumConcurrentRequests());
+        executor.setQueueCapacity(0);
+        executor.setThreadNamePrefix("ai-advisor-");
         executor.setWaitForTasksToCompleteOnShutdown(false);
         return executor;
+    }
+
+    // Scheduler riêng cho deadline/heartbeat, không thay scheduler mặc định của module khác.
+    @Bean(defaultCandidate = false)
+    ThreadPoolTaskScheduler aiAdvisorLifecycleScheduler() {
+        var scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(2);
+        scheduler.setThreadNamePrefix("ai-advisor-lifecycle-");
+        return scheduler;
     }
 
     @Bean

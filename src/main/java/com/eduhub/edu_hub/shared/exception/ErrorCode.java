@@ -197,6 +197,9 @@ public enum ErrorCode {
             4608, "Nguồn tri thức chưa sẵn sàng hoặc không phù hợp với thao tác", HttpStatus.CONFLICT),
     CHAT_SESSION_CHANGED(4609, "Hội thoại đã có tin nhắn mới, vui lòng gửi lại câu hỏi", HttpStatus.CONFLICT),
     KNOWLEDGE_SOURCE_FILE_NOT_FOUND(4610, "Nguồn tri thức không còn tệp gốc để tải", HttpStatus.NOT_FOUND),
+    AI_CHAT_REQUEST_NOT_FOUND(4611, "Không tìm thấy lượt xử lý trợ lý", HttpStatus.NOT_FOUND),
+    AI_CHAT_REQUEST_CONFLICT(4612, "Lượt chat đã được gửi hoặc đang có lượt khác xử lý", HttpStatus.CONFLICT),
+    AI_ADVISOR_CAPACITY_EXCEEDED(4613, "Trợ lý đang bận, vui lòng thử lại sau", HttpStatus.SERVICE_UNAVAILABLE),
 
     // Cấu hình tham số hệ thống
     SYSTEM_CONFIG_CHANGED(4701, "Cấu hình đã thay đổi, vui lòng tải lại", HttpStatus.CONFLICT),

@@ -18,9 +18,11 @@ class TeachingPeriodsRequestTest {
     @ValueSource(strings = {"45.0", "45.5", "\"45\""})
     void coercesNumericTeachingPeriodsForSubjectRequests(String teachingPeriodsToken) {
         String subjectRequestJson = "{\"totalTeachingPeriods\":" + teachingPeriodsToken + "}";
-        assertThat(mapper.readValue(subjectRequestJson, CreateSubjectRequest.class).getTotalTeachingPeriods())
+        assertThat(mapper.readValue(subjectRequestJson, CreateSubjectRequest.class)
+                        .getTotalTeachingPeriods())
                 .isEqualTo(45);
-        assertThat(mapper.readValue(subjectRequestJson, UpdateSubjectRequest.class).getTotalTeachingPeriods())
+        assertThat(mapper.readValue(subjectRequestJson, UpdateSubjectRequest.class)
+                        .getTotalTeachingPeriods())
                 .isEqualTo(45);
     }
 
