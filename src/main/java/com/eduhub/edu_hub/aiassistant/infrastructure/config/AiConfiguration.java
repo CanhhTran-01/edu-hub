@@ -4,7 +4,6 @@ import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantConfigura
 import com.google.genai.Client;
 import com.google.genai.types.HttpOptions;
 import com.google.genai.types.HttpRetryOptions;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.google.genai.embedding.GoogleGenAiEmbeddingConnectionDetails;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -17,19 +16,6 @@ import org.springframework.scheduling.concurrent.*;
 @EnableScheduling
 @EnableConfigurationProperties({AiRagProperties.class, AiAdvisorProperties.class})
 public class AiConfiguration {
-    private static final int MAXIMUM_CHAT_WORKERS = 8;
-    private static final int MAXIMUM_QUEUED_CHAT_REQUESTS = 16;
-
-    /**
-     * Lịch sử và ngữ cảnh được application cung cấp tường minh từ dữ liệu DB.
-     * ChatClient chỉ gọi model.
-     * Chưa dùng chatMemory hay memory advisor của Spring AI.
-     */
-    @Bean
-    ChatClient aiAssistantChatClient(ChatClient.Builder builder) {
-        return builder.build();
-    }
-
     @Bean(destroyMethod = "close")
     Client googleGenAiClient(@Value("${spring.ai.google.genai.api-key:}") String apiKey, AiRagProperties properties) {
         if (apiKey == null || apiKey.isBlank()) {
@@ -49,17 +35,6 @@ public class AiConfiguration {
         return GoogleGenAiEmbeddingConnectionDetails.builder()
                 .genAiClient(googleGenAiClient)
                 .build();
-    }
-
-    @Bean
-    ThreadPoolTaskExecutor aiRequestExecutor() {
-        var executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(MAXIMUM_CHAT_WORKERS);
-        executor.setMaxPoolSize(MAXIMUM_CHAT_WORKERS);
-        executor.setQueueCapacity(MAXIMUM_QUEUED_CHAT_REQUESTS);
-        executor.setThreadNamePrefix("ai-request-");
-        executor.setWaitForTasksToCompleteOnShutdown(false);
-        return executor;
     }
 
     @Bean

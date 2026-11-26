@@ -121,7 +121,7 @@ class AiAdvisorChatServiceTest {
         when(model.answer(any(), anyList())).thenAnswer(invocation -> {
             AdvisorChatExecution execution = invocation.getArgument(0);
             execution.cancel("USER_REQUEST");
-            return new AiAssistantPort.Answer("Kết quả đến muộn.", List.of());
+            return new AiAdvisorModelPort.Answer("Kết quả đến muộn.", List.of());
         });
         var execution = start(request());
         workers.removeFirst().run();
@@ -148,7 +148,7 @@ class AiAdvisorChatServiceTest {
                     false,
                     "Chưa đủ lịch sử",
                     LocalDateTime.now(clock)));
-            return new AiAssistantPort.Answer("GPA của bạn là 9.99, đã có 999 tín chỉ.", List.of());
+            return new AiAdvisorModelPort.Answer("GPA của bạn là 9.99, đã có 999 tín chỉ.", List.of());
         });
         var execution = start(request());
         workers.removeFirst().run();
@@ -167,7 +167,7 @@ class AiAdvisorChatServiceTest {
         when(model.answer(any(), anyList())).thenAnswer(invocation -> {
             AdvisorChatExecution execution = invocation.getArgument(0);
             execution.recordKnowledgeChunks(List.of(chunk));
-            return new AiAssistantPort.Answer("Theo quy chế [K21].", List.of(21L));
+            return new AiAdvisorModelPort.Answer("Theo quy chế [K21].", List.of(21L));
         });
         start(request());
         workers.removeFirst().run();
@@ -176,9 +176,64 @@ class AiAdvisorChatServiceTest {
     }
 
     @Test
+    void modelAndHistoryReceiveOnlyTheNormalizedRedactedQuestion() {
+        var request = request();
+        request.setMessage("  Quy chế   cho email sinhvien@example.com, CCCD 012345678901?  ");
+        when(model.answer(any(), anyList())).thenReturn(new AiAdvisorModelPort.Answer("Xin chào", List.of()));
+        var execution = start(request);
+
+        workers.removeFirst().run();
+
+        String redactedQuestion = "Quy chế cho email [đã ẩn email], CCCD [đã ẩn định danh]?";
+        assertThat(execution.getQuestion()).isEqualTo(redactedQuestion);
+        verify(model).answer(eq(execution), anyList());
+        verify(history).recordExchange(eq(principal), any(), eq(redactedQuestion), anyString(), anyList());
+    }
+
+    @Test
+    void emptyKnowledgeRetrievalSavesFallbackWithoutCitations() {
+        when(model.answer(any(), anyList())).thenAnswer(invocation -> {
+            AdvisorChatExecution execution = invocation.getArgument(0);
+            execution.startTool("k1", "searchAcademicKnowledge", "{\"query\":\"Quy chế học lại?\"}", "Đang tra cứu");
+            execution.recordKnowledgeChunks(List.of());
+            execution.completeTool("k1", "searchAcademicKnowledge");
+            return new AiAdvisorModelPort.Answer("Không tìm thấy nguồn phù hợp.", List.of());
+        });
+        var execution = start(request());
+
+        workers.removeFirst().run();
+
+        assertThat(execution.getStatus().state()).isEqualTo(AdvisorRequestState.COMPLETED);
+        assertThat(execution.getStatus().response().getContent()).isEqualTo(ragSettings.getFallbackMessage());
+        verify(history)
+                .recordExchange(eq(principal), any(), anyString(), eq(ragSettings.getFallbackMessage()), eq(List.of()));
+    }
+
+    @Test
+    void fabricatedKnowledgeReferencesUseFallbackWithoutSavingUnverifiedReferences() {
+        var retrievedChunk = new KnowledgeChunkPort.RetrievedChunk(
+                21L, 3L, "Quy chế", null, "Nội dung", 10, 0.9, LocalDate.of(2026, 1, 1));
+        when(model.answer(any(), anyList())).thenAnswer(invocation -> {
+            AdvisorChatExecution execution = invocation.getArgument(0);
+            execution.startTool("k1", "searchAcademicKnowledge", "{\"query\":\"Quy chế học lại?\"}", "Đang tra cứu");
+            execution.recordKnowledgeChunks(List.of(retrievedChunk));
+            execution.completeTool("k1", "searchAcademicKnowledge");
+            return new AiAdvisorModelPort.Answer("Theo quy chế [K999].", List.of(999L));
+        });
+        var execution = start(request());
+
+        workers.removeFirst().run();
+
+        assertThat(execution.getStatus().state()).isEqualTo(AdvisorRequestState.COMPLETED);
+        assertThat(execution.getStatus().response().getContent()).isEqualTo(ragSettings.getFallbackMessage());
+        verify(history)
+                .recordExchange(eq(principal), any(), anyString(), eq(ragSettings.getFallbackMessage()), eq(List.of()));
+    }
+
+    @Test
     void noToolCannotInventPersonalAcademicFacts() {
         when(model.answer(any(), anyList()))
-                .thenReturn(new AiAssistantPort.Answer("Bạn đã tốt nghiệp loại Giỏi.", List.of()));
+                .thenReturn(new AiAdvisorModelPort.Answer("Bạn đã tốt nghiệp loại Giỏi.", List.of()));
         var execution = start(request());
         workers.removeFirst().run();
         assertThat(execution.getStatus().response().getContent()).contains("Hiện tôi hỗ trợ");
@@ -220,7 +275,7 @@ class AiAdvisorChatServiceTest {
 
     @Test
     void completedRuntimeRequestsExpireInsteadOfAccumulatingWithoutBound() {
-        when(model.answer(any(), anyList())).thenReturn(new AiAssistantPort.Answer("Xin chào", List.of()));
+        when(model.answer(any(), anyList())).thenReturn(new AiAdvisorModelPort.Answer("Xin chào", List.of()));
         var execution = start(request());
         workers.removeFirst().run();
         when(clock.instant()).thenReturn(Instant.parse("2026-11-25T17:11:00Z"));

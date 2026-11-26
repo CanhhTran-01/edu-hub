@@ -5,5 +5,9 @@ import java.util.List;
 
 /** Ranh giới model Agent; protocol/tool signatures của provider chỉ nằm trong adapter. */
 public interface AiAdvisorModelPort {
-    AiAssistantPort.Answer answer(AdvisorChatExecution execution, List<AiAssistantPort.ConversationMessage> history);
+    Answer answer(AdvisorChatExecution execution, List<ConversationMessage> history);
+
+    record Answer(String content, List<Long> citationIds) {}
+
+    record ConversationMessage(String role, String content) {}
 }

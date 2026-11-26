@@ -122,6 +122,11 @@ public final class AdvisorChatExecution {
         completeOutput = outputCompletion;
     }
 
+    /**
+     * Đăng ký thread hiện tại làm worker của lượt chat này, để cancel/limit có thể interrupt khi cần.
+     * Phải gọi từ chính worker thread (không phải thread Tomcat) và kiểm tra ngay trạng thái,
+     * vì lượt chat có thể đã bị hủy hoặc quá hạn trong lúc chờ trong hàng đợi của executor.
+     */
     public synchronized void registerWorkerThread() {
         workerThread = Thread.currentThread();
         checkCanContinue();

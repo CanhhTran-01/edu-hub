@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import com.eduhub.edu_hub.aiassistant.api.dto.response.AdvisorEventResponse;
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
+import com.eduhub.edu_hub.aiassistant.application.port.AiAdvisorModelPort.ConversationMessage;
 import com.eduhub.edu_hub.aiassistant.application.service.*;
 import com.eduhub.edu_hub.aiassistant.application.service.AdvisorChatExecution.AdvisorExecutionStoppedException;
 import com.eduhub.edu_hub.aiassistant.domain.enums.AdvisorRequestState;
@@ -128,13 +129,16 @@ class SpringAiAdvisorModelAdapterTest {
                         finalResponse());
         when(tools.searchAcademicKnowledge(execution, "Quy chế học lại?")).thenReturn(List.of());
 
-        var answer = adapter.answer(execution, List.of());
+        var history = List.of(new ConversationMessage("USER", "Quy chế học lại?"));
+        var answer = adapter.answer(execution, history);
 
         assertThat(answer.content()).isEqualTo("Đã tra cứu.");
         verify(tools).getAcademicProfile(execution);
         verify(tools).searchAcademicKnowledge(execution, "Quy chế học lại?");
         var prompts = ArgumentCaptor.forClass(Prompt.class);
         verify(model, times(3)).call(prompts.capture());
+        assertThat(prompts.getAllValues().getFirst().getUserMessage().getText())
+                .contains("\"history\"", "\"role\":\"USER\"", "\"content\":\"Quy chế học lại?\"");
         assertThat(prompts.getAllValues().get(1).getInstructions()).contains(profileCall);
         assertThat(profileCall.getMetadata().get("thoughtSignatures")).isSameAs(signatures);
         var toolResponses = prompts.getAllValues().get(2).getInstructions().stream()

@@ -1,11 +1,8 @@
 package com.eduhub.edu_hub.aiassistant.api.controller;
 
 import com.eduhub.edu_hub.aiassistant.api.dto.request.AdvisorChatRequest;
-import com.eduhub.edu_hub.aiassistant.api.dto.request.ChatRequest;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.AdvisorRequestStatusResponse;
-import com.eduhub.edu_hub.aiassistant.api.dto.response.ChatResponse;
 import com.eduhub.edu_hub.aiassistant.application.service.AiAdvisorChatService;
-import com.eduhub.edu_hub.aiassistant.application.service.AiChatService;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
 import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import jakarta.validation.Valid;
@@ -32,7 +29,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class AiChatController {
     private static final long STREAM_COMPLETION_GRACE_MILLIS = 1000;
     private final ApiResponseFactory apiResponseFactory;
-    private final AiChatService chatService;
     private final AiAdvisorChatService advisorChatService;
 
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -70,11 +66,5 @@ public class AiChatController {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(apiResponseFactory.success(advisorChatService.cancelRequest(authenticatedJwt, requestId)));
-    }
-
-    @PostMapping("/chat")
-    public ApiResponse<ChatResponse> chat(
-            @AuthenticationPrincipal Jwt authenticatedJwt, @Valid @RequestBody ChatRequest request) {
-        return apiResponseFactory.success(chatService.chat(authenticatedJwt, request));
     }
 }

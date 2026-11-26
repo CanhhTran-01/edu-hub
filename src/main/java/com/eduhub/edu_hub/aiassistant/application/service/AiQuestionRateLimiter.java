@@ -10,7 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-/** Hai transport chat cùng tiêu thụ hạn mức theo User ID trên một instance. */
+/** Giới hạn số lượt hỏi theo User ID trên một instance. */
 @Service
 @RequiredArgsConstructor
 public class AiQuestionRateLimiter {

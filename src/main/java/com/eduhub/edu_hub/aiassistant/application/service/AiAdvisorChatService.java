@@ -5,7 +5,7 @@ import com.eduhub.edu_hub.aiassistant.api.dto.request.AdvisorChatRequest;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.AdvisorRequestStatusResponse;
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
 import com.eduhub.edu_hub.aiassistant.application.port.*;
-import com.eduhub.edu_hub.aiassistant.application.port.AiAssistantPort.*;
+import com.eduhub.edu_hub.aiassistant.application.port.AiAdvisorModelPort.*;
 import com.eduhub.edu_hub.aiassistant.application.service.AdvisorChatExecution.AdvisorExecutionStoppedException;
 import com.eduhub.edu_hub.aiassistant.domain.policy.AiContentPolicy;
 import com.eduhub.edu_hub.aiassistant.infrastructure.adapter.AiTokenCounter;
@@ -121,23 +121,32 @@ public class AiAdvisorChatService {
 
     private void executeChat(AdvisorChatExecution execution) {
         try {
+            // 1. Đăng ký worker thread và gọi AI Agent để xử lý câu hỏi.
             execution.registerWorkerThread();
             var modelAnswer = modelPort.answer(
                     execution, selectHistory(execution.getConversation().messages()));
             execution.checkCanContinue();
+
+            // 2. Thu thập các tài liệu học vụ đã được cung cấp cho AI.
             var suppliedChunks = execution.getRetrievedChunks();
             var suppliedChunkIds = suppliedChunks.stream()
                     .map(KnowledgeChunkPort.RetrievedChunk::chunkId)
                     .collect(Collectors.toSet());
+
+            // 3. Kiểm tra tính hợp lệ của câu trả lời và các nguồn trích dẫn.
             boolean hasValidKnowledgeAnswer = modelAnswer != null
                     && modelAnswer.content() != null
                     && modelAnswer.content().length() <= 20000
                     && AiContentPolicy.hasValidCitations(
-                            modelAnswer.content(), modelAnswer.citationIds(), suppliedChunkIds);
+                    modelAnswer.content(), modelAnswer.citationIds(), suppliedChunkIds);
+
+            // 4. Lọc các tài liệu thực sự được AI trích dẫn hợp lệ.
             var citedChunkIds = hasValidKnowledgeAnswer ? new HashSet<>(modelAnswer.citationIds()) : Set.<Long>of();
             var citedChunks = suppliedChunks.stream()
                     .filter(chunk -> citedChunkIds.contains(chunk.chunkId()))
                     .toList();
+
+            // 5. Xác định nội dung câu trả lời cuối cùng dựa trên dữ liệu đã xác minh.
             String content;
             if (execution.getAcademicProfile() != null) {
                 // Chỉ template BE phát số liệu cá nhân; text model không được tự thêm GPA/tín chỉ.
@@ -145,25 +154,33 @@ public class AiAdvisorChatService {
                 if (!citedChunks.isEmpty())
                     content += "\nTài liệu liên quan: "
                             + citedChunks.stream()
-                                    .map(chunk -> "[K" + chunk.chunkId() + "]")
-                                    .collect(Collectors.joining(", "))
+                            .map(chunk -> "[K" + chunk.chunkId() + "]")
+                            .collect(Collectors.joining(", "))
                             + ".";
+
+                // Sử dụng câu trả lời của AI nếu nội dung và trích dẫn hợp lệ.
             } else if (hasValidKnowledgeAnswer) {
                 content = AiContentPolicy.redactPromptText(modelAnswer.content());
+
+                // Xử lý trường hợp AI chưa thực thi bất kỳ Tool nào.
             } else if (execution.getStatus().toolCalls() == 0) {
                 // Chỉ nhận câu hỏi làm rõ không chứa số khi chưa có bằng chứng; còn lại giới thiệu capability thật.
                 content = modelAnswer != null
-                                && modelAnswer.content() != null
-                                && modelAnswer.content().length() <= 2000
-                                && modelAnswer.content().strip().endsWith("?")
-                                && modelAnswer.content().codePoints().noneMatch(Character::isDigit)
-                                && modelAnswer.citationIds() != null
-                                && modelAnswer.citationIds().isEmpty()
+                        && modelAnswer.content() != null
+                        && modelAnswer.content().length() <= 2000
+                        && modelAnswer.content().strip().endsWith("?")
+                        && modelAnswer.content().codePoints().noneMatch(Character::isDigit)
+                        && modelAnswer.citationIds() != null
+                        && modelAnswer.citationIds().isEmpty()
                         ? AiContentPolicy.redactPromptText(modelAnswer.content())
                         : CAPABILITIES_MESSAGE;
+
+                // Sử dụng câu trả lời fallback khi không có đủ bằng chứng hợp lệ.
             } else {
                 content = ragProperties.getFallbackMessage();
             }
+
+            // 6. Hoàn tất execution và lưu câu trả lời đã xác minh vào lịch sử hội thoại.
             String verifiedContent = content;
             execution.complete(() -> historyService.recordExchange(
                     execution.getPrincipal(),
@@ -171,13 +188,19 @@ public class AiAdvisorChatService {
                     execution.getQuestion(),
                     verifiedContent,
                     citedChunks));
+
+            // 7. Xử lý trường hợp execution bị hủy hoặc vượt giới hạn.
         } catch (AdvisorExecutionStoppedException exception) {
             // Hủy/limit đã phát terminal; không lưu text dở hoặc phát thêm lỗi.
+
+            // 8. Xử lý lỗi phát sinh và đánh dấu execution thất bại.
         } catch (RuntimeException exception) {
             int code = exception instanceof BaseException businessException
                     ? businessException.getErrorCode().getCode()
                     : ErrorCode.AI_SERVICE_UNAVAILABLE.getCode();
             execution.fail(code);
+
+            // 9. Giải phóng suất thực thi và ghi log tổng kết request.
         } finally {
             // Giữ suất đến khi worker thực sự dừng; cancel SDK có thể chưa giải phóng I/O ngay.
             releaseActiveRequest(execution);

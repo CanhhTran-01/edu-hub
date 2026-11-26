@@ -3,7 +3,7 @@ package com.eduhub.edu_hub.aiassistant.application.service;
 import com.eduhub.edu_hub.aiassistant.api.dto.request.SearchChatSessionsRequest;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.*;
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
-import com.eduhub.edu_hub.aiassistant.application.port.AiAssistantPort.ConversationMessage;
+import com.eduhub.edu_hub.aiassistant.application.port.AiAdvisorModelPort.ConversationMessage;
 import com.eduhub.edu_hub.aiassistant.application.port.KnowledgeChunkPort;
 import com.eduhub.edu_hub.aiassistant.application.port.KnowledgeChunkPort.RetrievedChunk;
 import com.eduhub.edu_hub.aiassistant.application.specification.ChatSessionSpecification;
@@ -36,6 +36,7 @@ public class ChatHistoryService {
     private final KnowledgeChunkPort chunkPort;
     private final AiRagProperties properties;
     private final Clock clock;
+
     public record ConversationContext(Long sessionId, Long lastMessageId, List<ConversationMessage> messages) {}
 
     public PageResponse<ChatSessionSummaryResponse> getAllSessions(Jwt principal, SearchChatSessionsRequest request) {

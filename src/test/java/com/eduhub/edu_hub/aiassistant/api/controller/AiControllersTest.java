@@ -36,7 +36,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 class AiControllersTest {
-    AiChatService chat = mock(AiChatService.class);
     ChatHistoryService history = mock(ChatHistoryService.class);
     AiAdvisorChatService advisor = mock(AiAdvisorChatService.class);
     KnowledgeSourceService sources = mock(KnowledgeSourceService.class);
@@ -53,7 +52,7 @@ class AiControllersTest {
         var responses = new ApiResponseFactory(clock);
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(principal));
         mvc = MockMvcBuilders.standaloneSetup(
-                        new AiChatController(responses, chat, advisor),
+                        new AiChatController(responses, advisor),
                         new AiChatSessionController(responses, history),
                         new KnowledgeSourceController(responses, sources))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
@@ -140,31 +139,71 @@ class AiControllersTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.path").value("/api/v1/ai/sessions/999"));
         verify(history).getSessionById(principal, "999");
-        verifyNoInteractions(chat, advisor);
+        verifyNoInteractions(advisor);
     }
 
     @Test
-    void chatReturnsSourceAndPageCitationsWithoutSectionTitles() throws Exception {
-        when(chat.chat(eq(principal), any()))
-                .thenReturn(ChatResponse.builder()
-                        .sessionId("3")
-                        .messageId("11")
-                        .content("Theo quy chế [K21].")
-                        .citations(List.of(citationResponse()))
-                        .build());
-        mvc.perform(
-                        post("/api/v1/ai/chat")
-                                .contentType("application/json")
-                                .content(
-                                        """
-                                {"message":"Quy chế học lại?"}
-                                """))
+    void advisorCompletionReturnsSavedContentAndCitationsWithinTheSelectedSession() throws Exception {
+        UUID clientRequestId = UUID.randomUUID();
+        var execution = new AdvisorChatExecution(
+                clientRequestId,
+                7L,
+                principal,
+                "Quy chế học lại?",
+                new ChatHistoryService.ConversationContext(3L, 11L, List.of()),
+                new AiAdvisorProperties(),
+                new AiTokenCounter(),
+                clock);
+        var savedResponse = ChatResponse.builder()
+                .sessionId("3")
+                .messageId("13")
+                .content("Theo quy chế [K21].")
+                .citations(List.of(citationResponse()))
+                .build();
+        when(advisor.prepareChat(eq(principal), any())).thenReturn(execution);
+        doAnswer(invocation -> {
+                    execution.complete(() -> savedResponse);
+                    return null;
+                })
+                .when(advisor)
+                .startChat(execution);
+
+        var stream = mvc.perform(post("/api/v1/ai/chat/stream")
+                        .contentType("application/json")
+                        .accept("text/event-stream")
+                        .content("{\"sessionId\":\"3\",\"message\":\"Quy chế học lại?\",\"clientRequestId\":\""
+                                + clientRequestId + "\"}"))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        var body = mvc.perform(asyncDispatch(stream))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.intent").doesNotHaveJsonPath())
-                .andExpect(jsonPath("$.data.citations[0].referenceCode").value("K21"))
-                .andExpect(jsonPath("$.data.citations[0].sourceTitle").value("Quy chế"))
-                .andExpect(jsonPath("$.data.citations[0].pageNumber").value(2))
-                .andExpect(jsonPath("$.data.citations[0].sectionTitle").doesNotHaveJsonPath());
+                .andExpect(content().contentTypeCompatibleWith("text/event-stream"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString(StandardCharsets.UTF_8);
+        assertThat(body)
+                .contains(
+                        "event:agent.completed",
+                        "\"sessionId\":\"3\"",
+                        "\"messageId\":\"13\"",
+                        "\"content\":\"Theo quy chế [K21].\"",
+                        "\"referenceCode\":\"K21\"",
+                        "\"sourceTitle\":\"Quy chế\"",
+                        "\"pageNumber\":2")
+                .doesNotContain("\"intent\":", "\"sectionTitle\":");
+        var captured = ArgumentCaptor.forClass(AdvisorChatRequest.class);
+        verify(advisor).prepareChat(eq(principal), captured.capture());
+        assertThat(captured.getValue().getSessionId()).isEqualTo("3");
+    }
+
+    @Test
+    void removedSynchronousChatEndpointReturnsNotFoundWithoutStartingAnAdvisorRequest() throws Exception {
+        mvc.perform(post("/api/v1/ai/chat")
+                        .contentType("application/json")
+                        .content("{\"message\":\"Quy chế học lại?\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(ErrorCode.ENDPOINT_NOT_FOUND.getCode()));
+        verifyNoInteractions(advisor, history);
     }
 
     @Test
@@ -184,14 +223,14 @@ class AiControllersTest {
     }
 
     @Test
-    void rateLimitReturnsBusinessCodeAndRetryHeader() throws Exception {
-        when(chat.chat(eq(principal), any())).thenThrow(new AiAssistantException(ErrorCode.AI_RATE_LIMIT_EXCEEDED));
-        mvc.perform(post("/api/v1/ai/chat")
+    void advisorRateLimitReturnsBusinessCodeAndRetryHeader() throws Exception {
+        when(advisor.prepareChat(eq(principal), any()))
+                .thenThrow(new AiAssistantException(ErrorCode.AI_RATE_LIMIT_EXCEEDED));
+        mvc.perform(post("/api/v1/ai/chat/stream")
                         .contentType("application/json")
+                        .accept("text/event-stream")
                         .content(
-                                """
-                        {"message":"Quy chế học lại?"}
-                        """))
+                                "{\"message\":\"Quy chế học lại?\",\"clientRequestId\":\"" + UUID.randomUUID() + "\"}"))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(header().string("Retry-After", "60"))
                 .andExpect(jsonPath("$.code").value(4606));

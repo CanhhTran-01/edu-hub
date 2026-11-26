@@ -5,7 +5,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
-import com.eduhub.edu_hub.aiassistant.application.port.AiAssistantPort.ConversationMessage;
+import com.eduhub.edu_hub.aiassistant.application.port.AiAdvisorModelPort.ConversationMessage;
 import com.eduhub.edu_hub.aiassistant.application.port.KnowledgeChunkPort;
 import com.eduhub.edu_hub.aiassistant.application.port.KnowledgeChunkPort.RetrievedChunk;
 import com.eduhub.edu_hub.aiassistant.domain.enums.*;

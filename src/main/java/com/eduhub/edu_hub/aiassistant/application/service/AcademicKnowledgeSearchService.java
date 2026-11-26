@@ -12,7 +12,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-/** Pipeline truy xuất chung cho chat RAG và tool, giữ cùng bộ lọc nguồn và ngân sách đoạn trích. */
+/** Truy xuất cho tool tri thức, giữ bộ lọc nguồn và ngân sách đoạn trích. */
 @Service
 @RequiredArgsConstructor
 public class AcademicKnowledgeSearchService {
