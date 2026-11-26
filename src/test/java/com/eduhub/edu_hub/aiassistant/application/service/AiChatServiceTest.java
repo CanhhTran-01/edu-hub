@@ -53,7 +53,14 @@ class AiChatServiceTest {
         when(historyService.recordExchange(any(), any(), anyString(), anyString(), anyList()))
                 .thenReturn(ChatResponse.builder().content("Đã lưu").build());
         service = new AiChatService(
-                accessService, assistantPort, chunkPort, historyService, properties, tokenCounter, clock, executor);
+                accessService,
+                assistantPort,
+                new AcademicKnowledgeSearchService(chunkPort, properties, tokenCounter, clock),
+                historyService,
+                properties,
+                tokenCounter,
+                new AiQuestionRateLimiter(properties, clock),
+                executor);
     }
 
     @Test

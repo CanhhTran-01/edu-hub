@@ -46,8 +46,8 @@ public final class AiContentPolicy {
         var matcher = CITATION.matcher(content);
         while (matcher.find()) {
             try {
-                Long chunkId = Long.valueOf(matcher.group(1));
-                if (chunkId <= 0 || !chunkId.toString().equals(matcher.group(1))) return false;
+                long chunkId = Long.parseLong(matcher.group(1));
+                if (chunkId <= 0 || !Long.toString(chunkId).equals(matcher.group(1))) return false;
                 inlineChunkIds.add(chunkId);
             } catch (NumberFormatException exception) {
                 return false;

@@ -11,13 +11,18 @@ import com.eduhub.edu_hub.aiassistant.api.dto.response.*;
 import com.eduhub.edu_hub.aiassistant.api.exception.AiAssistantExceptionHandler;
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
 import com.eduhub.edu_hub.aiassistant.application.service.*;
+import com.eduhub.edu_hub.aiassistant.domain.enums.AdvisorRequestState;
 import com.eduhub.edu_hub.aiassistant.domain.enums.ChatMessageRole;
 import com.eduhub.edu_hub.aiassistant.domain.enums.KnowledgeSourceStatus;
+import com.eduhub.edu_hub.aiassistant.infrastructure.adapter.AiTokenCounter;
+import com.eduhub.edu_hub.aiassistant.infrastructure.config.AiAdvisorProperties;
 import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
 import com.eduhub.edu_hub.shared.exception.*;
 import java.nio.charset.StandardCharsets;
 import java.time.*;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.*;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.ContentDisposition;
@@ -33,6 +38,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class AiControllersTest {
     AiChatService chat = mock(AiChatService.class);
     ChatHistoryService history = mock(ChatHistoryService.class);
+    AiAdvisorChatService advisor = mock(AiAdvisorChatService.class);
     KnowledgeSourceService sources = mock(KnowledgeSourceService.class);
     Clock clock = Clock.fixed(Instant.parse("2026-11-18T17:00:00Z"), ZoneId.of("Asia/Ho_Chi_Minh"));
     Jwt principal = Jwt.withTokenValue("token")
@@ -47,7 +53,8 @@ class AiControllersTest {
         var responses = new ApiResponseFactory(clock);
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(principal));
         mvc = MockMvcBuilders.standaloneSetup(
-                        new AiChatController(responses, chat, history),
+                        new AiChatController(responses, chat, advisor),
+                        new AiChatSessionController(responses, history),
                         new KnowledgeSourceController(responses, sources))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setControllerAdvice(new AiAssistantExceptionHandler(responses), new GlobalExceptionHandler(responses))
@@ -123,6 +130,20 @@ class AiControllersTest {
     }
 
     @Test
+    void missingSessionReturnsAiJsonErrorForAClientAcceptingEventStream() throws Exception {
+        when(history.getSessionById(principal, "999"))
+                .thenThrow(new AiAssistantException(ErrorCode.CHAT_SESSION_NOT_FOUND));
+        mvc.perform(get("/api/v1/ai/sessions/999").accept("text/event-stream"))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith("application/json"))
+                .andExpect(jsonPath("$.code").value(4602))
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.path").value("/api/v1/ai/sessions/999"));
+        verify(history).getSessionById(principal, "999");
+        verifyNoInteractions(chat, advisor);
+    }
+
+    @Test
     void chatReturnsSourceAndPageCitationsWithoutSectionTitles() throws Exception {
         when(chat.chat(eq(principal), any()))
                 .thenReturn(ChatResponse.builder()
@@ -174,6 +195,120 @@ class AiControllersTest {
                 .andExpect(status().isTooManyRequests())
                 .andExpect(header().string("Retry-After", "60"))
                 .andExpect(jsonPath("$.code").value(4606));
+    }
+
+    @Test
+    void advisorStreamUsesSseEnvelopeAndVerifiedPrincipal() throws Exception {
+        UUID clientRequestId = UUID.randomUUID();
+        var execution = new AdvisorChatExecution(
+                clientRequestId,
+                7L,
+                principal,
+                "GPA của tôi?",
+                new ChatHistoryService.ConversationContext(null, null, List.of()),
+                new AiAdvisorProperties(),
+                new AiTokenCounter(),
+                clock);
+        when(advisor.prepareChat(eq(principal), any())).thenReturn(execution);
+        doAnswer(invocation -> {
+                    execution.publish("agent.started", Map.of("clientRequestId", clientRequestId));
+                    execution.cancel("USER_REQUEST");
+                    return null;
+                })
+                .when(advisor)
+                .startChat(execution);
+
+        var stream = mvc.perform(post("/api/v1/ai/chat/stream")
+                        .contentType("application/json")
+                        .accept("text/event-stream")
+                        .content("{\"message\":\"GPA của tôi?\",\"clientRequestId\":\"" + clientRequestId + "\"}"))
+                .andExpect(request().asyncStarted())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(header().string("X-Accel-Buffering", "no"))
+                .andReturn();
+        var body = mvc.perform(asyncDispatch(stream))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("text/event-stream"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString(StandardCharsets.UTF_8);
+        assertThat(body)
+                .contains(
+                        "event:agent.started",
+                        "event:agent.cancelled",
+                        "id:1",
+                        "id:2",
+                        "\"requestId\":\"" + execution.getRequestId(),
+                        "\"sequence\":1")
+                .doesNotContain("thoughtSignatures", "systemPrompt");
+        var captured = ArgumentCaptor.forClass(AdvisorChatRequest.class);
+        verify(advisor).prepareChat(eq(principal), captured.capture());
+        assertThat(captured.getValue().getClientRequestId()).isEqualTo(clientRequestId);
+    }
+
+    @Test
+    void advisorRejectsMissingRequestIdentityAndArbitraryStudentIdBeforeOpeningStream() throws Exception {
+        mvc.perform(post("/api/v1/ai/chat/stream")
+                        .contentType("application/json")
+                        .accept("text/event-stream")
+                        .content("{\"message\":\"GPA của tôi?\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(1001));
+        mvc.perform(post("/api/v1/ai/chat/stream")
+                        .contentType("application/json")
+                        .accept("text/event-stream")
+                        .content("{\"message\":\"GPA?\",\"clientRequestId\":\"" + UUID.randomUUID()
+                                + "\",\"studentId\":999}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(1001));
+        verifyNoInteractions(advisor);
+    }
+
+    @Test
+    void advisorCapacityFailureIsJsonBeforeAnySseAndProvidesRetryDelay() throws Exception {
+        when(advisor.prepareChat(eq(principal), any()))
+                .thenThrow(new AiAssistantException(ErrorCode.AI_ADVISOR_CAPACITY_EXCEEDED));
+        mvc.perform(post("/api/v1/ai/chat/stream")
+                        .contentType("application/json")
+                        .accept("text/event-stream")
+                        .content("{\"message\":\"GPA?\",\"clientRequestId\":\"" + UUID.randomUUID() + "\"}"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(header().string("Retry-After", "10"))
+                .andExpect(jsonPath("$.code").value(4613));
+        verify(advisor, never()).startChat(any());
+    }
+
+    @Test
+    void advisorStatusAndCancelUsePrincipalAndDisableCaching() throws Exception {
+        UUID requestId = UUID.randomUUID();
+        var response = new AdvisorRequestStatusResponse(
+                requestId,
+                UUID.randomUUID(),
+                null,
+                AdvisorRequestState.CANCELLED,
+                LocalDateTime.now(clock),
+                LocalDateTime.now(clock),
+                2,
+                1,
+                0,
+                2000,
+                "USER_REQUEST",
+                null,
+                null,
+                null);
+        when(advisor.findRequestStatus(principal, requestId)).thenReturn(response);
+        when(advisor.cancelRequest(principal, requestId)).thenReturn(response);
+        mvc.perform(get("/api/v1/ai/chat-requests/" + requestId).param("userId", "999"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.data.requestId").value(requestId.toString()))
+                .andExpect(jsonPath("$.data.state").value("CANCELLED"));
+        mvc.perform(post("/api/v1/ai/chat-requests/" + requestId + "/cancel"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.data.stopReason").value("USER_REQUEST"));
+        verify(advisor).findRequestStatus(principal, requestId);
+        verify(advisor).cancelRequest(principal, requestId);
     }
 
     @Test

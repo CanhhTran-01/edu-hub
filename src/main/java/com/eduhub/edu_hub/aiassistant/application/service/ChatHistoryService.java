@@ -36,6 +36,7 @@ public class ChatHistoryService {
     private final KnowledgeChunkPort chunkPort;
     private final AiRagProperties properties;
     private final Clock clock;
+    public record ConversationContext(Long sessionId, Long lastMessageId, List<ConversationMessage> messages) {}
 
     public PageResponse<ChatSessionSummaryResponse> getAllSessions(Jwt principal, SearchChatSessionsRequest request) {
         Long userId = accessService.requireStudent(principal).getId();
@@ -120,8 +121,9 @@ public class ChatHistoryService {
         for (ChatMessage message : messages) {
             var messageReferences = references.getOrDefault(message.getId(), List.of());
             // Memory RAG chỉ dùng lại câu trả lời còn đủ nguồn; lời đáp không có nguồn vẫn giữ trong lịch sử hiển thị.
+
             // TODO(ADVISOR_MEMORY_PROVENANCE): Khi có kết quả tool/artifact, bổ sung kiểm tra snapshot của
-            // kết quả học vụ; hiện chưa có payload này nên không coi text không nguồn là dữ liệu đã xác minh.
+            //  kết quả học vụ; hiện chưa có payload này nên không coi text không nguồn là dữ liệu đã xác minh.
             if (message.getRole() == ChatMessageRole.ASSISTANT
                     && (messageReferences.isEmpty()
                             || messageReferences.stream()
@@ -213,8 +215,6 @@ public class ChatHistoryService {
         log.warn("Từ chối đọc phiên hội thoại không khả dụng: actorId={}", userId);
         return new AiAssistantException(ErrorCode.CHAT_SESSION_NOT_FOUND);
     }
-
-    public record ConversationContext(Long sessionId, Long lastMessageId, List<ConversationMessage> messages) {}
 
     private ChatSession lockOrCreateSession(
             Long userId, ConversationContext context, String question, LocalDateTime now) {

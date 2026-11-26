@@ -3,7 +3,7 @@ package com.eduhub.edu_hub.aiassistant.application.service;
 import com.eduhub.edu_hub.aiassistant.api.dto.request.ChatRequest;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.ChatResponse;
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
-import com.eduhub.edu_hub.aiassistant.application.port.*;
+import com.eduhub.edu_hub.aiassistant.application.port.AiAssistantPort;
 import com.eduhub.edu_hub.aiassistant.application.port.AiAssistantPort.ConversationMessage;
 import com.eduhub.edu_hub.aiassistant.application.port.KnowledgeChunkPort.RetrievedChunk;
 import com.eduhub.edu_hub.aiassistant.domain.policy.AiContentPolicy;
@@ -24,33 +24,31 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class AiChatService {
     private static final int MAXIMUM_QUESTION_LENGTH = 2000;
-    private static final int MAXIMUM_TRACKED_USERS = 100000;
     private final AiAccessService accessService;
     private final AiAssistantPort assistantPort;
-    private final KnowledgeChunkPort chunkPort;
+    private final AcademicKnowledgeSearchService knowledgeSearchService;
     private final ChatHistoryService historyService;
     private final AiRagProperties properties;
     private final AiTokenCounter tokenCounter;
-    private final Clock clock;
+    private final AiQuestionRateLimiter questionRateLimiter;
     private final AsyncTaskExecutor executor;
-    private final Map<Long, RateWindow> rateWindows = new ConcurrentHashMap<>();
 
     public AiChatService(
             AiAccessService accessService,
             AiAssistantPort assistantPort,
-            KnowledgeChunkPort chunkPort,
+            AcademicKnowledgeSearchService knowledgeSearchService,
             ChatHistoryService historyService,
             AiRagProperties properties,
             AiTokenCounter tokenCounter,
-            Clock clock,
+            AiQuestionRateLimiter questionRateLimiter,
             @Qualifier("aiRequestExecutor") AsyncTaskExecutor executor) {
         this.accessService = accessService;
         this.assistantPort = assistantPort;
-        this.chunkPort = chunkPort;
+        this.knowledgeSearchService = knowledgeSearchService;
         this.historyService = historyService;
         this.properties = properties;
         this.tokenCounter = tokenCounter;
-        this.clock = clock;
+        this.questionRateLimiter = questionRateLimiter;
         this.executor = executor;
     }
 
@@ -62,7 +60,7 @@ public class AiChatService {
                 || request.getMessage().length() > MAXIMUM_QUESTION_LENGTH) {
             throw new AiAssistantException(ErrorCode.VALIDATION_ERROR);
         }
-        consumeQuestionAllowance(userId);
+        questionRateLimiter.consumeQuestionAllowance(userId);
         String question = AiContentPolicy.redactPromptText(AiContentPolicy.normalizeQuestion(request.getMessage()));
         var context = historyService.loadConversation(userId, request.getSessionId());
         List<ConversationMessage> history = limitHistory(context.messages());
@@ -84,9 +82,9 @@ public class AiChatService {
     }
 
     private PreparedAnswer prepareAnswer(String question, List<ConversationMessage> history) {
-        // TODO(ADVISOR_CONTEXTUAL_RETRIEVAL): Khi triển khai Agent sau khi duyệt thiết kế, dùng history/state
-        // để dựng truy vấn hoặc hỏi rõ tham chiếu mơ hồ; luồng RAG hiện truy xuất trực tiếp câu hỏi đã chuẩn hóa.
-        List<RetrievedChunk> chunks = selectContext(chunkPort.findRelevantChunks(question, LocalDate.now(clock)));
+        // NOTE: Endpoint RAG đồng bộ vẫn truy xuất câu hỏi trực tiếp để giữ contract hiện có.
+        // Agent ở /chat/stream tự dựng query hoặc hỏi rõ qua searchAcademicKnowledge, không gọi lại use-case lưu chat.
+        List<RetrievedChunk> chunks = knowledgeSearchService.findRelevantKnowledge(question);
         if (chunks.isEmpty()) return new PreparedAnswer(properties.getFallbackMessage(), List.of());
 
         // Tập này được dùng cả khi dựng prompt và hậu kiểm; không truy xuất lần hai để suy ra nguồn của câu trả lời.
@@ -106,20 +104,6 @@ public class AiChatService {
                         .toList());
     }
 
-    private List<RetrievedChunk> selectContext(List<RetrievedChunk> candidates) {
-        List<RetrievedChunk> selectedChunks = new ArrayList<>();
-        int contextTokens = 0;
-        for (RetrievedChunk chunk : candidates) {
-            int chunkTokens =
-                    tokenCounter.countTokens(chunk.content() + chunk.sourceTitle() + chunk.effectiveDate()) + 64;
-            if (selectedChunks.size() >= properties.getMaximumContextChunks()) break;
-            if (contextTokens + chunkTokens > properties.getContextTokenLimit()) continue;
-            selectedChunks.add(chunk);
-            contextTokens += chunkTokens;
-        }
-        return List.copyOf(selectedChunks);
-    }
-
     private List<ConversationMessage> limitHistory(List<ConversationMessage> messages) {
         List<ConversationMessage> selectedMessages = new ArrayList<>();
         int historyTokens = 0;
@@ -135,29 +119,10 @@ public class AiChatService {
         return List.copyOf(selectedMessages);
     }
 
-    private void consumeQuestionAllowance(Long userId) {
-        Instant now = clock.instant();
-        rateWindows
-                .entrySet()
-                .removeIf(entry -> !entry.getValue().startedAt().plusSeconds(60).isAfter(now));
-        if (!rateWindows.containsKey(userId) && rateWindows.size() >= MAXIMUM_TRACKED_USERS) {
-            throw new AiAssistantException(ErrorCode.AI_RATE_LIMIT_EXCEEDED);
-        }
-        rateWindows.compute(userId, (accountId, previousWindow) -> {
-            RateWindow window = previousWindow == null ? new RateWindow(now, 0) : previousWindow;
-            if (window.questionCount() >= properties.getQuestionsPerMinute()) {
-                throw new AiAssistantException(ErrorCode.AI_RATE_LIMIT_EXCEEDED);
-            }
-            return new RateWindow(window.startedAt(), window.questionCount() + 1);
-        });
-    }
-
     private AiAssistantException serviceUnavailable(Long userId) {
         log.warn("Dịch vụ AI lỗi hoặc quá thời hạn: actorId={}", userId);
         return new AiAssistantException(ErrorCode.AI_SERVICE_UNAVAILABLE);
     }
 
     private record PreparedAnswer(String content, List<RetrievedChunk> citedChunks) {}
-
-    private record RateWindow(Instant startedAt, int questionCount) {}
 }

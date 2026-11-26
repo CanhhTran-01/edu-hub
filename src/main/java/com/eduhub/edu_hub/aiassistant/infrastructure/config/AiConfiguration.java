@@ -15,7 +15,7 @@ import org.springframework.scheduling.concurrent.*;
 
 @Configuration
 @EnableScheduling
-@EnableConfigurationProperties(AiRagProperties.class)
+@EnableConfigurationProperties({AiRagProperties.class, AiAdvisorProperties.class})
 public class AiConfiguration {
     private static final int MAXIMUM_CHAT_WORKERS = 8;
     private static final int MAXIMUM_QUEUED_CHAT_REQUESTS = 16;
@@ -60,6 +60,26 @@ public class AiConfiguration {
         executor.setThreadNamePrefix("ai-request-");
         executor.setWaitForTasksToCompleteOnShutdown(false);
         return executor;
+    }
+
+    @Bean
+    ThreadPoolTaskExecutor aiAdvisorExecutor(AiAdvisorProperties properties) {
+        var executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(properties.getMaximumConcurrentRequests());
+        executor.setMaxPoolSize(properties.getMaximumConcurrentRequests());
+        executor.setQueueCapacity(0);
+        executor.setThreadNamePrefix("ai-advisor-");
+        executor.setWaitForTasksToCompleteOnShutdown(false);
+        return executor;
+    }
+
+    // Scheduler riêng cho deadline/heartbeat, không thay scheduler mặc định của module khác.
+    @Bean(defaultCandidate = false)
+    ThreadPoolTaskScheduler aiAdvisorLifecycleScheduler() {
+        var scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(2);
+        scheduler.setThreadNamePrefix("ai-advisor-lifecycle-");
+        return scheduler;
     }
 
     @Bean
