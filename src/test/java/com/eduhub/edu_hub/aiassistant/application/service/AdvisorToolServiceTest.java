@@ -12,8 +12,13 @@ import com.eduhub.edu_hub.academic.application.facade.AcademicFacade;
 import com.eduhub.edu_hub.academic.domain.enums.*;
 import com.eduhub.edu_hub.aiassistant.infrastructure.adapter.AiTokenCounter;
 import com.eduhub.edu_hub.aiassistant.infrastructure.config.AiAdvisorProperties;
+import com.eduhub.edu_hub.enrollment.api.dto.request.MinimumExamScoreRequest;
+import com.eduhub.edu_hub.enrollment.api.dto.response.MinimumExamScoreResponse;
+import com.eduhub.edu_hub.enrollment.application.facade.EnrollmentFacade;
+import com.eduhub.edu_hub.enrollment.domain.enums.MinimumExamScoreStatus;
 import com.eduhub.edu_hub.scheduling.api.dto.response.SemesterResponse;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import java.math.BigDecimal;
 import java.time.*;
 import java.util.*;
 import org.junit.jupiter.api.Test;
@@ -24,8 +29,10 @@ class AdvisorToolServiceTest {
     AiAccessService access = mock(AiAccessService.class);
     AcademicFacade.Advisor academic = mock(AcademicFacade.Advisor.class);
     AcademicFacade.GpaSimulation simulation = mock(AcademicFacade.GpaSimulation.class);
-    AdvisorToolService service =
-            new AdvisorToolService(access, academic, mock(AcademicKnowledgeSearchService.class), simulation);
+    AcademicFacade.Prerequisites prerequisites = mock(AcademicFacade.Prerequisites.class);
+    EnrollmentFacade.ExamScore examScores = mock(EnrollmentFacade.ExamScore.class);
+    AdvisorToolService service = new AdvisorToolService(
+            access, academic, mock(AcademicKnowledgeSearchService.class), simulation, prerequisites, examScores);
     Clock clock = Clock.fixed(Instant.parse("2026-11-27T00:00:00Z"), ZoneId.of("Asia/Ho_Chi_Minh"));
     Jwt principal = Jwt.withTokenValue("token")
             .header("alg", "HS256")
@@ -105,6 +112,87 @@ class AdvisorToolServiceTest {
                 .pendingConditions(List.of())
                 .calculatedAt(LocalDateTime.now(clock))
                 .build();
+    }
+
+    @Test
+    void examFollowUpKeepsOtherInputsAndAcceptsZeroAsAnExplicitChange() {
+        var execution = examExecution();
+        when(examScores.solveMinimumExamScore(any())).thenReturn(previousExam());
+        service.solveExamScore(execution, null, BigDecimal.ZERO, null, null, false);
+        var request = ArgumentCaptor.forClass(MinimumExamScoreRequest.class);
+        verify(examScores).solveMinimumExamScore(request.capture());
+        assertThat(request.getValue().subjectName()).isEqualTo("Giải tích 1");
+        assertThat(request.getValue().componentScore1()).isZero();
+        assertThat(request.getValue().componentScore2()).isEqualByComparingTo("7");
+        assertThat(request.getValue().targetGradeLetter()).isEqualTo("A");
+        verifyNoInteractions(academic, simulation, prerequisites);
+    }
+
+    @Test
+    void aNewSubjectOrExplicitResetDoesNotReuseAnotherCalculationsScores() {
+        when(examScores.solveMinimumExamScore(any())).thenReturn(previousExam());
+        service.solveExamScore(examExecution(), "Môn khác", null, null, "B", false);
+        service.solveExamScore(examExecution(), "Giải tích 1", null, null, "B", true);
+        var request = ArgumentCaptor.forClass(MinimumExamScoreRequest.class);
+        verify(examScores, times(2)).solveMinimumExamScore(request.capture());
+        assertThat(request.getAllValues()).allSatisfy(inputs -> {
+            assertThat(inputs.componentScore1()).isNull();
+            assertThat(inputs.componentScore2()).isNull();
+        });
+    }
+
+    @Test
+    void prerequisiteToolReadsFreshDataAndDoesNotModifyGpaAssumptions() {
+        var execution = execution(goal(2L));
+        var response = PrerequisiteImpactResponse.builder()
+                .status(PrerequisiteAnalysisStatus.COMPLETED)
+                .scope(PrerequisiteAnalysisScope.COURSE_IMPACT)
+                .courses(List.of())
+                .courseReferences(List.of("S1"))
+                .pendingCourseReferences(List.of())
+                .calculatedAt(LocalDateTime.now(clock))
+                .build();
+        when(prerequisites.analyzeMyPrerequisites(eq(principal), any())).thenReturn(response);
+        assertThat(service.analyzePrerequisiteImpact(execution, PrerequisiteAnalysisScope.COURSE_IMPACT, List.of("S1")))
+                .isSameAs(response);
+        assertThat(execution.getGpaContext().conditions()).hasSize(1);
+        assertThat(execution.getPrerequisiteImpact()).isSameAs(response);
+        verifyNoInteractions(simulation, examScores);
+    }
+
+    @Test
+    void cancelledExamCalculationRejectsItsLateResult() {
+        var execution = examExecution();
+        when(examScores.solveMinimumExamScore(any())).thenAnswer(invocation -> {
+            execution.cancel("USER_REQUEST");
+            return previousExam();
+        });
+        assertThatThrownBy(() -> service.solveExamScore(execution, null, null, BigDecimal.TEN, null, false))
+                .isInstanceOf(AdvisorChatExecution.AdvisorExecutionStoppedException.class);
+        assertThat(execution.getExamScore()).isNull();
+    }
+
+    private MinimumExamScoreResponse previousExam() {
+        return MinimumExamScoreResponse.builder()
+                .status(MinimumExamScoreStatus.SOLVED)
+                .subjectName("Giải tích 1")
+                .componentScore1(new BigDecimal("8"))
+                .componentScore2(new BigDecimal("7"))
+                .targetGradeLetter("A")
+                .calculatedAt(LocalDateTime.now(clock))
+                .build();
+    }
+
+    private AdvisorChatExecution examExecution() {
+        return new AdvisorChatExecution(
+                UUID.randomUUID(),
+                7L,
+                principal,
+                "TP1 là 0 thì sao?",
+                new ChatHistoryService.ConversationContext(3L, 11L, List.of(), null, null, previousExam()),
+                new AiAdvisorProperties(),
+                mock(AiTokenCounter.class),
+                clock);
     }
 
     private GpaSimulationSnapshotResponse snapshot(Long semesterId, String reference) {

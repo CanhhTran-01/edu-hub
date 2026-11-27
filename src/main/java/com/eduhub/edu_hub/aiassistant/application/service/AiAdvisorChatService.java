@@ -2,7 +2,10 @@ package com.eduhub.edu_hub.aiassistant.application.service;
 
 import com.eduhub.edu_hub.academic.api.dto.response.AdvisorAcademicProfileResponse;
 import com.eduhub.edu_hub.academic.api.dto.response.GpaGoalResponse;
+import com.eduhub.edu_hub.academic.api.dto.response.PrerequisiteImpactResponse;
+import com.eduhub.edu_hub.academic.domain.enums.AcademicRequirementStatus;
 import com.eduhub.edu_hub.academic.domain.enums.GpaGoalStatus;
+import com.eduhub.edu_hub.academic.domain.enums.PrerequisiteAnalysisStatus;
 import com.eduhub.edu_hub.aiassistant.api.dto.request.AdvisorChatRequest;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.AdvisorMessagePayloadResponse;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.AdvisorRequestStatusResponse;
@@ -13,6 +16,8 @@ import com.eduhub.edu_hub.aiassistant.application.service.AdvisorChatExecution.A
 import com.eduhub.edu_hub.aiassistant.domain.policy.AiContentPolicy;
 import com.eduhub.edu_hub.aiassistant.infrastructure.adapter.AiTokenCounter;
 import com.eduhub.edu_hub.aiassistant.infrastructure.config.*;
+import com.eduhub.edu_hub.enrollment.api.dto.response.MinimumExamScoreResponse;
+import com.eduhub.edu_hub.enrollment.domain.enums.MinimumExamScoreStatus;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.math.BigDecimal;
@@ -31,9 +36,10 @@ import org.springframework.stereotype.Service;
 @Service
 @Slf4j
 public class AiAdvisorChatService {
+    private static final int MAXIMUM_ACADEMIC_TEXT_CHARACTERS = 18000;
     private static final String CAPABILITIES_MESSAGE =
-            "Xin chào! Hiện tôi hỗ trợ tra cứu quy chế, xem tổng quan học vụ và tìm phương án GPA kỳ hiện tại. "
-                    + "Bạn muốn xem học vụ, tìm phương án GPA hay tra cứu quy chế nào?";
+            "Xin chào! Hiện tôi hỗ trợ tra cứu quy chế, xem tổng quan học vụ, tìm phương án GPA kỳ hiện tại, "
+                    + "phân tích tiên quyết và tính điểm thi tối thiểu từ TP1/TP2 bạn nhập. Bạn cần hỗ trợ nội dung nào?";
     private final AiAccessService accessService;
     private final ChatHistoryService historyService;
     private final AiAdvisorModelPort modelPort;
@@ -189,15 +195,55 @@ public class AiAdvisorChatService {
                 content = ragProperties.getFallbackMessage();
             }
 
+            boolean hasPrerequisiteAnswer =
+                    execution.getPrerequisiteImpact() != null || execution.hasAttemptedPrerequisiteAnalysis();
+            boolean hasExamAnswer = execution.getExamScore() != null || execution.hasAttemptedExamScoreCalculation();
+            if (hasPrerequisiteAnswer || hasExamAnswer) {
+                var academicSections = new ArrayList<String>();
+                boolean hasGpaAnswer = execution.getGpaGoal() != null || execution.hasAttemptedGpaGoalSearch();
+                if (hasGpaAnswer) academicSections.add(content);
+                isClarification = hasGpaAnswer && isClarification;
+                if (hasPrerequisiteAnswer) {
+                    var prerequisiteImpact = execution.getPrerequisiteImpact();
+                    academicSections.add(
+                            prerequisiteImpact == null
+                                    ? "Chưa thể xác minh phân tích tiên quyết từ dữ liệu hiện hành."
+                                    : renderPrerequisiteImpact(prerequisiteImpact));
+                    isClarification |= prerequisiteImpact != null
+                            && prerequisiteImpact.status() == PrerequisiteAnalysisStatus.NEEDS_CLARIFICATION;
+                }
+                if (hasExamAnswer) {
+                    var examScore = execution.getExamScore();
+                    academicSections.add(
+                            examScore == null
+                                    ? "Chưa thể xác minh điểm thi tối thiểu theo thang điểm hiện hành."
+                                    : renderExamScore(examScore));
+                    isClarification |=
+                            examScore != null && examScore.status() == MinimumExamScoreStatus.NEEDS_CLARIFICATION;
+                }
+                content = String.join("\n\n", academicSections);
+                if (content.length() > MAXIMUM_ACADEMIC_TEXT_CHARACTERS) {
+                    int end = content.offsetByCodePoints(
+                            0, Math.min(MAXIMUM_ACADEMIC_TEXT_CHARACTERS, content.codePointCount(0, content.length())));
+                    content = content.substring(0, end) + "\nXem đầy đủ các hàng và chuỗi môn trong bảng kết quả.";
+                }
+            }
+
             // 6. Hoàn tất execution và lưu câu trả lời đã xác minh vào lịch sử hội thoại.
-            var payload = execution.getGpaGoal() != null || execution.getAcademicProfile() != null || isClarification
+            var payload = execution.getGpaGoal() != null
+                            || execution.getAcademicProfile() != null
+                            || isClarification
+                            || hasPrerequisiteAnswer
+                            || hasExamAnswer
                     ? new AdvisorMessagePayloadResponse(
                             AdvisorMessagePayloadResponse.SCHEMA_VERSION,
                             AdvisorMessagePayloadResponse.TYPE,
                             content,
                             isClarification,
                             execution.getAcademicProfile(),
-                            execution.getGpaGoal())
+                            execution.getGpaGoal(),
+                            execution.getPrerequisiteImpact(),
+                            execution.getExamScore())
                     : null;
             if (payload != null && !citedChunks.isEmpty())
                 content += "\nTài liệu liên quan: "
@@ -387,6 +433,112 @@ public class AiAdvisorChatService {
         if (goal.status() == GpaGoalStatus.INFEASIBLE)
             text.append("\nGPA kỳ tối đa theo các điều kiện: ")
                     .append(displayNumber(goal.maximumPossibleSemesterGpa()));
+        return text.toString();
+    }
+
+    private String renderPrerequisiteImpact(PrerequisiteImpactResponse response) {
+        var text = new StringBuilder("Phân tích tiên quyết");
+        if (response.semester() != null)
+            text.append(" — ").append(response.semester().getSemesterName());
+        text.append('\n').append(response.message());
+        for (var course : response.courses().stream().limit(50).toList()) {
+            text.append("\n\n")
+                    .append(Objects.requireNonNullElse(course.subject().subjectCode(), "Môn chưa rõ mã"))
+                    .append(" — ")
+                    .append(course.subject().subjectName())
+                    .append(
+                            course.registeredInCurrentSemester()
+                                    ? " (đăng ký kỳ hiện tại)"
+                                    : " (môn CTĐT, không phải lượt đăng ký kỳ này)")
+                    .append("\nTiên quyết trước kỳ: ")
+                    .append(requirementStatusLabel(course.prerequisiteStatus()));
+            if (course.prerequisites().isEmpty())
+                text.append("\nKhông có cạnh tiên quyết được cung cấp trong phạm vi dữ liệu.");
+            else
+                for (var requirement : course.prerequisites())
+                    text.append("\n- ")
+                            .append(Objects.requireNonNullElse(
+                                    requirement.subject().subjectCode(),
+                                    requirement.subject().subjectName()))
+                            .append(": ")
+                            .append(
+                                    requirement.passedBeforeSemester() == null
+                                            ? "chưa đủ lịch sử"
+                                            : requirement.passedBeforeSemester()
+                                                    ? "đã đạt trước kỳ"
+                                                    : "chưa đạt trước kỳ");
+            if (!course.failureAssumptionApplicable()) {
+                text.append("\nĐã có kết quả đạt; giả định trượt không làm mất môn tiên quyết đã hoàn thành.");
+            } else {
+                text.append("\nẢnh hưởng khi không đạt: ").append(requirementStatusLabel(course.impactStatus()));
+                appendDependencyPaths(text, "Trực tiếp", course.directImpacts());
+                appendDependencyPaths(text, "Gián tiếp", course.indirectImpacts());
+                if (course.impactStatus() == AcademicRequirementStatus.SATISFIED
+                        && course.directImpacts().isEmpty()
+                        && course.indirectImpacts().isEmpty())
+                    text.append("\nKhông thấy môn chưa đạt nào bị ảnh hưởng trong phạm vi đã xác minh.");
+            }
+        }
+        if (!response.historyComplete() || !response.graphComplete())
+            text.append('\n').append(response.scopeNotice());
+        if (response.status() == PrerequisiteAnalysisStatus.SEARCH_LIMIT_REACHED)
+            text.append("\nĐã chạm giới hạn số môn/chuỗi cần duyệt; phần chưa xét không được coi là thỏa mãn.");
+        return text.toString();
+    }
+
+    private void appendDependencyPaths(
+            StringBuilder text, String label, List<PrerequisiteImpactResponse.DependencyImpactResponse> impacts) {
+        for (var impact : impacts.stream().limit(20).toList())
+            text.append("\n- ")
+                    .append(label)
+                    .append(": ")
+                    .append(impact.path().stream()
+                            .map(subject -> Objects.requireNonNullElse(subject.subjectCode(), subject.subjectName()))
+                            .collect(Collectors.joining(" → ")))
+                    .append(
+                            impact.status() == AcademicRequirementStatus.INSUFFICIENT_DATA
+                                    ? " (chưa đủ lịch sử để xác nhận)"
+                                    : "");
+        if (impacts.size() > 20) text.append("\nXem thêm các chuỗi trong bảng kết quả.");
+    }
+
+    private String requirementStatusLabel(AcademicRequirementStatus status) {
+        return switch (status) {
+            case SATISFIED -> "Thỏa mãn trong phạm vi đã xác minh";
+            case BLOCKED -> "Vướng tiên quyết";
+            case INSUFFICIENT_DATA -> "Chưa đủ dữ liệu";
+        };
+    }
+
+    private String renderExamScore(MinimumExamScoreResponse response) {
+        var text = new StringBuilder("Tính điểm thi tối thiểu — ")
+                .append(Objects.requireNonNullElse(response.subjectName(), "chưa điền tên môn"))
+                .append('\n')
+                .append(response.message());
+        if (response.componentScore1() != null)
+            text.append("\nTP1 đã nhập: ").append(displayNumber(response.componentScore1()));
+        if (response.componentScore2() != null)
+            text.append("\nTP2 đã nhập: ").append(displayNumber(response.componentScore2()));
+        if (response.targetGradeLetter() != null)
+            text.append("\nMục tiêu: từ ").append(response.targetGradeLetter()).append(" trở lên");
+        if (response.processScore() != null)
+            text.append("\nĐiểm quá trình sau làm tròn: ").append(displayNumber(response.processScore()));
+        if (response.status() == MinimumExamScoreStatus.SOLVED) {
+            text.append("\nĐiểm thi tối thiểu (bước 0,001): ")
+                    .append(displayNumber(response.minimumExamScore()))
+                    .append("\nNếu chỉ nhập hai chữ số thập phân: ")
+                    .append(displayNumber(response.minimumExamScoreTwoDecimals()))
+                    .append("\nTổng kết tại ngưỡng tối thiểu: ")
+                    .append(displayNumber(response.achievedCourseScore10()))
+                    .append(" — ")
+                    .append(response.achievedGradeLetter());
+        } else if (response.status() == MinimumExamScoreStatus.UNREACHABLE) {
+            text.append("\nTổng kết tối đa khi thi 10: ")
+                    .append(displayNumber(response.maximumCourseScore10()))
+                    .append(" — ")
+                    .append(response.maximumGradeLetter());
+        }
+        text.append("\nĐây là tính thử từ TP1/TP2 đã nhập; không thay đổi điểm thật.");
         return text.toString();
     }
 

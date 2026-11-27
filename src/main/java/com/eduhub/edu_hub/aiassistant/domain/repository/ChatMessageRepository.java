@@ -23,7 +23,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
               and message.content like :payloadPattern
             order by message.id desc
             """)
-    List<ChatMessage> findGpaContextMessages(
+    List<ChatMessage> findAcademicContextMessages(
             @Param("sessionId") Long sessionId,
             @Param("userId") Long userId,
             @Param("payloadPattern") String payloadPattern,

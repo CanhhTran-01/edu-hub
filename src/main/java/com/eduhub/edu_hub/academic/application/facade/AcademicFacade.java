@@ -2,13 +2,19 @@ package com.eduhub.edu_hub.academic.application.facade;
 
 import com.eduhub.edu_hub.academic.api.dto.request.GpaGoalRequest;
 import com.eduhub.edu_hub.academic.api.dto.request.GpaSimulationRequest;
+import com.eduhub.edu_hub.academic.api.dto.request.PrerequisiteImpactRequest;
 import com.eduhub.edu_hub.academic.api.dto.response.AdvisorAcademicProfileResponse;
 import com.eduhub.edu_hub.academic.api.dto.response.GpaGoalResponse;
 import com.eduhub.edu_hub.academic.api.dto.response.GpaSimulationPreviewResponse;
 import com.eduhub.edu_hub.academic.api.dto.response.GpaSimulationSnapshotResponse;
+import com.eduhub.edu_hub.academic.api.dto.response.PrerequisiteImpactResponse;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 public interface AcademicFacade {
+    interface Prerequisites {
+        PrerequisiteImpactResponse analyzeMyPrerequisites(Jwt principal, PrerequisiteImpactRequest request);
+    }
+
     interface GpaSimulation {
         GpaSimulationSnapshotResponse findMySnapshot(Jwt principal);
 

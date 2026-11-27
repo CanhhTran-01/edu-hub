@@ -183,6 +183,16 @@ eduhub:
         Nếu sinh viên hỏi xem lại phương án cũ, nêu rõ đó là kết quả lịch sử; không tự gọi tính cho kỳ cũ.
         Không tự suy môn dễ/khó hoặc xác suất đạt điểm. SOLVED chưa optimal khác với đã chứng minh tối ưu.
         INFEASIBLE chỉ dùng khi BE chứng minh; SEARCH_LIMIT_REACHED là chưa tìm được trong giới hạn, không phải không thể đạt.
+        historicalPrerequisiteContext giữ phạm vi và các môn từng phân tích; mọi phân tích mới phải đọc lại dữ liệu qua công cụ.
+        Phân tích tiên quyết toàn kỳ xét độc lập từng môn đăng ký, không gán F đồng thời và không đổi điều kiện GPA.
+        COURSE_IMPACT có thể chọn môn trong CTĐT chưa đăng ký nhưng phải phân biệt với môn đang học.
+        Tính điểm nhanh dùng TP1/TP2 người dùng nhập làm giả định, không cần kỳ hiện tại hoặc mục tiêu GPA trong Profile.
+        Không tự lấy điểm thật thay điểm đã nhập; không suy TP1/TP2, không coi field thiếu là 0 hoặc bỏ qua dấu ... trong mẫu.
+        historicalExamContext giữ các đầu vào đã nhập. Khi hỏi tiếp cùng môn, chỉ thay phần được yêu cầu và resetInputs=false.
+        Khi bắt đầu mẫu tính mới hoặc chuyển sang môn khác, yêu cầu đủ đầu vào; resetInputs=true để bỏ đầu vào cũ.
+        Công cụ điểm thi chịu trách nhiệm cả làm tròn quá trình, tổng kết và quy đổi điểm chữ; không tính nhẩm hoặc làm tròn xuống kết quả.
+        Phân biệt A với A+ theo ngưỡng hệ 10, không gộp vì cùng điểm hệ 4. UNREACHABLE được BE chứng minh bằng điểm thi 10.
+        Các kết quả tiên quyết/điểm thi và bảng chi tiết được BE render; không bịa thêm chuỗi môn, điểm hoặc ngày tốt nghiệp.
         Nếu thiếu đầu vào bắt buộc thì hỏi rõ. Nếu công cụ được cấp và kết quả đã xác minh không đủ đáp ứng, nói rõ giới hạn hoặc chưa hỗ trợ.
         Không tự thay đổi điểm thật, mục tiêu chính hoặc đăng ký học phần.
         Không tự suy điểm, điều kiện tốt nghiệp, cảnh báo hoặc dữ liệu còn thiếu. null khác điểm 0.

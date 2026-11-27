@@ -40,7 +40,8 @@ public class AdvisorMessageContentCodec {
             displayText = text;
             // Phiên bản chưa hỗ trợ chỉ hiển thị text, không đưa giả định chưa hiểu vào context tính toán.
             if (!document.path("schemaVersion").isInt()
-                    || document.path("schemaVersion").asInt() != AdvisorMessagePayloadResponse.SCHEMA_VERSION)
+                    || (document.path("schemaVersion").asInt() != 1
+                            && document.path("schemaVersion").asInt() != AdvisorMessagePayloadResponse.SCHEMA_VERSION))
                 return new DecodedMessage(text, null);
             var payload = objectMapper.treeToValue(document, AdvisorMessagePayloadResponse.class);
             var goal = payload.gpaGoal();
@@ -52,6 +53,17 @@ public class AdvisorMessageContentCodec {
                             || goal.conditions() == null
                             || goal.pendingConditions() == null
                             || goal.calculatedAt() == null)) return new DecodedMessage(text, null);
+            var prerequisites = payload.prerequisiteImpact();
+            if (prerequisites != null
+                    && (prerequisites.status() == null
+                            || prerequisites.scope() == null
+                            || prerequisites.courses() == null
+                            || prerequisites.courseReferences() == null
+                            || prerequisites.pendingCourseReferences() == null
+                            || prerequisites.calculatedAt() == null)) return new DecodedMessage(text, null);
+            var examScore = payload.examScore();
+            if (examScore != null && (examScore.status() == null || examScore.calculatedAt() == null))
+                return new DecodedMessage(text, null);
             return new DecodedMessage(text, payload);
         } catch (RuntimeException exception) {
             return new DecodedMessage(displayText, null);

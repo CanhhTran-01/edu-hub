@@ -1,12 +1,18 @@
 package com.eduhub.edu_hub.aiassistant.infrastructure.adapter;
 
+import static com.eduhub.edu_hub.aiassistant.infrastructure.adapter.AcademicAdvisorTools.EXAM_SCORE_TOOL;
 import static com.eduhub.edu_hub.aiassistant.infrastructure.adapter.AcademicAdvisorTools.GPA_GOAL_TOOL;
 import static com.eduhub.edu_hub.aiassistant.infrastructure.adapter.AcademicAdvisorTools.KNOWLEDGE_TOOL;
+import static com.eduhub.edu_hub.aiassistant.infrastructure.adapter.AcademicAdvisorTools.PREREQUISITE_TOOL;
 import static com.eduhub.edu_hub.aiassistant.infrastructure.adapter.AcademicAdvisorTools.PROFILE_TOOL;
 
 import com.eduhub.edu_hub.academic.api.dto.request.GpaGoalRequest;
 import com.eduhub.edu_hub.academic.api.dto.request.GpaGoalRequest.CourseGradeConditionRequest;
+import com.eduhub.edu_hub.academic.api.dto.request.PrerequisiteImpactRequest;
+import com.eduhub.edu_hub.academic.api.dto.response.GpaGoalResponse;
+import com.eduhub.edu_hub.academic.api.dto.response.PrerequisiteImpactResponse;
 import com.eduhub.edu_hub.academic.domain.enums.CourseGradeComparison;
+import com.eduhub.edu_hub.academic.domain.enums.PrerequisiteAnalysisScope;
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
 import com.eduhub.edu_hub.aiassistant.application.port.AiAdvisorModelPort;
 import com.eduhub.edu_hub.aiassistant.application.port.AiAdvisorModelPort.*;
@@ -15,6 +21,7 @@ import com.eduhub.edu_hub.aiassistant.application.service.AdvisorChatExecution.A
 import com.eduhub.edu_hub.aiassistant.application.service.AdvisorToolService;
 import com.eduhub.edu_hub.aiassistant.domain.policy.AiContentPolicy;
 import com.eduhub.edu_hub.aiassistant.infrastructure.config.AiAdvisorProperties;
+import com.eduhub.edu_hub.enrollment.api.dto.response.MinimumExamScoreResponse;
 import com.eduhub.edu_hub.shared.exception.BaseException;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.util.*;
@@ -40,6 +47,7 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
     private static final int MAXIMUM_GPA_ARGUMENT_CHARACTERS = 400000;
+    private static final int MAXIMUM_PREREQUISITE_ARGUMENT_CHARACTERS = 40000;
     private final ChatModel chatModel;
     private final AdvisorToolService toolService;
     private final ObjectMapper objectMapper;
@@ -67,7 +75,9 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
         context.put("question", execution.getQuestion());
         context.put("history", history);
         // Trạng thái chính xác nằm ngoài sliding window nhưng vẫn được tính vào ngân sách toàn prompt.
-        context.put("historicalGpaContext", execution.getGpaContext());
+        context.put("historicalGpaContext", gpaContext(execution.getGpaContext()));
+        context.put("historicalPrerequisiteContext", prerequisiteContext(execution.getPrerequisiteContext()));
+        context.put("historicalExamContext", examContext(execution.getExamScoreContext()));
         messages.add(new UserMessage(objectMapper.writeValueAsString(context)));
 
         // 2. Khởi tạo hàng đợi Tool Call và đăng ký các Tool cho AI.
@@ -114,8 +124,8 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
                         .orElseThrow();
                 pendingCalls.clear();
                 for (var call : toolGeneration.getOutput().getToolCalls()) {
-                    if (!Set.of(PROFILE_TOOL, KNOWLEDGE_TOOL, GPA_GOAL_TOOL).contains(call.name()))
-                        throw new AiAssistantException(ErrorCode.AI_SERVICE_UNAVAILABLE);
+                    if (!Set.of(PROFILE_TOOL, KNOWLEDGE_TOOL, GPA_GOAL_TOOL, PREREQUISITE_TOOL, EXAM_SCORE_TOOL)
+                            .contains(call.name())) throw new AiAssistantException(ErrorCode.AI_SERVICE_UNAVAILABLE);
                     pendingCalls.add(call);
                 }
 
@@ -322,8 +332,11 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
             try {
                 if (arguments == null
                         || arguments.length()
-                                > (GPA_GOAL_TOOL.equals(toolName) ? MAXIMUM_GPA_ARGUMENT_CHARACTERS : 5000))
-                    throw new IllegalArgumentException();
+                                > (GPA_GOAL_TOOL.equals(toolName)
+                                        ? MAXIMUM_GPA_ARGUMENT_CHARACTERS
+                                        : PREREQUISITE_TOOL.equals(toolName)
+                                                ? MAXIMUM_PREREQUISITE_ARGUMENT_CHARACTERS
+                                                : 5000)) throw new IllegalArgumentException();
                 var parsedArguments = objectMapper.readTree(arguments);
                 if (!parsedArguments.isObject()) throw new IllegalArgumentException();
 
@@ -334,6 +347,10 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
                     canonicalArguments = "{}";
                 } else if (GPA_GOAL_TOOL.equals(toolName)) {
                     canonicalArguments = canonicalGpaArguments(parsedArguments);
+                } else if (PREREQUISITE_TOOL.equals(toolName)) {
+                    canonicalArguments = canonicalPrerequisiteArguments(parsedArguments);
+                } else if (EXAM_SCORE_TOOL.equals(toolName)) {
+                    canonicalArguments = canonicalExamArguments(parsedArguments);
                 } else {
                     if (parsedArguments.size() != 1
                             || !parsedArguments.has("query")
@@ -355,9 +372,15 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
                     traceCallId,
                     toolName,
                     canonicalArguments,
-                    GPA_GOAL_TOOL.equals(toolName)
-                            ? "Đang tìm phương án đạt mục tiêu GPA kỳ…"
-                            : query == null ? "Đang tra cứu hồ sơ học vụ cá nhân…" : "Đang tra cứu tài liệu học vụ…");
+                    PREREQUISITE_TOOL.equals(toolName)
+                            ? "Đang phân tích tiên quyết và các môn bị ảnh hưởng…"
+                            : EXAM_SCORE_TOOL.equals(toolName)
+                                    ? "Đang tính điểm thi tối thiểu theo TP1/TP2…"
+                                    : GPA_GOAL_TOOL.equals(toolName)
+                                            ? "Đang tìm phương án đạt mục tiêu GPA kỳ…"
+                                            : query == null
+                                                    ? "Đang tra cứu hồ sơ học vụ cá nhân…"
+                                                    : "Đang tra cứu tài liệu học vụ…");
 
             // 4. Thực thi Tool tương ứng để lấy dữ liệu học vụ.
             try {
@@ -365,6 +388,12 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
                 String toolJson = toolCallback.call(canonicalArguments);
                 execution.checkCanContinue();
                 execution.completeTool(traceCallId, toolName);
+                // Model chỉ cần đầu vào/kết luận để điều phối; bảng và chuỗi đầy đủ vẫn giữ trong execution cho FE/lịch
+                // sử.
+                if (PREREQUISITE_TOOL.equals(toolName) && execution.getPrerequisiteImpact() != null)
+                    return objectMapper.writeValueAsString(prerequisiteContext(execution.getPrerequisiteImpact()));
+                if (EXAM_SCORE_TOOL.equals(toolName) && execution.getExamScore() != null)
+                    return objectMapper.writeValueAsString(examContext(execution.getExamScore()));
                 return toolJson;
 
                 // 6. Lan truyền exception nếu Agent bị yêu cầu dừng thực thi.
@@ -397,5 +426,113 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
                         Map.of("code", code, "message", "Chưa lấy được dữ liệu, không được suy đoán kết quả.")));
             }
         }
+    }
+
+    private String canonicalPrerequisiteArguments(JsonNode arguments) {
+        if (arguments.size() != 2
+                || !arguments.has("scope")
+                || !arguments.get("scope").isString()
+                || !arguments.has("courseReferences")
+                || !arguments.get("courseReferences").isArray()
+                || arguments.get("courseReferences").size() > PrerequisiteImpactRequest.MAXIMUM_COURSE_REFERENCES)
+            throw new IllegalArgumentException();
+        var scope = PrerequisiteAnalysisScope.valueOf(arguments.get("scope").asString());
+        var references = new ArrayList<String>();
+        for (var reference : arguments.get("courseReferences")) {
+            if (!reference.isString()
+                    || reference.asString().isBlank()
+                    || reference.asString().length() > 255) throw new IllegalArgumentException();
+            references.add(AiContentPolicy.redactPromptText(AiContentPolicy.normalizeQuestion(reference.asString())));
+        }
+        if (scope == PrerequisiteAnalysisScope.SEMESTER_OVERVIEW && !references.isEmpty())
+            throw new IllegalArgumentException();
+        return objectMapper.writeValueAsString(Map.of("scope", scope, "courseReferences", references));
+    }
+
+    private String canonicalExamArguments(JsonNode arguments) {
+        for (String field : arguments.propertyNames())
+            if (!Set.of("subjectName", "componentScore1", "componentScore2", "targetGradeLetter", "resetInputs")
+                    .contains(field)) throw new IllegalArgumentException();
+        if (!arguments.has("resetInputs") || !arguments.get("resetInputs").isBoolean())
+            throw new IllegalArgumentException();
+        var canonical = new LinkedHashMap<String, Object>();
+        for (String field : List.of("subjectName", "targetGradeLetter")) {
+            var text = arguments.get(field);
+            if (text != null
+                    && !text.isNull()
+                    && (!text.isString() || text.asString().length() > (field.equals("subjectName") ? 255 : 10)))
+                throw new IllegalArgumentException();
+            canonical.put(
+                    field,
+                    text == null || text.isNull()
+                            ? null
+                            : AiContentPolicy.redactPromptText(AiContentPolicy.normalizeQuestion(text.asString())));
+        }
+        for (String field : List.of("componentScore1", "componentScore2")) {
+            var score = arguments.get(field);
+            if (score != null && !score.isNull() && !score.isNumber()) throw new IllegalArgumentException();
+            canonical.put(field, score == null || score.isNull() ? null : score.decimalValue());
+        }
+        canonical.put("resetInputs", arguments.get("resetInputs").booleanValue());
+        return objectMapper.writeValueAsString(canonical);
+    }
+
+    private Map<String, Object> gpaContext(GpaGoalResponse goal) {
+        if (goal == null) return null;
+        var context = new LinkedHashMap<String, Object>();
+        context.put("status", goal.status());
+        context.put("semester", goal.snapshot() == null ? null : goal.snapshot().semester());
+        context.put("conditions", goal.conditions());
+        context.put("pendingConditions", goal.pendingConditions());
+        context.put("calculatedAt", goal.calculatedAt());
+        context.put("message", goal.message());
+        return context;
+    }
+
+    private Map<String, Object> prerequisiteContext(PrerequisiteImpactResponse response) {
+        if (response == null) return null;
+        var context = new LinkedHashMap<String, Object>();
+        context.put("status", response.status());
+        context.put("scope", response.scope());
+        context.put("semester", response.semester());
+        context.put("courseReferences", response.courseReferences());
+        context.put("pendingCourseReferences", response.pendingCourseReferences());
+        context.put("historyComplete", response.historyComplete());
+        context.put("graphComplete", response.graphComplete());
+        context.put("prerequisiteStatus", response.prerequisiteStatus());
+        context.put("impactStatus", response.impactStatus());
+        context.put(
+                "subjects",
+                response.courses().stream()
+                        .map(course -> Map.of(
+                                "subject",
+                                course.subject(),
+                                "directImpactCount",
+                                course.directImpacts().size(),
+                                "indirectImpactCount",
+                                course.indirectImpacts().size(),
+                                "failureAssumptionApplicable",
+                                course.failureAssumptionApplicable()))
+                        .toList());
+        context.put("calculatedAt", response.calculatedAt());
+        context.put("message", response.message());
+        return context;
+    }
+
+    private Map<String, Object> examContext(MinimumExamScoreResponse response) {
+        if (response == null) return null;
+        var context = new LinkedHashMap<String, Object>();
+        context.put("status", response.status());
+        context.put("subjectName", response.subjectName());
+        context.put("componentScore1", response.componentScore1());
+        context.put("componentScore2", response.componentScore2());
+        context.put("targetGradeLetter", response.targetGradeLetter());
+        context.put("processScore", response.processScore());
+        context.put("minimumExamScore", response.minimumExamScore());
+        context.put("minimumExamScoreTwoDecimals", response.minimumExamScoreTwoDecimals());
+        context.put("maximumCourseScore10", response.maximumCourseScore10());
+        context.put("calculatedAt", response.calculatedAt());
+        context.put("message", response.message());
+        return context;
     }
 }

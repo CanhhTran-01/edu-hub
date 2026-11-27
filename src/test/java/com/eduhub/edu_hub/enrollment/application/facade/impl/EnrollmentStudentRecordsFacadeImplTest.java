@@ -3,11 +3,13 @@ package com.eduhub.edu_hub.enrollment.application.facade.impl;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.eduhub.edu_hub.enrollment.api.dto.response.PassedSubjectSemesterResponse;
 import com.eduhub.edu_hub.enrollment.domain.enums.EnrollmentStatus;
 import com.eduhub.edu_hub.enrollment.domain.model.Enrollment;
 import com.eduhub.edu_hub.enrollment.domain.repository.EnrollmentRepository;
 import com.eduhub.edu_hub.enrollment.infrastructure.config.EnrollmentRegistrationSettings;
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
+import java.time.Clock;
 import java.util.*;
 import org.junit.jupiter.api.Test;
 
@@ -87,5 +89,32 @@ class EnrollmentStudentRecordsFacadeImplTest {
         assertThat(displayed.gradePublishedAt()).isEqualTo(publishedAt);
         assertThat(displayed.gradeLockAt()).isEqualTo(publishedAt.plusDays(14));
         assertThat(displayed.gradeLocked()).isTrue();
+    }
+
+    @Test
+    void passedSemesterSourceKeepsHiddenResultsAndDeduplicatesSameSubjectAndSemester() {
+        var repository = mock(EnrollmentRepository.class);
+        var passed = attempt(1L, 2L, EnrollmentStatus.COMPLETED);
+        var hiddenPassed = attempt(3L, 1L, EnrollmentStatus.COMPLETED);
+        var repeatedPass = attempt(1L, 2L, EnrollmentStatus.COMPLETED);
+        var failed = attempt(4L, 2L, EnrollmentStatus.FAILED);
+        when(hiddenPassed.isDeleted()).thenReturn(true);
+        when(repository.findAllByStudentIdOrderByRegisteredAtAscIdAsc(99L))
+                .thenReturn(List.of(passed, repeatedPass, hiddenPassed, failed));
+        var facade = new EnrollmentStudentRecordsFacadeImpl(
+                repository,
+                mock(PeopleFacade.Enrollment.class),
+                mock(EnrollmentRegistrationSettings.class),
+                Clock.systemUTC());
+        assertThat(facade.findPassedSubjectSemesters(99L))
+                .containsExactly(new PassedSubjectSemesterResponse(1L, 2L), new PassedSubjectSemesterResponse(3L, 1L));
+    }
+
+    private Enrollment attempt(Long subjectId, Long semesterId, EnrollmentStatus status) {
+        var attempt = mock(Enrollment.class);
+        when(attempt.getSubjectId()).thenReturn(subjectId);
+        when(attempt.getSemesterId()).thenReturn(semesterId);
+        when(attempt.getStatus()).thenReturn(status);
+        return attempt;
     }
 }

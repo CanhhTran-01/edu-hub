@@ -1,6 +1,7 @@
 package com.eduhub.edu_hub.aiassistant.application.service;
 
 import com.eduhub.edu_hub.academic.api.dto.response.GpaGoalResponse;
+import com.eduhub.edu_hub.academic.api.dto.response.PrerequisiteImpactResponse;
 import com.eduhub.edu_hub.aiassistant.api.dto.request.SearchChatSessionsRequest;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.*;
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
@@ -14,10 +15,12 @@ import com.eduhub.edu_hub.aiassistant.domain.repository.*;
 import com.eduhub.edu_hub.aiassistant.domain.repository.MessageChunkReferenceRepository.ReferenceProjection;
 import com.eduhub.edu_hub.aiassistant.infrastructure.config.AiRagProperties;
 import com.eduhub.edu_hub.aiassistant.infrastructure.serialization.AdvisorMessageContentCodec;
+import com.eduhub.edu_hub.enrollment.api.dto.response.MinimumExamScoreResponse;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.time.*;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,9 +44,19 @@ public class ChatHistoryService {
     private final AdvisorMessageContentCodec contentCodec;
 
     public record ConversationContext(
-            Long sessionId, Long lastMessageId, List<ConversationMessage> messages, GpaGoalResponse latestGpaGoal) {
+            Long sessionId,
+            Long lastMessageId,
+            List<ConversationMessage> messages,
+            GpaGoalResponse latestGpaGoal,
+            PrerequisiteImpactResponse latestPrerequisiteImpact,
+            MinimumExamScoreResponse latestExamScore) {
         public ConversationContext(Long sessionId, Long lastMessageId, List<ConversationMessage> messages) {
-            this(sessionId, lastMessageId, messages, null);
+            this(sessionId, lastMessageId, messages, null, null, null);
+        }
+
+        public ConversationContext(
+                Long sessionId, Long lastMessageId, List<ConversationMessage> messages, GpaGoalResponse latestGpaGoal) {
+            this(sessionId, lastMessageId, messages, latestGpaGoal, null, null);
         }
     }
 
@@ -124,18 +137,26 @@ public class ChatHistoryService {
         Collections.reverse(messages);
         List<ConversationMessage> conversation = new ArrayList<>();
         GpaGoalResponse latestGpaGoal = null;
+        PrerequisiteImpactResponse latestPrerequisiteImpact = null;
+        MinimumExamScoreResponse latestExamScore = null;
         for (ChatMessage message : messages) {
             var decoded = decodeAssistantContent(message);
             if (message.getRole() == ChatMessageRole.ASSISTANT
                     && decoded.payload() != null
                     && decoded.payload().gpaGoal() != null)
                 latestGpaGoal = decoded.payload().gpaGoal();
+            if (decoded.payload() != null && decoded.payload().prerequisiteImpact() != null)
+                latestPrerequisiteImpact = decoded.payload().prerequisiteImpact();
+            if (decoded.payload() != null && decoded.payload().examScore() != null)
+                latestExamScore = decoded.payload().examScore();
             var messageReferences = references.getOrDefault(message.getId(), List.of());
             // Memory RAG chỉ dùng lại câu trả lời còn đủ nguồn; lời đáp không có nguồn vẫn giữ trong lịch sử hiển thị.
 
             // Payload học vụ chỉ giữ ngữ cảnh lịch sử, không được dùng thay nguồn điểm/mục tiêu hiện hành.
             boolean hasAcademicContext = decoded.payload() != null
                     && (decoded.payload().gpaGoal() != null
+                            || decoded.payload().prerequisiteImpact() != null
+                            || decoded.payload().examScore() != null
                             || decoded.payload().academicProfile() != null
                             || decoded.payload().clarification());
             if (message.getRole() == ChatMessageRole.ASSISTANT
@@ -153,20 +174,36 @@ public class ChatHistoryService {
                     : decoded.text();
             conversation.add(new ConversationMessage(message.getRole().name(), memoryText));
         }
-        // Đọc trạng thái GPA riêng với sliding window để không làm mất điều kiện ở hội thoại dài.
+        // Đọc trạng thái từng capability riêng với sliding window để không làm mất đầu vào ở hội thoại dài.
         if (latestGpaGoal == null)
-            latestGpaGoal =
-                    messageRepository
-                            .findGpaContextMessages(session.getId(), userId, "%\"gpaGoal\":{%", PageRequest.of(0, 1))
-                            .stream()
-                            .map(message ->
-                                    contentCodec.decode(message.getContent()).payload())
-                            .filter(Objects::nonNull)
-                            .map(AdvisorMessagePayloadResponse::gpaGoal)
-                            .filter(Objects::nonNull)
-                            .findFirst()
-                            .orElse(null);
-        return new ConversationContext(session.getId(), lastMessageId, List.copyOf(conversation), latestGpaGoal);
+            latestGpaGoal = loadLatestAcademicContext(
+                    session.getId(), userId, "gpaGoal", AdvisorMessagePayloadResponse::gpaGoal);
+        if (latestPrerequisiteImpact == null)
+            latestPrerequisiteImpact = loadLatestAcademicContext(
+                    session.getId(), userId, "prerequisiteImpact", AdvisorMessagePayloadResponse::prerequisiteImpact);
+        if (latestExamScore == null)
+            latestExamScore = loadLatestAcademicContext(
+                    session.getId(), userId, "examScore", AdvisorMessagePayloadResponse::examScore);
+        return new ConversationContext(
+                session.getId(),
+                lastMessageId,
+                List.copyOf(conversation),
+                latestGpaGoal,
+                latestPrerequisiteImpact,
+                latestExamScore);
+    }
+
+    private <T> T loadLatestAcademicContext(
+            Long sessionId, Long userId, String fieldName, Function<AdvisorMessagePayloadResponse, T> contextSelector) {
+        return messageRepository
+                .findAcademicContextMessages(sessionId, userId, "%\"" + fieldName + "\":{%", PageRequest.of(0, 1))
+                .stream()
+                .map(message -> contentCodec.decode(message.getContent()).payload())
+                .filter(Objects::nonNull)
+                .map(contextSelector)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 
     @Transactional

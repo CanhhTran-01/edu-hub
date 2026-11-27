@@ -17,9 +17,12 @@ import com.eduhub.edu_hub.aiassistant.domain.model.*;
 import com.eduhub.edu_hub.aiassistant.domain.repository.*;
 import com.eduhub.edu_hub.aiassistant.infrastructure.config.AiRagProperties;
 import com.eduhub.edu_hub.aiassistant.infrastructure.serialization.AdvisorMessageContentCodec;
+import com.eduhub.edu_hub.enrollment.api.dto.response.MinimumExamScoreResponse;
+import com.eduhub.edu_hub.enrollment.domain.enums.MinimumExamScoreStatus;
 import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
 import com.eduhub.edu_hub.scheduling.api.dto.response.SemesterResponse;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
+import java.math.BigDecimal;
 import java.time.*;
 import java.util.*;
 import org.junit.jupiter.api.*;
@@ -205,7 +208,7 @@ class ChatHistoryServiceTest {
         when(messages.findBySessionIdAndSessionUserIdAndSessionDeletedFalseAndDeletedFalseOrderByIdDesc(
                         eq(3L), eq(7L), any()))
                 .thenReturn(List.of(message(99L, "Tin gần đây không chứa phương án.")));
-        when(messages.findGpaContextMessages(eq(3L), eq(7L), anyString(), any()))
+        when(messages.findAcademicContextMessages(eq(3L), eq(7L), eq("%\"gpaGoal\":{%"), any()))
                 .thenReturn(List.of(message(11L, codec.encode(payload(false)))));
         var context = service.loadConversation(7L, "3");
         assertThat(context.lastMessageId()).isEqualTo(99L);
@@ -282,5 +285,76 @@ class ChatHistoryServiceTest {
         assertThat(detail.messages().getFirst().content()).isEqualTo(question.getContent());
         assertThat(detail.messages().getFirst().payload()).isNull();
         assertThat(service.loadConversation(7L, "3").latestGpaGoal()).isNull();
+    }
+
+    @Test
+    void versionTwoExamAndPrerequisitePayloadRoundTripsAndRemainsAvailableWithoutCitations() {
+        var payload = extendedPayload();
+        var stored = message(11L, codec.encode(payload));
+        when(sessions.findByIdAndUserIdAndDeletedFalse(3L, 7L)).thenReturn(Optional.of(session));
+        when(messages.findBySessionIdAndSessionUserIdAndSessionDeletedFalseAndDeletedFalseOrderByIdAsc(3L, 7L))
+                .thenReturn(List.of(stored));
+        when(messages.findBySessionIdAndSessionUserIdAndSessionDeletedFalseAndDeletedFalseOrderByIdDesc(
+                        eq(3L), eq(7L), any()))
+                .thenReturn(List.of(stored));
+        var detail = service.getSessionById(principal, "3");
+        var context = service.loadConversation(7L, "3");
+        assertThat(detail.messages().getFirst().payload()).isEqualTo(payload);
+        assertThat(context.messages()).containsExactly(new ConversationMessage("ASSISTANT", payload.text()));
+        assertThat(context.latestExamScore().componentScore2()).isEqualByComparingTo("7");
+        assertThat(context.latestPrerequisiteImpact().courseReferences()).containsExactly("S1");
+    }
+
+    @Test
+    void eachAcademicContextCanBeRecoveredOutsideTheWindowIndependently() {
+        when(sessions.findByIdAndUserIdAndDeletedFalse(3L, 7L)).thenReturn(Optional.of(session));
+        when(messages.findBySessionIdAndSessionUserIdAndSessionDeletedFalseAndDeletedFalseOrderByIdDesc(
+                        eq(3L), eq(7L), any()))
+                .thenReturn(List.of(message(99L, "Tin mới không chứa kết quả học vụ.")));
+        var previous = message(11L, codec.encode(extendedPayload()));
+        when(messages.findAcademicContextMessages(eq(3L), eq(7L), eq("%\"prerequisiteImpact\":{%"), any()))
+                .thenReturn(List.of(previous));
+        when(messages.findAcademicContextMessages(eq(3L), eq(7L), eq("%\"examScore\":{%"), any()))
+                .thenReturn(List.of(previous));
+        var context = service.loadConversation(7L, "3");
+        assertThat(context.latestGpaGoal()).isNull();
+        assertThat(context.latestExamScore().subjectName()).isEqualTo("Giải tích 1");
+        assertThat(context.latestPrerequisiteImpact().scope()).isEqualTo(PrerequisiteAnalysisScope.COURSE_IMPACT);
+        assertThat(context.lastMessageId()).isEqualTo(99L);
+    }
+
+    private AdvisorMessagePayloadResponse extendedPayload() {
+        var prerequisiteImpact = PrerequisiteImpactResponse.builder()
+                .status(PrerequisiteAnalysisStatus.COMPLETED)
+                .scope(PrerequisiteAnalysisScope.COURSE_IMPACT)
+                .semester(SemesterResponse.builder()
+                        .id(2L)
+                        .semesterName("Kỳ hiện tại")
+                        .build())
+                .courseReferences(List.of("S1"))
+                .pendingCourseReferences(List.of())
+                .courses(List.of())
+                .calculatedAt(LocalDateTime.now(clock))
+                .message("Phân tích độc lập.")
+                .build();
+        var exam = MinimumExamScoreResponse.builder()
+                .status(MinimumExamScoreStatus.SOLVED)
+                .subjectName("Giải tích 1")
+                .componentScore1(new BigDecimal("8"))
+                .componentScore2(new BigDecimal("7"))
+                .targetGradeLetter("A")
+                .minimumExamScore(new BigDecimal("8.943"))
+                .calculatedAt(LocalDateTime.now(clock))
+                .message("Tính thử từ đầu vào.")
+                .build();
+        return new AdvisorMessagePayloadResponse(
+                2,
+                AdvisorMessagePayloadResponse.TYPE,
+                "Hai kết quả đã kiểm tra.",
+                false,
+                null,
+                null,
+                prerequisiteImpact,
+                exam);
     }
 }

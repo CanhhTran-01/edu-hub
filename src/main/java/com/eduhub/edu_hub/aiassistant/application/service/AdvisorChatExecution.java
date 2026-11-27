@@ -2,11 +2,13 @@ package com.eduhub.edu_hub.aiassistant.application.service;
 
 import com.eduhub.edu_hub.academic.api.dto.response.AdvisorAcademicProfileResponse;
 import com.eduhub.edu_hub.academic.api.dto.response.GpaGoalResponse;
+import com.eduhub.edu_hub.academic.api.dto.response.PrerequisiteImpactResponse;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.*;
 import com.eduhub.edu_hub.aiassistant.application.port.KnowledgeChunkPort.RetrievedChunk;
 import com.eduhub.edu_hub.aiassistant.domain.enums.AdvisorRequestState;
 import com.eduhub.edu_hub.aiassistant.infrastructure.adapter.AiTokenCounter;
 import com.eduhub.edu_hub.aiassistant.infrastructure.config.AiAdvisorProperties;
+import com.eduhub.edu_hub.enrollment.api.dto.response.MinimumExamScoreResponse;
 import java.io.IOException;
 import java.time.*;
 import java.util.*;
@@ -75,6 +77,12 @@ public final class AdvisorChatExecution {
     private GpaGoalResponse gpaGoal;
     private GpaGoalResponse gpaContext;
     private boolean gpaGoalAttempted;
+    private PrerequisiteImpactResponse prerequisiteImpact;
+    private PrerequisiteImpactResponse prerequisiteContext;
+    private boolean prerequisiteAnalysisAttempted;
+    private MinimumExamScoreResponse examScore;
+    private MinimumExamScoreResponse examScoreContext;
+    private boolean examScoreCalculationAttempted;
     private ChatResponse response;
 
     // Quản lý SSE streaming và trạng thái kết nối với client
@@ -144,6 +152,54 @@ public final class AdvisorChatExecution {
 
     public synchronized boolean hasAttemptedGpaGoalSearch() {
         return gpaGoalAttempted;
+    }
+
+    public synchronized PrerequisiteImpactResponse getPrerequisiteImpact() {
+        return prerequisiteImpact;
+    }
+
+    public synchronized PrerequisiteImpactResponse getPrerequisiteContext() {
+        return prerequisiteContext == null ? conversation.latestPrerequisiteImpact() : prerequisiteContext;
+    }
+
+    public synchronized void beginPrerequisiteAnalysis() {
+        checkCanContinue();
+        prerequisiteAnalysisAttempted = true;
+        prerequisiteImpact = null;
+    }
+
+    public synchronized boolean hasAttemptedPrerequisiteAnalysis() {
+        return prerequisiteAnalysisAttempted;
+    }
+
+    public synchronized void recordPrerequisiteImpact(PrerequisiteImpactResponse response) {
+        checkCanContinue();
+        prerequisiteImpact = response;
+        prerequisiteContext = response;
+    }
+
+    public synchronized MinimumExamScoreResponse getExamScore() {
+        return examScore;
+    }
+
+    public synchronized MinimumExamScoreResponse getExamScoreContext() {
+        return examScoreContext == null ? conversation.latestExamScore() : examScoreContext;
+    }
+
+    public synchronized void beginExamScoreCalculation() {
+        checkCanContinue();
+        examScoreCalculationAttempted = true;
+        examScore = null;
+    }
+
+    public synchronized boolean hasAttemptedExamScoreCalculation() {
+        return examScoreCalculationAttempted;
+    }
+
+    public synchronized void recordExamScore(MinimumExamScoreResponse response) {
+        checkCanContinue();
+        examScore = response;
+        examScoreContext = response;
     }
 
     public synchronized List<RetrievedChunk> getRetrievedChunks() {
@@ -281,6 +337,18 @@ public final class AdvisorChatExecution {
             var savedGoal = response.getPayload().gpaGoal();
             writeEvent("ui.component", Map.of("type", "gpa_goal", "schemaVersion", 1, "payload", savedGoal));
             writeEvent("context.updated", Map.of("gpaGoal", savedGoal));
+        }
+        if (response.getPayload() != null && response.getPayload().prerequisiteImpact() != null) {
+            var savedPrerequisites = response.getPayload().prerequisiteImpact();
+            writeEvent(
+                    "ui.component",
+                    Map.of("type", "prerequisite_impact", "schemaVersion", 1, "payload", savedPrerequisites));
+            writeEvent("context.updated", Map.of("prerequisiteImpact", savedPrerequisites));
+        }
+        if (response.getPayload() != null && response.getPayload().examScore() != null) {
+            var savedExamScore = response.getPayload().examScore();
+            writeEvent("ui.component", Map.of("type", "exam_score", "schemaVersion", 1, "payload", savedExamScore));
+            writeEvent("context.updated", Map.of("examScore", savedExamScore));
         }
         if (!response.getCitations().isEmpty())
             writeEvent(
