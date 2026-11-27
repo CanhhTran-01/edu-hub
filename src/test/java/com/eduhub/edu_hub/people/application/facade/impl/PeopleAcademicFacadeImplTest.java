@@ -39,6 +39,7 @@ class PeopleAcademicFacadeImplTest {
                 .administrativeClass(administrativeClass)
                 .activityStatus(StudentActivityStatus.DEACTIVATED)
                 .targetGpa(new BigDecimal("3.25"))
+                .semesterTargetGpa(new BigDecimal("3.50"))
                 .academicWarningStatus("WARNING")
                 .academicWarningReason("Lý do đã lưu")
                 .build();
@@ -53,6 +54,7 @@ class PeopleAcademicFacadeImplTest {
         assertThat(profile.admissionYear()).isEqualTo(2026);
         assertThat(profile.academicWarningReason()).isEqualTo("Lý do đã lưu");
         assertThat(profile.targetGpa()).isEqualByComparingTo("3.25");
+        assertThat(profile.semesterTargetGpa()).isEqualByComparingTo("3.50");
         verify(studentRepository, never()).save(any());
     }
 

@@ -130,11 +130,11 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
             String finalContent = candidateIndex == null
                     ? Objects.requireNonNullElse(firstOutput.getText(), "")
                     : visibleOutputs.stream()
-                    .filter(output -> Objects.equals(
-                            candidateIndex, output.getMetadata().get("candidateIndex")))
-                    .map(AssistantMessage::getText)
-                    .filter(Objects::nonNull)
-                    .reduce("", String::concat);
+                            .filter(output -> Objects.equals(
+                                    candidateIndex, output.getMetadata().get("candidateIndex")))
+                            .map(AssistantMessage::getText)
+                            .filter(Objects::nonNull)
+                            .reduce("", String::concat);
 
             // 12. Parse câu trả lời và kết thúc vòng lặp Agent.
             return parseAnswer(finalContent);
@@ -156,6 +156,46 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
         }
         tools.forEach(tool -> contextText.append(objectMapper.writeValueAsString(tool.getToolDefinition())));
         return contextText.toString();
+    }
+
+    @Override
+    public String commentOnSimulation(String verifiedSimulationJson) {
+        var options = ToolCallingChatOptions.builder()
+                .temperature(0.0)
+                .maxTokens(properties.getMaximumOutputTokens())
+                .toolCallbacks(List.of())
+                .build();
+        var response = chatModel.call(new Prompt(
+                List.of(
+                        new SystemMessage(properties.requireSimulationCommentPrompt()),
+                        new UserMessage(verifiedSimulationJson)),
+                options));
+        if (response == null || response.hasToolCalls() || response.getResults().isEmpty())
+            throw new AiAssistantException(ErrorCode.AI_SERVICE_UNAVAILABLE);
+        var visibleOutputs = response.getResults().stream()
+                .map(Generation::getOutput)
+                .filter(output -> !Boolean.TRUE.equals(output.getMetadata().get("isThought")))
+                .toList();
+        if (visibleOutputs.isEmpty()) throw new AiAssistantException(ErrorCode.AI_SERVICE_UNAVAILABLE);
+        var firstOutput = visibleOutputs.getFirst();
+        Object candidateIndex = firstOutput.getMetadata().get("candidateIndex");
+        String comment = candidateIndex == null
+                ? Objects.requireNonNullElse(firstOutput.getText(), "")
+                : visibleOutputs.stream()
+                        .filter(output -> Objects.equals(
+                                candidateIndex, output.getMetadata().get("candidateIndex")))
+                        .map(AssistantMessage::getText)
+                        .filter(Objects::nonNull)
+                        .reduce("", String::concat);
+        comment = AiContentPolicy.redactPromptText(comment).strip();
+        // Số liệu trong lời thoại do template BE phát; model chỉ nhận xét định tính, không thêm số chưa kiểm chứng.
+        if (comment.isBlank()
+                || comment.length() > properties.getMaximumSimulationCommentCharacters()
+                || comment.codePoints().anyMatch(Character::isDigit)
+                || comment.contains("```")
+                || comment.contains("<")
+                || comment.contains(">")) throw new AiAssistantException(ErrorCode.AI_SERVICE_UNAVAILABLE);
+        return comment.replaceAll("\\s+", " ");
     }
 
     private Answer parseAnswer(String finalContent) {
@@ -206,8 +246,7 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
             execution.checkCanContinue();
             var call = pendingCalls.removeFirst();
             String toolName = getToolDefinition().name();
-            if (!toolName.equals(call.name()))
-                throw new AiAssistantException(ErrorCode.AI_SERVICE_UNAVAILABLE);
+            if (!toolName.equals(call.name())) throw new AiAssistantException(ErrorCode.AI_SERVICE_UNAVAILABLE);
 
             // 2. Validate arguments do AI cung cấp theo schema của từng Tool.
             String query;

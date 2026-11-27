@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.Semaphore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.task.AsyncTaskExecutor;
@@ -39,6 +40,7 @@ class AiAdvisorChatServiceTest {
             Jwt.withTokenValue("test").header("alg", "HS256").claim("uid", 7L).build();
     List<Runnable> workers = new ArrayList<>();
     List<String> events = new ArrayList<>();
+    Semaphore capacity = new Semaphore(settings.getMaximumConcurrentRequests());
     AiAdvisorChatService service;
 
     @BeforeEach
@@ -71,7 +73,7 @@ class AiAdvisorChatServiceTest {
                 .when(executor)
                 .execute(any(Runnable.class));
         service = new AiAdvisorChatService(
-                access, history, model, limiter, settings, ragSettings, counter, clock, executor, scheduler);
+                access, history, model, limiter, settings, ragSettings, counter, clock, executor, scheduler, capacity);
     }
 
     @Test
@@ -143,6 +145,7 @@ class AiAdvisorChatServiceTest {
                     120,
                     18,
                     BigDecimal.ZERO,
+                    new BigDecimal("3.50"),
                     6,
                     1,
                     false,
@@ -154,7 +157,11 @@ class AiAdvisorChatServiceTest {
         workers.removeFirst().run();
         assertThat(execution.getStatus().state()).isEqualTo(AdvisorRequestState.COMPLETED);
         assertThat(execution.getStatus().response().getContent())
-                .contains("GPA tích lũy: chưa đủ dữ liệu", "GPA kỳ hiện tại: 0", "Mục tiêu GPA tốt nghiệp đã lưu: 0");
+                .contains(
+                        "GPA tích lũy: chưa đủ dữ liệu",
+                        "GPA kỳ hiện tại: 0",
+                        "Mục tiêu GPA tốt nghiệp đã lưu: 0",
+                        "Mục tiêu GPA kỳ mặc định đã lưu: 3,50");
         assertThat(execution.getStatus().response().getContent()).doesNotContain("9.99", "999");
         assertThat(events).contains("ui.component", "context.updated", "text.delta");
         assertThat(events.getLast()).isEqualTo("agent.completed");
@@ -287,6 +294,15 @@ class AiAdvisorChatServiceTest {
         execution.connect((name, envelope) -> events.add(name), () -> {});
         service.startChat(execution);
         return execution;
+    }
+
+    @Test
+    void popupWorkReservesSharedCapacityBeforeChatOpensItsStream() {
+        capacity.acquireUninterruptibly(settings.getMaximumConcurrentRequests());
+        assertThatThrownBy(() -> service.prepareChat(principal, request()))
+                .isInstanceOfSatisfying(AiAssistantException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.AI_ADVISOR_CAPACITY_EXCEEDED));
+        verifyNoInteractions(model, limiter, executor);
     }
 
     private AdvisorChatRequest request() {

@@ -59,6 +59,7 @@ class StudentSelfServiceTest {
         student.setFullName("Tên hồ sơ gốc");
         student.setPhone("0900000000");
         student.setTargetGpa(new BigDecimal("3.20"));
+        student.setSemesterTargetGpa(new BigDecimal("3.50"));
     }
 
     @Test
@@ -83,6 +84,7 @@ class StudentSelfServiceTest {
         assertThat(response.getMajorName()).isEqualTo("Công nghệ thông tin");
         assertThat(response.getEmail()).isEqualTo("old@example.com");
         assertThat(response.getTargetGpa()).isEqualByComparingTo("3.20");
+        assertThat(response.getSemesterTargetGpa()).isEqualByComparingTo("3.50");
         verify(studentRepository, never()).findByIdAndDeletedFalse(any());
     }
 
@@ -95,6 +97,7 @@ class StudentSelfServiceTest {
         var response = studentSelfService.updateMyProfile(authenticatedJwt, request);
 
         assertThat(response.getTargetGpa()).isEqualByComparingTo("4");
+        assertThat(response.getSemesterTargetGpa()).isEqualByComparingTo("3.50");
         assertThat(response.getPhone()).isEqualTo("0900000000");
         assertThat(response.getFullName()).isEqualTo("Tên hồ sơ gốc");
         verify(identityFacade, never()).updateAccountEmail(any(), any());
@@ -141,6 +144,7 @@ class StudentSelfServiceTest {
         when(studentRepository.findMyProfileForUpdate(7L)).thenReturn(Optional.of(student));
         var request = new UpdateMyProfileRequest();
         request.setTargetGpa(new BigDecimal("3.2"));
+        request.setSemesterTargetGpa(new BigDecimal("3.5"));
         request.setPhone(" 0900000000 ");
         studentSelfService.updateMyProfile(authenticatedJwt, request);
         studentSelfService.updateMyProfile(authenticatedJwt, new UpdateMyProfileRequest());
@@ -204,6 +208,48 @@ class StudentSelfServiceTest {
         assertThatThrownBy(() -> studentSelfService.updateMyProfile(authenticatedJwt, request))
                 .isInstanceOf(StudentProfileException.class);
         assertThat(student.getTargetGpa()).isEqualByComparingTo("3.20");
+        verify(studentRepository, never()).save(any());
+        verify(identityFacade, never()).updateAccountEmail(any(), any());
+    }
+
+    @Test
+    void updatesBothIndependentTargetsAndPreservesOtherProfileFields() {
+        when(studentRepository.findMyProfileForUpdate(7L)).thenReturn(Optional.of(student));
+        var request = new UpdateMyProfileRequest();
+        request.setTargetGpa(new BigDecimal("3.60"));
+        request.setSemesterTargetGpa(BigDecimal.ZERO);
+        var response = studentSelfService.updateMyProfile(authenticatedJwt, request);
+        assertThat(response.getTargetGpa()).isEqualByComparingTo("3.60");
+        assertThat(response.getSemesterTargetGpa()).isEqualByComparingTo("0");
+        assertThat(response.getPhone()).isEqualTo("0900000000");
+        verify(studentRepository).save(student);
+        verify(identityFacade, never()).updateAccountEmail(any(), any());
+    }
+
+    @Test
+    void explicitNullClearsSemesterTargetWithoutChangingGraduationTarget() {
+        when(studentRepository.findMyProfileForUpdate(7L)).thenReturn(Optional.of(student));
+        var request = new UpdateMyProfileRequest();
+        request.setSemesterTargetGpa(null);
+        var response = studentSelfService.updateMyProfile(authenticatedJwt, request);
+        assertThat(response.getSemesterTargetGpa()).isNull();
+        assertThat(response.getTargetGpa()).isEqualByComparingTo("3.20");
+        verify(studentRepository).save(student);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"-0.01", "4.01", "3.125"})
+    void invalidSemesterTargetStopsAllOtherChangesBeforeMutatingTheProfile(String semesterTargetGpa) {
+        when(studentRepository.findMyProfileForUpdate(7L)).thenReturn(Optional.of(student));
+        var request = new UpdateMyProfileRequest();
+        request.setTargetGpa(BigDecimal.ONE);
+        request.setSemesterTargetGpa(new BigDecimal(semesterTargetGpa));
+        request.setEmail("new@example.com");
+        assertThatThrownBy(() -> studentSelfService.updateMyProfile(authenticatedJwt, request))
+                .isInstanceOfSatisfying(StudentProfileException.class, exception -> assertThat(exception.getField())
+                        .isEqualTo("semesterTargetGpa"));
+        assertThat(student.getTargetGpa()).isEqualByComparingTo("3.20");
+        assertThat(student.getSemesterTargetGpa()).isEqualByComparingTo("3.50");
         verify(studentRepository, never()).save(any());
         verify(identityFacade, never()).updateAccountEmail(any(), any());
     }

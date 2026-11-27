@@ -165,15 +165,16 @@ class SpringAiAdvisorModelAdapterTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {
-        "{\"query\":null}",
-        "{\"query\":123}",
-        "{\"query\":true}",
-        "{\"query\":[]}",
-        "{\"query\":\" \"}",
-        "{\"query\":\"Quy chế\",\"studentId\":999}",
-        "[]"
-    })
+    @ValueSource(
+            strings = {
+                "{\"query\":null}",
+                "{\"query\":123}",
+                "{\"query\":true}",
+                "{\"query\":[]}",
+                "{\"query\":\" \"}",
+                "{\"query\":\"Quy chế\",\"studentId\":999}",
+                "[]"
+            })
     void invalidKnowledgeArgumentsAreRejectedBeforeMethodBindingAndToolTrace(String arguments) {
         when(model.call(any(Prompt.class)))
                 .thenReturn(responseWithTool("k1", "searchAcademicKnowledge", arguments), finalResponse());
@@ -225,6 +226,7 @@ class SpringAiAdvisorModelAdapterTest {
                         120,
                         18,
                         new BigDecimal("3.20"),
+                        new BigDecimal("3.50"),
                         6,
                         0,
                         true,
@@ -388,6 +390,31 @@ class SpringAiAdvisorModelAdapterTest {
                 .content("")
                 .toolCalls(List.of(new AssistantMessage.ToolCall(id, "function", name, arguments)))
                 .build())));
+    }
+
+    @Test
+    void simulationCommentUsesItsOwnPromptWithoutToolsOrConversationHistory() {
+        properties.setSimulationCommentPrompt("Chỉ nhận xét định tính cho popup.");
+        when(model.call(any(Prompt.class)))
+                .thenReturn(new ChatResponse(List.of(new Generation(
+                        new AssistantMessage("Hãy cân nhắc bộ giả định theo kế hoạch học tập của bạn.")))));
+        assertThat(adapter.commentOnSimulation("{\"semesterGpa\":3.25}"))
+                .isEqualTo("Hãy cân nhắc bộ giả định theo kế hoạch học tập của bạn.");
+        var prompts = ArgumentCaptor.forClass(Prompt.class);
+        verify(model).call(prompts.capture());
+        assertThat(prompts.getValue().getSystemMessage().getText()).isEqualTo("Chỉ nhận xét định tính cho popup.");
+        assertThat(((ToolCallingChatOptions) prompts.getValue().getOptions()).getToolCallbacks())
+                .isEmpty();
+        verifyNoInteractions(tools);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"GPA sẽ là 9.99.", "<script>test</script>", "```json\n{}\n```", " "})
+    void simulationCommentRejectsUnverifiedNumbersOrMarkup(String comment) {
+        properties.setSimulationCommentPrompt("Chỉ nhận xét định tính cho popup.");
+        when(model.call(any(Prompt.class)))
+                .thenReturn(new ChatResponse(List.of(new Generation(new AssistantMessage(comment)))));
+        assertThatThrownBy(() -> adapter.commentOnSimulation("{}")).isInstanceOf(AiAssistantException.class);
     }
 
     private ChatResponse finalResponse() {

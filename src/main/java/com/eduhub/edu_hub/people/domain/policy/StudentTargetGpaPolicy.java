@@ -12,18 +12,25 @@ public final class StudentTargetGpaPolicy {
     private StudentTargetGpaPolicy() {}
 
     public static void validateTargetGpa(BigDecimal targetGpa) {
+        validateTargetGpa(targetGpa, "targetGpa");
+    }
+
+    public static void validateSemesterTargetGpa(BigDecimal semesterTargetGpa) {
+        validateTargetGpa(semesterTargetGpa, "semesterTargetGpa");
+    }
+
+    private static void validateTargetGpa(BigDecimal targetGpa, String field) {
 
         // null biểu thị chưa thiết lập mục tiêu; 0 vẫn là một mục tiêu hợp lệ.
         if (targetGpa == null) return;
 
         if (targetGpa.signum() < 0 || targetGpa.compareTo(MAXIMUM_TARGET_GPA) > 0) {
-            throw new StudentProfileException(
-                    ErrorCode.INVALID_TARGET_GPA, "targetGpa", "GPA mục tiêu phải từ 0 đến 4");
+            throw new StudentProfileException(ErrorCode.INVALID_TARGET_GPA, field, "GPA mục tiêu phải từ 0 đến 4");
         }
 
         if (targetGpa.scale() > MAXIMUM_FRACTION_DIGITS) {
             throw new StudentProfileException(
-                    ErrorCode.VALIDATION_ERROR, "targetGpa", "GPA mục tiêu tối đa 2 chữ số thập phân");
+                    ErrorCode.VALIDATION_ERROR, field, "GPA mục tiêu tối đa 2 chữ số thập phân");
         }
     }
 }

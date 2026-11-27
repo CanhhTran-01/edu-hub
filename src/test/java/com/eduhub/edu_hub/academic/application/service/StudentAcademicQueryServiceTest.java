@@ -61,6 +61,7 @@ class StudentAcademicQueryServiceTest {
                         2026,
                         StudentActivityStatus.STUDYING,
                         new BigDecimal("3.25"),
+                        new BigDecimal("3.50"),
                         "WARNING",
                         "Lý do đã lưu"));
         when(calendar.findCurrentSemester()).thenReturn(Optional.of(currentSemester));

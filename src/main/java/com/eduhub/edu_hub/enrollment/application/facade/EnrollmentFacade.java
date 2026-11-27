@@ -1,5 +1,6 @@
 package com.eduhub.edu_hub.enrollment.application.facade;
 
+import com.eduhub.edu_hub.enrollment.api.dto.response.CourseGradeScaleResponse;
 import com.eduhub.edu_hub.enrollment.api.dto.response.EnrollmentResponse;
 import com.eduhub.edu_hub.enrollment.api.dto.response.EnrollmentScopeResponse;
 import com.eduhub.edu_hub.enrollment.api.dto.response.LearningHistoryResponse;
@@ -11,6 +12,10 @@ import java.util.Optional;
 import java.util.Set;
 
 public interface EnrollmentFacade {
+    interface GradeScale {
+        CourseGradeScaleResponse findCurrentGradeScale();
+    }
+
     interface StudentRecords {
         StudentLearningHistoryResponse findLearningHistory(Long studentId);
     }

@@ -15,6 +15,7 @@ import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.math.BigDecimal;
 import java.time.*;
 import java.util.*;
+import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -40,6 +41,7 @@ public class AiAdvisorChatService {
     private final Clock clock;
     private final AsyncTaskExecutor executor;
     private final TaskScheduler scheduler;
+    private final Semaphore capacity;
     private final Map<UUID, AdvisorChatExecution> requestsById = new HashMap<>();
     private final Map<RequestIdentity, UUID> requestIdsByClientIdentity = new HashMap<>();
     private final Map<Long, AdvisorChatExecution> activeRequestsByUserId = new HashMap<>();
@@ -54,7 +56,8 @@ public class AiAdvisorChatService {
             AiTokenCounter tokenCounter,
             Clock clock,
             @Qualifier("aiAdvisorExecutor") AsyncTaskExecutor executor,
-            @Qualifier("aiAdvisorLifecycleScheduler") TaskScheduler scheduler) {
+            @Qualifier("aiAdvisorLifecycleScheduler") TaskScheduler scheduler,
+            @Qualifier("aiAdvisorCapacity") Semaphore capacity) {
         this.accessService = accessService;
         this.historyService = historyService;
         this.modelPort = modelPort;
@@ -65,6 +68,7 @@ public class AiAdvisorChatService {
         this.clock = clock;
         this.executor = executor;
         this.scheduler = scheduler;
+        this.capacity = capacity;
     }
 
     public AdvisorChatExecution prepareChat(Jwt principal, AdvisorChatRequest request) {
@@ -89,20 +93,26 @@ public class AiAdvisorChatService {
             if (activeRequestsByUserId.size() >= properties.getMaximumConcurrentRequests()
                     || requestsById.size() >= properties.getMaximumTrackedRequests())
                 throw new AiAssistantException(ErrorCode.AI_ADVISOR_CAPACITY_EXCEEDED);
-            rateLimiter.consumeQuestionAllowance(userId);
-            var execution = new AdvisorChatExecution(
-                    request.getClientRequestId(),
-                    userId,
-                    principal,
-                    question,
-                    conversation,
-                    properties,
-                    tokenCounter,
-                    clock);
-            requestsById.put(execution.getRequestId(), execution);
-            requestIdsByClientIdentity.put(identity, execution.getRequestId());
-            activeRequestsByUserId.put(userId, execution);
-            return execution;
+            if (!capacity.tryAcquire()) throw new AiAssistantException(ErrorCode.AI_ADVISOR_CAPACITY_EXCEEDED);
+            try {
+                rateLimiter.consumeQuestionAllowance(userId);
+                var execution = new AdvisorChatExecution(
+                        request.getClientRequestId(),
+                        userId,
+                        principal,
+                        question,
+                        conversation,
+                        properties,
+                        tokenCounter,
+                        clock);
+                requestsById.put(execution.getRequestId(), execution);
+                requestIdsByClientIdentity.put(identity, execution.getRequestId());
+                activeRequestsByUserId.put(userId, execution);
+                return execution;
+            } catch (RuntimeException exception) {
+                capacity.release();
+                throw exception;
+            }
         }
     }
 
@@ -138,7 +148,7 @@ public class AiAdvisorChatService {
                     && modelAnswer.content() != null
                     && modelAnswer.content().length() <= 20000
                     && AiContentPolicy.hasValidCitations(
-                    modelAnswer.content(), modelAnswer.citationIds(), suppliedChunkIds);
+                            modelAnswer.content(), modelAnswer.citationIds(), suppliedChunkIds);
 
             // 4. Lọc các tài liệu thực sự được AI trích dẫn hợp lệ.
             var citedChunkIds = hasValidKnowledgeAnswer ? new HashSet<>(modelAnswer.citationIds()) : Set.<Long>of();
@@ -154,8 +164,8 @@ public class AiAdvisorChatService {
                 if (!citedChunks.isEmpty())
                     content += "\nTài liệu liên quan: "
                             + citedChunks.stream()
-                            .map(chunk -> "[K" + chunk.chunkId() + "]")
-                            .collect(Collectors.joining(", "))
+                                    .map(chunk -> "[K" + chunk.chunkId() + "]")
+                                    .collect(Collectors.joining(", "))
                             + ".";
 
                 // Sử dụng câu trả lời của AI nếu nội dung và trích dẫn hợp lệ.
@@ -166,12 +176,12 @@ public class AiAdvisorChatService {
             } else if (execution.getStatus().toolCalls() == 0) {
                 // Chỉ nhận câu hỏi làm rõ không chứa số khi chưa có bằng chứng; còn lại giới thiệu capability thật.
                 content = modelAnswer != null
-                        && modelAnswer.content() != null
-                        && modelAnswer.content().length() <= 2000
-                        && modelAnswer.content().strip().endsWith("?")
-                        && modelAnswer.content().codePoints().noneMatch(Character::isDigit)
-                        && modelAnswer.citationIds() != null
-                        && modelAnswer.citationIds().isEmpty()
+                                && modelAnswer.content() != null
+                                && modelAnswer.content().length() <= 2000
+                                && modelAnswer.content().strip().endsWith("?")
+                                && modelAnswer.content().codePoints().noneMatch(Character::isDigit)
+                                && modelAnswer.citationIds() != null
+                                && modelAnswer.citationIds().isEmpty()
                         ? AiContentPolicy.redactPromptText(modelAnswer.content())
                         : CAPABILITIES_MESSAGE;
 
@@ -238,7 +248,7 @@ public class AiAdvisorChatService {
     }
 
     private synchronized void releaseActiveRequest(AdvisorChatExecution execution) {
-        activeRequestsByUserId.remove(execution.getUserId(), execution);
+        if (activeRequestsByUserId.remove(execution.getUserId(), execution)) capacity.release();
     }
 
     private void removeExpiredRequests() {
@@ -287,6 +297,8 @@ public class AiAdvisorChatService {
                 + "\nTín chỉ đăng ký kỳ hiện tại: " + displayNumber(profile.currentRegisteredCredits())
                 + "\nMục tiêu GPA tốt nghiệp đã lưu: "
                 + (profile.graduationTargetGpa() == null ? "chưa đặt" : displayNumber(profile.graduationTargetGpa()))
+                + "\nMục tiêu GPA kỳ mặc định đã lưu: "
+                + (profile.semesterTargetGpa() == null ? "chưa đặt" : displayNumber(profile.semesterTargetGpa()))
                 + "\nSố học phần đã có kết quả trong kỳ: " + profile.currentSemesterGradedCourseCount()
                 + "/" + profile.currentSemesterCourseCount()
                 + (profile.historyComplete() ? "" : "\nChưa đủ lịch sử để kết luận số liệu tích lũy toàn khóa.")

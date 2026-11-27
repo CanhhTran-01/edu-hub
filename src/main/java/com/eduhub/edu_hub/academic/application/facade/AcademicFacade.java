@@ -1,24 +1,22 @@
 package com.eduhub.edu_hub.academic.application.facade;
 
+import com.eduhub.edu_hub.academic.api.dto.request.GpaSimulationRequest;
 import com.eduhub.edu_hub.academic.api.dto.response.AdvisorAcademicProfileResponse;
-import com.eduhub.edu_hub.academic.api.dto.response.StudentAcademicSummaryResponse;
-import java.math.BigDecimal;
+import com.eduhub.edu_hub.academic.api.dto.response.GpaSimulationPreviewResponse;
+import com.eduhub.edu_hub.academic.api.dto.response.GpaSimulationSnapshotResponse;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 public interface AcademicFacade {
+    interface GpaSimulation {
+        GpaSimulationSnapshotResponse findMySnapshot(Jwt principal);
+
+        GpaSimulationPreviewResponse previewMyGpa(Jwt principal, GpaSimulationRequest request);
+    }
+
     /** Chỉ đọc học vụ của principal đã xác thực, không nhận Student ID từ model hoặc client. */
     interface Advisor {
         AdvisorAcademicProfileResponse findMyAcademicProfile(Jwt principal);
     }
-
-    /** Tính GPA tích lũy hiện tại */
-    BigDecimal calculateCumulativeGpa(Long studentId);
-
-    /** Tính số tín chỉ tích lũy */
-    int calculateAccumulatedCredits(Long studentId);
-
-    /** Lấy tóm tắt học vụ của sinh viên */
-    StudentAcademicSummaryResponse getStudentAcademicSummary(Long studentId);
 
     /** Kiểm tra và cập nhật cảnh báo học vụ */
     // TODO(ACADEMIC_WARNING_EVALUATION): Chưa có implementation; chỉ triển khai sau khi có nguồn điểm,
