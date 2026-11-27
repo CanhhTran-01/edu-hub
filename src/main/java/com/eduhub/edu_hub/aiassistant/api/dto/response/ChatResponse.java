@@ -11,4 +11,5 @@ public class ChatResponse {
     private String messageId;
     private String content;
     private List<CitationResponse> citations;
+    private AdvisorMessagePayloadResponse payload;
 }

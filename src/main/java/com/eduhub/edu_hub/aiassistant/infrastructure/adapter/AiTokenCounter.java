@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class AiTokenCounter {
     private final Encoding encoding = Encodings.newDefaultEncodingRegistry().getEncoding(EncodingType.CL100K_BASE);
+
     public int countTokens(String text) {
         return encoding.countTokens(text);
     }

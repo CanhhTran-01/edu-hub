@@ -111,7 +111,8 @@ class AiControllersTest {
                                 ChatMessageRole.ASSISTANT,
                                 "Theo quy chế [K21].",
                                 LocalDateTime.now(clock),
-                                List.of(citationResponse())))));
+                                List.of(citationResponse()),
+                                null))));
         mvc.perform(get("/api/v1/ai/sessions/3").param("userId", "999"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", "no-store"))

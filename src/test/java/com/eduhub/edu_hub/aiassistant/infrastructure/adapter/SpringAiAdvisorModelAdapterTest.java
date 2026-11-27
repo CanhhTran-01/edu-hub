@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import com.eduhub.edu_hub.academic.api.dto.request.GpaGoalRequest.CourseGradeConditionRequest;
 import com.eduhub.edu_hub.academic.api.dto.response.AdvisorAcademicProfileResponse;
+import com.eduhub.edu_hub.academic.domain.enums.CourseGradeComparison;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.AdvisorEventResponse;
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
 import com.eduhub.edu_hub.aiassistant.application.port.AiAdvisorModelPort.ConversationMessage;
@@ -197,7 +199,7 @@ class SpringAiAdvisorModelAdapterTest {
         var callbacks = ((ToolCallingChatOptions) prompts.getValue().getOptions()).getToolCallbacks();
         assertThat(callbacks)
                 .extracting(callback -> callback.getToolDefinition().name())
-                .containsExactlyInAnyOrder("getAcademicProfile", "searchAcademicKnowledge");
+                .containsExactlyInAnyOrder("getAcademicProfile", "searchAcademicKnowledge", "solveGpaGoal");
         var jsonMapper = JsonMapper.builder().build();
         for (var callback : callbacks) {
             var definition = callback.getToolDefinition();
@@ -205,6 +207,12 @@ class SpringAiAdvisorModelAdapterTest {
             assertThat(definition.inputSchema()).doesNotContain("execution", "principal", "studentId", "userId");
             if (definition.name().equals("getAcademicProfile")) {
                 assertThat(schema.get("properties").isEmpty()).isTrue();
+            } else if (definition.name().equals("solveGpaGoal")) {
+                assertThat(schema.get("properties").size()).isEqualTo(2);
+                assertThat(schema.at("/properties/conditionChanges/type").asString())
+                        .isEqualTo("array");
+                assertThat(schema.at("/properties/resetConditions/type").asString())
+                        .isEqualTo("boolean");
             } else {
                 assertThat(schema.get("properties").size()).isEqualTo(1);
                 assertThat(schema.at("/properties/query/type").asString()).isEqualTo("string");
@@ -420,5 +428,47 @@ class SpringAiAdvisorModelAdapterTest {
     private ChatResponse finalResponse() {
         return new ChatResponse(
                 List.of(new Generation(new AssistantMessage("{\"content\":\"Đã tra cứu.\",\"citationIds\":[]}"))));
+    }
+
+    @Test
+    void annotatedGpaToolReceivesAllConditionsAndEmitsActualExecutionTrace() {
+        when(model.call(any(Prompt.class)))
+                .thenReturn(
+                        responseWithTool(
+                                "g1",
+                                "solveGpaGoal",
+                                """
+                {"conditionChanges":[
+                  {"courseReference":" X ","comparison":"EXACT","gradeLetter":"b"},
+                  {"courseReference":"Y","comparison":"AT_MOST","gradeLetter":"C"}
+                ],"resetConditions":false}
+                """),
+                        finalResponse());
+        adapter.answer(execution, List.of());
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<CourseGradeConditionRequest>> conditions = ArgumentCaptor.forClass(List.class);
+        verify(tools).solveGpaGoal(eq(execution), conditions.capture(), eq(false));
+        assertThat(conditions.getValue())
+                .containsExactly(
+                        new CourseGradeConditionRequest("X", null, CourseGradeComparison.EXACT, "B"),
+                        new CourseGradeConditionRequest("Y", null, CourseGradeComparison.AT_MOST, "C"));
+        assertThat(eventNames).containsExactly("tool.started", "tool.completed");
+        assertThat(((Map<?, ?>) events.getFirst().data()).get("toolName")).isEqualTo("solveGpaGoal");
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "{\"conditionChanges\":[],\"resetConditions\":false,\"studentId\":99}",
+                "{\"conditionChanges\":[],\"resetConditions\":\"false\"}",
+                "{\"conditionChanges\":[{\"enrollmentId\":1.5,\"comparison\":\"EXACT\",\"gradeLetter\":\"B\"}],\"resetConditions\":false}",
+                "{\"conditionChanges\":[{\"courseReference\":\"X\",\"comparison\":\"EXACT\",\"gradeLetter\":\"B\",\"semesterId\":1}],\"resetConditions\":false}"
+            })
+    void invalidGpaArgumentsNeverExecuteTheToolOrEmitAFakeStartedEvent(String arguments) {
+        when(model.call(any(Prompt.class)))
+                .thenReturn(responseWithTool("g1", "solveGpaGoal", arguments), finalResponse());
+        adapter.answer(execution, List.of());
+        verifyNoInteractions(tools);
+        assertThat(eventNames).isEmpty();
     }
 }

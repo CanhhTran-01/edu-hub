@@ -1,7 +1,10 @@
 package com.eduhub.edu_hub.aiassistant.application.service;
 
 import com.eduhub.edu_hub.academic.api.dto.response.AdvisorAcademicProfileResponse;
+import com.eduhub.edu_hub.academic.api.dto.response.GpaGoalResponse;
+import com.eduhub.edu_hub.academic.domain.enums.GpaGoalStatus;
 import com.eduhub.edu_hub.aiassistant.api.dto.request.AdvisorChatRequest;
+import com.eduhub.edu_hub.aiassistant.api.dto.response.AdvisorMessagePayloadResponse;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.AdvisorRequestStatusResponse;
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
 import com.eduhub.edu_hub.aiassistant.application.port.*;
@@ -29,8 +32,8 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class AiAdvisorChatService {
     private static final String CAPABILITIES_MESSAGE =
-            "Xin chào! Hiện tôi hỗ trợ tra cứu quy chế và xem tổng quan GPA, tín chỉ của bạn. "
-                    + "Bạn muốn xem học vụ hiện tại hay tra cứu nội dung quy chế nào?";
+            "Xin chào! Hiện tôi hỗ trợ tra cứu quy chế, xem tổng quan học vụ và tìm phương án GPA kỳ hiện tại. "
+                    + "Bạn muốn xem học vụ, tìm phương án GPA hay tra cứu quy chế nào?";
     private final AiAccessService accessService;
     private final ChatHistoryService historyService;
     private final AiAdvisorModelPort modelPort;
@@ -158,15 +161,19 @@ public class AiAdvisorChatService {
 
             // 5. Xác định nội dung câu trả lời cuối cùng dựa trên dữ liệu đã xác minh.
             String content;
-            if (execution.getAcademicProfile() != null) {
+            boolean isClarification = isSafeClarification(modelAnswer);
+            if (execution.getGpaGoal() != null) {
+                content = renderGpaGoal(execution.getGpaGoal());
+                isClarification = execution.getGpaGoal().status() == GpaGoalStatus.NEEDS_CLARIFICATION;
+            } else if (execution.hasAttemptedGpaGoalSearch()) {
+                content = "Chưa thể xác minh phương án GPA kỳ hiện tại. "
+                        + "Hãy kiểm tra kỳ học/dữ liệu khả dụng rồi yêu cầu tính lại; chưa có căn cứ kết luận không thể đạt.";
+                isClarification = false;
+            } else if (isClarification) {
+                content = AiContentPolicy.redactPromptText(modelAnswer.content());
+            } else if (execution.getAcademicProfile() != null) {
                 // Chỉ template BE phát số liệu cá nhân; text model không được tự thêm GPA/tín chỉ.
                 content = renderAcademicProfile(execution.getAcademicProfile());
-                if (!citedChunks.isEmpty())
-                    content += "\nTài liệu liên quan: "
-                            + citedChunks.stream()
-                                    .map(chunk -> "[K" + chunk.chunkId() + "]")
-                                    .collect(Collectors.joining(", "))
-                            + ".";
 
                 // Sử dụng câu trả lời của AI nếu nội dung và trích dẫn hợp lệ.
             } else if (hasValidKnowledgeAnswer) {
@@ -175,15 +182,7 @@ public class AiAdvisorChatService {
                 // Xử lý trường hợp AI chưa thực thi bất kỳ Tool nào.
             } else if (execution.getStatus().toolCalls() == 0) {
                 // Chỉ nhận câu hỏi làm rõ không chứa số khi chưa có bằng chứng; còn lại giới thiệu capability thật.
-                content = modelAnswer != null
-                                && modelAnswer.content() != null
-                                && modelAnswer.content().length() <= 2000
-                                && modelAnswer.content().strip().endsWith("?")
-                                && modelAnswer.content().codePoints().noneMatch(Character::isDigit)
-                                && modelAnswer.citationIds() != null
-                                && modelAnswer.citationIds().isEmpty()
-                        ? AiContentPolicy.redactPromptText(modelAnswer.content())
-                        : CAPABILITIES_MESSAGE;
+                content = CAPABILITIES_MESSAGE;
 
                 // Sử dụng câu trả lời fallback khi không có đủ bằng chứng hợp lệ.
             } else {
@@ -191,13 +190,36 @@ public class AiAdvisorChatService {
             }
 
             // 6. Hoàn tất execution và lưu câu trả lời đã xác minh vào lịch sử hội thoại.
+            var payload = execution.getGpaGoal() != null || execution.getAcademicProfile() != null || isClarification
+                    ? new AdvisorMessagePayloadResponse(
+                            AdvisorMessagePayloadResponse.SCHEMA_VERSION,
+                            AdvisorMessagePayloadResponse.TYPE,
+                            content,
+                            isClarification,
+                            execution.getAcademicProfile(),
+                            execution.getGpaGoal())
+                    : null;
+            if (payload != null && !citedChunks.isEmpty())
+                content += "\nTài liệu liên quan: "
+                        + citedChunks.stream()
+                                .map(chunk -> "[K" + chunk.chunkId() + "]")
+                                .collect(Collectors.joining(", "))
+                        + ".";
             String verifiedContent = content;
-            execution.complete(() -> historyService.recordExchange(
-                    execution.getPrincipal(),
-                    execution.getConversation(),
-                    execution.getQuestion(),
-                    verifiedContent,
-                    citedChunks));
+            execution.complete(() -> payload == null
+                    ? historyService.recordExchange(
+                            execution.getPrincipal(),
+                            execution.getConversation(),
+                            execution.getQuestion(),
+                            verifiedContent,
+                            citedChunks)
+                    : historyService.recordExchange(
+                            execution.getPrincipal(),
+                            execution.getConversation(),
+                            execution.getQuestion(),
+                            verifiedContent,
+                            citedChunks,
+                            payload));
 
             // 7. Xử lý trường hợp execution bị hủy hoặc vượt giới hạn.
         } catch (AdvisorExecutionStoppedException exception) {
@@ -252,7 +274,7 @@ public class AiAdvisorChatService {
     }
 
     private void removeExpiredRequests() {
-        // TODO(ADVISOR_REQUEST_PERSISTENCE): sau này lưu bền trạng thái/idempotency và artifact theo conversation.
+        // TODO(ADVISOR_REQUEST_PERSISTENCE): lưu trạng thái/idempotency bền để phục hồi sau restart.
         //  Runtime hiện giới hạn số bản ghi/thời gian; restart hoặc hết retention thì request không còn tra cứu được.
         var iterator = requestsById.values().iterator();
         while (iterator.hasNext()) {
@@ -287,6 +309,85 @@ public class AiAdvisorChatService {
         }
         Collections.reverse(selected);
         return List.copyOf(selected);
+    }
+
+    private boolean isSafeClarification(AiAdvisorModelPort.Answer answer) {
+        return answer != null
+                && answer.content() != null
+                && !answer.content().isBlank()
+                && answer.content().length() <= 2000
+                && answer.content().strip().endsWith("?")
+                && answer.content().codePoints().noneMatch(Character::isDigit)
+                && !answer.content().contains("<")
+                && !answer.content().contains(">")
+                && !answer.content().contains("```")
+                && answer.citationIds() != null
+                && answer.citationIds().isEmpty();
+    }
+
+    private String renderGpaGoal(GpaGoalResponse goal) {
+        var text = new StringBuilder("Kỳ tính: ")
+                .append(goal.snapshot().semester().getSemesterName())
+                .append('\n')
+                .append(goal.message());
+        if (goal.snapshot().semesterTargetGpa() != null)
+            text.append("\nMục tiêu GPA kỳ đã dùng: ")
+                    .append(displayNumber(goal.snapshot().semesterTargetGpa()));
+        if (!goal.conditions().isEmpty()) {
+            text.append("\nĐiều kiện đang áp dụng:");
+            for (var condition : goal.conditions()) {
+                String comparison =
+                        switch (condition.comparison()) {
+                            case EXACT -> "đúng";
+                            case AT_MOST -> "tối đa";
+                            case AT_LEAST -> "ít nhất";
+                            default -> "cần làm rõ";
+                        };
+                text.append("\n- ")
+                        .append(condition.courseReference())
+                        .append(": ")
+                        .append(comparison)
+                        .append(' ')
+                        .append(condition.gradeLetter());
+            }
+        }
+        if (goal.preview() != null) {
+            var preview = goal.preview();
+            text.append("\nGPA kỳ theo phương án: ").append(displayNumber(preview.semesterGpa()));
+            for (var course : preview.courses().stream().limit(50).toList()) {
+                String letters = String.join("/", course.gradeLetters());
+                var exact = goal.conditions().stream()
+                        .filter(condition -> condition.enrollmentId().equals(course.enrollmentId())
+                                && condition.comparison()
+                                        == com.eduhub.edu_hub.academic.domain.enums.CourseGradeComparison.EXACT)
+                        .findFirst();
+                if (exact.isPresent() && !course.hasPublishedGrade())
+                    letters = exact.get().gradeLetter();
+                text.append("\n- ")
+                        .append(course.subjectCode())
+                        .append(" — ")
+                        .append(course.subjectName())
+                        .append(": ")
+                        .append(letters.isBlank() ? displayNumber(course.grade4()) : letters)
+                        .append(" (")
+                        .append(displayNumber(course.grade4()))
+                        .append(", ")
+                        .append(course.hasPublishedGrade() ? "điểm đã công bố" : "giả định")
+                        .append(')');
+            }
+            if (preview.courses().size() > 50) text.append("\nXem đầy đủ các môn trong bảng phương án.");
+            if (preview.courses().stream().anyMatch(course -> course.grade4().signum() == 0))
+                text.append(
+                        "\nPhương án vẫn có F do điểm đã công bố hoặc điều kiện bắt buộc; không đồng nghĩa mọi môn đều đạt.");
+            if (preview.cumulativeGpa() != null)
+                text.append("\nGPA tích lũy dự kiến đến cuối kỳ: ").append(displayNumber(preview.cumulativeGpa()));
+            if (!preview.historyComplete()) text.append('\n').append(preview.scopeNotice());
+            text.append("\nĐây là phương án giả định, chưa phải điểm thực và chưa chứng minh mục tiêu tốt nghiệp.");
+        }
+        if (goal.status() == GpaGoalStatus.INFEASIBLE)
+            text.append("\nGPA kỳ tối đa theo các điều kiện: ")
+                    .append(displayNumber(goal.maximumPossibleSemesterGpa()));
+        return text.toString();
     }
 
     private String renderAcademicProfile(AdvisorAcademicProfileResponse profile) {

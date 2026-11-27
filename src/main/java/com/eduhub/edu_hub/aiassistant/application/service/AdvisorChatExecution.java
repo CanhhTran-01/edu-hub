@@ -1,6 +1,7 @@
 package com.eduhub.edu_hub.aiassistant.application.service;
 
 import com.eduhub.edu_hub.academic.api.dto.response.AdvisorAcademicProfileResponse;
+import com.eduhub.edu_hub.academic.api.dto.response.GpaGoalResponse;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.*;
 import com.eduhub.edu_hub.aiassistant.application.port.KnowledgeChunkPort.RetrievedChunk;
 import com.eduhub.edu_hub.aiassistant.domain.enums.AdvisorRequestState;
@@ -11,7 +12,6 @@ import java.time.*;
 import java.util.*;
 import java.util.concurrent.ScheduledFuture;
 import java.util.function.Supplier;
-
 import lombok.Getter;
 import org.springframework.security.oauth2.jwt.Jwt;
 
@@ -21,14 +21,24 @@ import org.springframework.security.oauth2.jwt.Jwt;
  */
 public final class AdvisorChatExecution {
     // Định danh request và thông tin người dùng
-    @Getter private final UUID requestId = UUID.randomUUID();
-    @Getter private final UUID clientRequestId;
-    @Getter private final Long userId;
-    @Getter private final Jwt principal;
+    @Getter
+    private final UUID requestId = UUID.randomUUID();
+
+    @Getter
+    private final UUID clientRequestId;
+
+    @Getter
+    private final Long userId;
+
+    @Getter
+    private final Jwt principal;
 
     // Câu hỏi và ngữ cảnh hội thoại
-    @Getter private final String question;
-    @Getter private final ChatHistoryService.ConversationContext conversation;
+    @Getter
+    private final String question;
+
+    @Getter
+    private final ChatHistoryService.ConversationContext conversation;
 
     // Cấu hình và các dependency hỗ trợ
     private final AiAdvisorProperties properties;
@@ -37,7 +47,9 @@ public final class AdvisorChatExecution {
 
     // Thời gian bắt đầu và thời hạn xử lý request
     private final Instant startedInstant;
-    @Getter private final Instant deadline;
+
+    @Getter
+    private final Instant deadline;
 
     // Theo dõi tool call trùng lặp và lưu dữ liệu truy xuất
     private final Map<String, Integer> identicalToolCalls = new HashMap<>();
@@ -60,6 +72,9 @@ public final class AdvisorChatExecution {
 
     // Lưu hồ sơ học tập và phản hồi của AI
     private AdvisorAcademicProfileResponse academicProfile;
+    private GpaGoalResponse gpaGoal;
+    private GpaGoalResponse gpaContext;
+    private boolean gpaGoalAttempted;
     private ChatResponse response;
 
     // Quản lý SSE streaming và trạng thái kết nối với client
@@ -110,6 +125,25 @@ public final class AdvisorChatExecution {
 
     public synchronized AdvisorAcademicProfileResponse getAcademicProfile() {
         return academicProfile;
+    }
+
+    public synchronized GpaGoalResponse getGpaGoal() {
+        return gpaGoal;
+    }
+
+    public synchronized GpaGoalResponse getGpaContext() {
+        return gpaContext == null ? conversation.latestGpaGoal() : gpaContext;
+    }
+
+    public synchronized void beginGpaGoalSearch() {
+        checkCanContinue();
+        gpaGoalAttempted = true;
+        // Lần tìm mới lỗi không được phát phương án thành công của lần gọi trước như kết quả yêu cầu mới.
+        gpaGoal = null;
+    }
+
+    public synchronized boolean hasAttemptedGpaGoalSearch() {
+        return gpaGoalAttempted;
     }
 
     public synchronized List<RetrievedChunk> getRetrievedChunks() {
@@ -207,6 +241,12 @@ public final class AdvisorChatExecution {
         academicProfile = profile;
     }
 
+    public synchronized void recordGpaGoal(GpaGoalResponse goal) {
+        checkCanContinue();
+        gpaGoal = goal;
+        gpaContext = goal;
+    }
+
     public synchronized void recordKnowledgeChunks(List<RetrievedChunk> chunks) {
         checkCanContinue();
         chunks.forEach(chunk -> retrievedChunksById.put(chunk.chunkId(), chunk));
@@ -235,6 +275,12 @@ public final class AdvisorChatExecution {
             writeEvent(
                     "ui.component", Map.of("type", "academic_profile", "schemaVersion", 1, "payload", academicProfile));
             writeEvent("context.updated", Map.of("academicProfile", academicProfile));
+        }
+        // Phát đúng payload đã commit, cùng cấu trúc với lịch sử và response trong GET status.
+        if (response.getPayload() != null && response.getPayload().gpaGoal() != null) {
+            var savedGoal = response.getPayload().gpaGoal();
+            writeEvent("ui.component", Map.of("type", "gpa_goal", "schemaVersion", 1, "payload", savedGoal));
+            writeEvent("context.updated", Map.of("gpaGoal", savedGoal));
         }
         if (!response.getCitations().isEmpty())
             writeEvent(

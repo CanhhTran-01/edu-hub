@@ -5,6 +5,9 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import com.eduhub.edu_hub.academic.api.dto.response.AdvisorAcademicProfileResponse;
+import com.eduhub.edu_hub.academic.api.dto.response.GpaGoalResponse;
+import com.eduhub.edu_hub.academic.api.dto.response.GpaSimulationSnapshotResponse;
+import com.eduhub.edu_hub.academic.domain.enums.GpaGoalStatus;
 import com.eduhub.edu_hub.aiassistant.api.dto.request.AdvisorChatRequest;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.ChatResponse;
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
@@ -13,6 +16,7 @@ import com.eduhub.edu_hub.aiassistant.domain.enums.AdvisorRequestState;
 import com.eduhub.edu_hub.aiassistant.infrastructure.adapter.AiTokenCounter;
 import com.eduhub.edu_hub.aiassistant.infrastructure.config.*;
 import com.eduhub.edu_hub.identity.api.dto.response.UserInfoResponse;
+import com.eduhub.edu_hub.scheduling.api.dto.response.SemesterResponse;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.math.BigDecimal;
 import java.time.*;
@@ -61,6 +65,14 @@ class AiAdvisorChatServiceTest {
                         .sessionId("3")
                         .messageId("11")
                         .content(invocation.getArgument(3))
+                        .citations(List.of())
+                        .build());
+        when(history.recordExchange(any(), any(), anyString(), anyString(), anyList(), any()))
+                .thenAnswer(invocation -> ChatResponse.builder()
+                        .sessionId("3")
+                        .messageId("11")
+                        .content(invocation.getArgument(3))
+                        .payload(invocation.getArgument(5))
                         .citations(List.of())
                         .build());
         when(scheduler.schedule(any(Runnable.class), any(Instant.class))).thenReturn(mock(ScheduledFuture.class));
@@ -312,9 +324,113 @@ class AiAdvisorChatServiceTest {
         return request;
     }
 
+    @Test
+    void failedGpaAttemptDoesNotFallBackToAProfileAnswerOrAnEarlierGpaSolution() {
+        when(model.answer(any(), anyList())).thenAnswer(invocation -> {
+            AdvisorChatExecution execution = invocation.getArgument(0);
+            execution.recordAcademicProfile(new AdvisorAcademicProfileResponse(
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    0,
+                    0,
+                    false,
+                    "Thiếu lịch sử",
+                    LocalDateTime.now(clock)));
+            execution.beginGpaGoalSearch();
+            return new AiAdvisorModelPort.Answer("GPA mới chắc chắn đạt mục tiêu.", List.of());
+        });
+        var execution = start(request());
+        workers.removeFirst().run();
+        assertThat(execution.getStatus().response().getContent())
+                .contains("Chưa thể xác minh phương án GPA")
+                .doesNotContain("GPA tích lũy:", "chắc chắn đạt");
+        assertThat(execution.getStatus().response().getPayload().gpaGoal()).isNull();
+    }
+
     private void assertNotFound(Runnable action) {
         assertThatThrownBy(action::run)
                 .isInstanceOfSatisfying(AiAssistantException.class, failure -> assertThat(failure.getErrorCode())
                         .isEqualTo(ErrorCode.AI_CHAT_REQUEST_NOT_FOUND));
+    }
+
+    @Test
+    void gpaGoalIsRenderedAndSavedInsteadOfBeingReplacedByTheProfileTemplate() {
+        when(model.answer(any(), anyList())).thenAnswer(invocation -> {
+            AdvisorChatExecution execution = invocation.getArgument(0);
+            execution.recordAcademicProfile(new AdvisorAcademicProfileResponse(
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    0,
+                    0,
+                    false,
+                    "Thiếu lịch sử",
+                    LocalDateTime.now(clock)));
+            execution.recordGpaGoal(GpaGoalResponse.builder()
+                    .status(GpaGoalStatus.INFEASIBLE)
+                    .snapshot(GpaSimulationSnapshotResponse.builder()
+                            .semesterTargetGpa(new BigDecimal("3.50"))
+                            .semester(SemesterResponse.builder()
+                                    .id(2L)
+                                    .semesterName("Kỳ hiện tại")
+                                    .build())
+                            .build())
+                    .conditions(List.of())
+                    .pendingConditions(List.of())
+                    .maximumPossibleSemesterGpa(new BigDecimal("3.33"))
+                    .calculatedAt(LocalDateTime.now(clock))
+                    .message("Không thể đạt với các điều kiện hiện tại.")
+                    .build());
+            return new AiAdvisorModelPort.Answer("GPA chắc chắn 9.99!", List.of());
+        });
+        var execution = start(request());
+        workers.removeFirst().run();
+        assertThat(execution.getStatus().state()).isEqualTo(AdvisorRequestState.COMPLETED);
+        assertThat(execution.getStatus().response().getContent())
+                .contains("Không thể đạt", "3,50", "3,33")
+                .doesNotContain("GPA tích lũy:", "9.99");
+        assertThat(execution.getStatus().response().getPayload().gpaGoal()).isNotNull();
+        assertThat(events).contains("ui.component", "context.updated");
+    }
+
+    @Test
+    void aClarificationAfterAProfileReadIsNotHiddenOrDiscardedFromTypedHistory() {
+        when(model.answer(any(), anyList())).thenAnswer(invocation -> {
+            AdvisorChatExecution execution = invocation.getArgument(0);
+            execution.recordAcademicProfile(new AdvisorAcademicProfileResponse(
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    0,
+                    0,
+                    false,
+                    "Thiếu lịch sử",
+                    LocalDateTime.now(clock)));
+            return new AiAdvisorModelPort.Answer("Bạn muốn đúng B hay từ B trở lên?", List.of());
+        });
+        var execution = start(request());
+        workers.removeFirst().run();
+        assertThat(execution.getStatus().response().getContent()).isEqualTo("Bạn muốn đúng B hay từ B trở lên?");
+        assertThat(execution.getStatus().response().getPayload().clarification())
+                .isTrue();
     }
 }

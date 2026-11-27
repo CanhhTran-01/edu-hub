@@ -1,8 +1,12 @@
 package com.eduhub.edu_hub.aiassistant.infrastructure.adapter;
 
+import static com.eduhub.edu_hub.aiassistant.infrastructure.adapter.AcademicAdvisorTools.GPA_GOAL_TOOL;
 import static com.eduhub.edu_hub.aiassistant.infrastructure.adapter.AcademicAdvisorTools.KNOWLEDGE_TOOL;
 import static com.eduhub.edu_hub.aiassistant.infrastructure.adapter.AcademicAdvisorTools.PROFILE_TOOL;
 
+import com.eduhub.edu_hub.academic.api.dto.request.GpaGoalRequest;
+import com.eduhub.edu_hub.academic.api.dto.request.GpaGoalRequest.CourseGradeConditionRequest;
+import com.eduhub.edu_hub.academic.domain.enums.CourseGradeComparison;
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
 import com.eduhub.edu_hub.aiassistant.application.port.AiAdvisorModelPort;
 import com.eduhub.edu_hub.aiassistant.application.port.AiAdvisorModelPort.*;
@@ -26,6 +30,7 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.execution.ToolExecutionException;
 import org.springframework.ai.tool.metadata.ToolMetadata;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -34,6 +39,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Component
 public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
+    private static final int MAXIMUM_GPA_ARGUMENT_CHARACTERS = 400000;
     private final ChatModel chatModel;
     private final AdvisorToolService toolService;
     private final ObjectMapper objectMapper;
@@ -57,8 +63,12 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
         // 1. Khởi tạo context cho AI.
         List<Message> messages = new ArrayList<>();
         messages.add(new SystemMessage(properties.requireSystemPrompt()));
-        messages.add(new UserMessage(
-                objectMapper.writeValueAsString(Map.of("question", execution.getQuestion(), "history", history))));
+        var context = new LinkedHashMap<String, Object>();
+        context.put("question", execution.getQuestion());
+        context.put("history", history);
+        // Trạng thái chính xác nằm ngoài sliding window nhưng vẫn được tính vào ngân sách toàn prompt.
+        context.put("historicalGpaContext", execution.getGpaContext());
+        messages.add(new UserMessage(objectMapper.writeValueAsString(context)));
 
         // 2. Khởi tạo hàng đợi Tool Call và đăng ký các Tool cho AI.
         Deque<AssistantMessage.ToolCall> pendingCalls = new ArrayDeque<>();
@@ -104,7 +114,7 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
                         .orElseThrow();
                 pendingCalls.clear();
                 for (var call : toolGeneration.getOutput().getToolCalls()) {
-                    if (!Set.of(PROFILE_TOOL, KNOWLEDGE_TOOL).contains(call.name()))
+                    if (!Set.of(PROFILE_TOOL, KNOWLEDGE_TOOL, GPA_GOAL_TOOL).contains(call.name()))
                         throw new AiAssistantException(ErrorCode.AI_SERVICE_UNAVAILABLE);
                     pendingCalls.add(call);
                 }
@@ -216,6 +226,64 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
         }
     }
 
+    private String canonicalGpaArguments(JsonNode arguments) {
+        if (arguments.size() != 2
+                || !arguments.has("conditionChanges")
+                || !arguments.has("resetConditions")
+                || !arguments.get("resetConditions").isBoolean()) throw new IllegalArgumentException();
+        var requestedConditions = arguments.get("conditionChanges");
+        if (!requestedConditions.isArray() || requestedConditions.size() > GpaGoalRequest.MAXIMUM_CONDITIONS)
+            throw new IllegalArgumentException();
+        var conditions = new ArrayList<CourseGradeConditionRequest>();
+        for (var condition : requestedConditions) {
+            if (!condition.isObject()) throw new IllegalArgumentException();
+            for (String property : condition.propertyNames()) {
+                if (!Set.of("courseReference", "enrollmentId", "comparison", "gradeLetter")
+                        .contains(property)) throw new IllegalArgumentException();
+            }
+            var reference = condition.get("courseReference");
+            if (reference != null
+                    && !reference.isNull()
+                    && (!reference.isString() || reference.asString().length() > 255))
+                throw new IllegalArgumentException();
+            var enrollmentId = condition.get("enrollmentId");
+            if (enrollmentId != null
+                    && !enrollmentId.isNull()
+                    && (!enrollmentId.isIntegralNumber()
+                            || !enrollmentId.canConvertToLong()
+                            || enrollmentId.longValue() <= 0)) throw new IllegalArgumentException();
+            if ((enrollmentId == null || enrollmentId.isNull())
+                    && (reference == null
+                            || !reference.isString()
+                            || reference.asString().isBlank())) throw new IllegalArgumentException();
+            var comparison = condition.get("comparison");
+            if (comparison == null || !comparison.isString()) throw new IllegalArgumentException();
+            var relation = CourseGradeComparison.valueOf(comparison.asString());
+            var letter = condition.get("gradeLetter");
+            if (letter != null
+                    && !letter.isNull()
+                    && (!letter.isString() || letter.asString().length() > 10)) throw new IllegalArgumentException();
+            if (relation != CourseGradeComparison.REMOVE
+                    && (letter == null
+                            || !letter.isString()
+                            || letter.asString().isBlank())) throw new IllegalArgumentException();
+            conditions.add(new CourseGradeConditionRequest(
+                    reference == null || reference.isNull()
+                            ? null
+                            : AiContentPolicy.redactPromptText(AiContentPolicy.normalizeQuestion(reference.asString())),
+                    enrollmentId == null || enrollmentId.isNull() ? null : enrollmentId.longValue(),
+                    relation,
+                    letter == null || letter.isNull()
+                            ? null
+                            : letter.asString().strip().toUpperCase(Locale.ROOT)));
+        }
+        return objectMapper.writeValueAsString(Map.of(
+                "conditionChanges",
+                conditions,
+                "resetConditions",
+                arguments.get("resetConditions").booleanValue()));
+    }
+
     private final class AdvisorToolCallback implements ToolCallback {
         private final ToolCallback toolCallback;
         private final AdvisorChatExecution execution;
@@ -249,9 +317,13 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
             if (!toolName.equals(call.name())) throw new AiAssistantException(ErrorCode.AI_SERVICE_UNAVAILABLE);
 
             // 2. Validate arguments do AI cung cấp theo schema của từng Tool.
-            String query;
+            String query = null;
+            String canonicalArguments;
             try {
-                if (arguments == null || arguments.length() > 5000) throw new IllegalArgumentException();
+                if (arguments == null
+                        || arguments.length()
+                                > (GPA_GOAL_TOOL.equals(toolName) ? MAXIMUM_GPA_ARGUMENT_CHARACTERS : 5000))
+                    throw new IllegalArgumentException();
                 var parsedArguments = objectMapper.readTree(arguments);
                 if (!parsedArguments.isObject()) throw new IllegalArgumentException();
 
@@ -259,6 +331,9 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
                 if (PROFILE_TOOL.equals(toolName)) {
                     if (!parsedArguments.isEmpty()) throw new IllegalArgumentException();
                     query = null;
+                    canonicalArguments = "{}";
+                } else if (GPA_GOAL_TOOL.equals(toolName)) {
+                    canonicalArguments = canonicalGpaArguments(parsedArguments);
                 } else {
                     if (parsedArguments.size() != 1
                             || !parsedArguments.has("query")
@@ -266,6 +341,7 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
                     query = parsedArguments.get("query").asString();
                     if (query.isBlank() || query.length() > 2000) throw new IllegalArgumentException();
                     query = AiContentPolicy.redactPromptText(AiContentPolicy.normalizeQuestion(query));
+                    canonicalArguments = objectMapper.writeValueAsString(Map.of("query", query));
                 }
             } catch (RuntimeException exception) {
                 // Chưa chạy tool khi validation bị từ chối, không phát trace giả.
@@ -275,12 +351,13 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
             // 3. Chuẩn hóa thông tin Tool Call và ghi nhận sự kiện bắt đầu thực thi.
             String traceCallId =
                     call.id() == null || call.id().isBlank() ? UUID.randomUUID().toString() : call.id();
-            String canonicalArguments = query == null ? "{}" : objectMapper.writeValueAsString(Map.of("query", query));
             execution.startTool(
                     traceCallId,
                     toolName,
                     canonicalArguments,
-                    query == null ? "Đang tra cứu hồ sơ học vụ cá nhân…" : "Đang tra cứu tài liệu học vụ…");
+                    GPA_GOAL_TOOL.equals(toolName)
+                            ? "Đang tìm phương án đạt mục tiêu GPA kỳ…"
+                            : query == null ? "Đang tra cứu hồ sơ học vụ cá nhân…" : "Đang tra cứu tài liệu học vụ…");
 
             // 4. Thực thi Tool tương ứng để lấy dữ liệu học vụ.
             try {

@@ -133,6 +133,11 @@ enrollment:
     maximum-credits: ${ENROLLMENT_MAXIMUM_CREDITS:}
     first-supported-admission-year: ${ENROLLMENT_FIRST_SUPPORTED_ADMISSION_YEAR:}
 
+academic:
+  gpa-goal-solver:
+    maximum-evaluations: ${GPA_GOAL_MAXIMUM_EVALUATIONS:10000}
+    execution-timeout: ${GPA_GOAL_EXECUTION_TIMEOUT:5s}
+
 eduhub:
   ai:
     advisor:
@@ -168,6 +173,16 @@ eduhub:
         Câu hỏi quy chế của trường phải dùng công cụ tra cứu tài liệu học vụ, không trả lời từ trí nhớ.
         Có thể gọi tiếp công cụ dựa trên kết quả trước; không cần một thứ tự cố định.
         Dùng history để hiểu câu hỏi và dựng query đầy đủ. Nếu tham chiếu mơ hồ, hỏi rõ trước khi truy xuất.
+        historicalGpaContext là payload lịch sử để tiếp tục điều kiện, không phải dữ liệu điểm hoặc mục tiêu hiện hành.
+        Khi tìm phương án, truyền mọi điều kiện của message trong cùng lần gọi công cụ; Backend tự giữ các điều kiện cũ khác môn.
+        Phân biệt EXACT (đúng), AT_MOST (tối đa), AT_LEAST (ít nhất); nếu 'đạt B' chưa rõ nghĩa thì dùng UNSPECIFIED để hỏi lại.
+        Khi trả lời câu hỏi làm rõ, gửi lại đủ pendingConditions với phần đã được làm rõ; không bỏ các điều kiện còn lại.
+        Chỉ resetConditions khi sinh viên yêu cầu bỏ hết điều kiện hoặc đồng ý bắt đầu lại ở kỳ hiện tại.
+        Điểm do solver đề xuất không phải điều kiện bắt buộc cho lượt sau. REMOVE chỉ gỡ điều kiện của môn được chỉ định.
+        Không tự nhận kết quả cũ là kết quả tính mới. Chỉ đọc lại lịch sử thì không cần tính, nhưng mọi yêu cầu tính tiếp phải gọi lại công cụ.
+        Nếu sinh viên hỏi xem lại phương án cũ, nêu rõ đó là kết quả lịch sử; không tự gọi tính cho kỳ cũ.
+        Không tự suy môn dễ/khó hoặc xác suất đạt điểm. SOLVED chưa optimal khác với đã chứng minh tối ưu.
+        INFEASIBLE chỉ dùng khi BE chứng minh; SEARCH_LIMIT_REACHED là chưa tìm được trong giới hạn, không phải không thể đạt.
         Nếu thiếu đầu vào bắt buộc thì hỏi rõ. Nếu công cụ được cấp và kết quả đã xác minh không đủ đáp ứng, nói rõ giới hạn hoặc chưa hỗ trợ.
         Không tự thay đổi điểm thật, mục tiêu chính hoặc đăng ký học phần.
         Không tự suy điểm, điều kiện tốt nghiệp, cảnh báo hoặc dữ liệu còn thiếu. null khác điểm 0.
