@@ -152,6 +152,27 @@ class AiAdvisorChatServiceTest {
     }
 
     @Test
+    void deletedSessionStopsCompletionWithoutPublishingAnAnswer() {
+        var chatRequest = request();
+        chatRequest.setSessionId("3");
+        when(history.loadConversation(7L, "3"))
+                .thenReturn(new ChatHistoryService.ConversationContext(3L, 11L, List.of()));
+        when(model.answer(any(), anyList())).thenReturn(new AiAdvisorModelPort.Answer("Xin chào", List.of()));
+        when(history.recordExchange(eq(principal), any(), anyString(), anyString(), anyList()))
+                .thenThrow(new AiAssistantException(ErrorCode.CHAT_SESSION_NOT_FOUND));
+
+        var execution = start(chatRequest);
+        workers.removeFirst().run();
+
+        var status = service.findRequestStatus(principal, execution.getRequestId());
+        assertThat(status.state()).isEqualTo(AdvisorRequestState.FAILED);
+        assertThat(status.errorCode()).isEqualTo(4602);
+        assertThat(status.response()).isNull();
+        assertThat(events).containsExactly("agent.started", "agent.error");
+        assertThat(capacity.availablePermits()).isEqualTo(settings.getMaximumConcurrentRequests());
+    }
+
+    @Test
     void verifiedProfileReplacesInventedNumbersAndKeepsMissingHistoryDistinctFromZero() {
         when(model.answer(any(), anyList())).thenAnswer(invocation -> {
             AdvisorChatExecution execution = invocation.getArgument(0);

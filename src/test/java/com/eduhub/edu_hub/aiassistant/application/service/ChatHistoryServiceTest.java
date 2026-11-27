@@ -7,6 +7,9 @@ import static org.mockito.Mockito.*;
 import com.eduhub.edu_hub.academic.api.dto.request.GpaGoalRequest.CourseGradeConditionRequest;
 import com.eduhub.edu_hub.academic.api.dto.response.*;
 import com.eduhub.edu_hub.academic.domain.enums.*;
+import com.eduhub.edu_hub.aiassistant.api.dto.request.RenameChatSessionRequest;
+import com.eduhub.edu_hub.aiassistant.api.dto.request.SearchChatSessionsRequest;
+import com.eduhub.edu_hub.aiassistant.api.dto.request.UpdateChatSessionPinRequest;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.AdvisorMessagePayloadResponse;
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
 import com.eduhub.edu_hub.aiassistant.application.port.AiAdvisorModelPort.ConversationMessage;
@@ -26,6 +29,12 @@ import java.math.BigDecimal;
 import java.time.*;
 import java.util.*;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
+import org.springframework.data.domain.*;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.oauth2.jwt.Jwt;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -62,6 +71,284 @@ class ChatHistoryServiceTest {
                 .isInstanceOfSatisfying(AiAssistantException.class, exception -> assertThat(exception.getErrorCode())
                         .isEqualTo(ErrorCode.CHAT_SESSION_NOT_FOUND));
         verifyNoInteractions(messages, references);
+    }
+
+    @Test
+    void sessionListPrioritizesPinsBeforePaginationAndReturnsDecodedPreview() {
+        session.updatePinned(true);
+        var searchRequest = new SearchChatSessionsRequest();
+        searchRequest.setPage(1);
+        searchRequest.setSize(10);
+        when(sessions.findAll(ArgumentMatchers.<Specification<ChatSession>>any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(session), PageRequest.of(1, 10), 11));
+        var lastMessage = mock(ChatMessageRepository.LastMessageProjection.class);
+        when(lastMessage.getSessionId()).thenReturn(3L);
+        when(lastMessage.getContent()).thenReturn(codec.encode(payload(false)));
+        when(messages.findLastMessages(7L, List.of(3L))).thenReturn(List.of(lastMessage));
+
+        var response = service.getAllSessions(principal, searchRequest);
+
+        var pageable = ArgumentCaptor.forClass(Pageable.class);
+        verify(sessions).findAll(ArgumentMatchers.<Specification<ChatSession>>any(), pageable.capture());
+        assertThat(pageable.getValue().getPageNumber()).isEqualTo(1);
+        assertThat(pageable.getValue().getSort())
+                .containsExactly(Sort.Order.desc("pinned"), Sort.Order.desc("startedAt"), Sort.Order.desc("id"));
+        assertThat(response.getContent().getFirst().pinned()).isTrue();
+        assertThat(response.getContent().getFirst().lastMessage())
+                .isEqualTo(payload(false).text());
+        assertThat(response.getTotalElements()).isEqualTo(11);
+    }
+
+    @Test
+    void renameNormalizesTheTitleAndPreservesMessagesPinAndConversationDates() {
+        session.updatePinned(true);
+        when(sessions.findOwnedForUpdate(3L, 7L)).thenReturn(Optional.of(session));
+        var renameRequest = new RenameChatSessionRequest();
+        renameRequest.setTitle("  Ho\u0323c   vu\u0323 \n cá nhân  ");
+        var lastMessage = mock(ChatMessageRepository.LastMessageProjection.class);
+        when(lastMessage.getContent()).thenReturn(codec.encode(payload(false)));
+        when(messages.findLastMessages(7L, List.of(3L))).thenReturn(List.of(lastMessage));
+        LocalDateTime startedAt = session.getStartedAt();
+        LocalDateTime lastMessageAt = session.getLastMessageAt();
+
+        var response = service.renameSession(principal, "3", renameRequest);
+
+        assertThat(session.getTitle()).isEqualTo("Học vụ cá nhân");
+        assertThat(response.title()).isEqualTo("Học vụ cá nhân");
+        assertThat(response.sessionId()).isEqualTo("3");
+        assertThat(response.pinned()).isTrue();
+        assertThat(response.startedAt()).isEqualTo(startedAt);
+        assertThat(response.lastMessageAt()).isEqualTo(lastMessageAt);
+        assertThat(response.lastMessage()).isEqualTo(payload(false).text());
+        verify(sessions).findOwnedForUpdate(3L, 7L);
+        verify(messages, never()).save(any());
+        verifyNoInteractions(references, chunks);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 255})
+    void renameAcceptsTheTitleLengthBoundaries(int titleLength) {
+        when(sessions.findOwnedForUpdate(3L, 7L)).thenReturn(Optional.of(session));
+        var renameRequest = new RenameChatSessionRequest();
+        String title = "a".repeat(titleLength);
+        renameRequest.setTitle("  " + title + "  ");
+
+        assertThat(service.renameSession(principal, "3", renameRequest).title()).isEqualTo(title);
+        assertThat(session.getTitle()).isEqualTo(title);
+    }
+
+    @Test
+    void renameRejectsMissingBlankAndOversizedTitlesBeforeLockingTheSession() {
+        var blankRequest = new RenameChatSessionRequest();
+        blankRequest.setTitle(" \t\n ");
+        var oversizedRequest = new RenameChatSessionRequest();
+        oversizedRequest.setTitle("a".repeat(256));
+
+        for (RenameChatSessionRequest invalidRequest :
+                Arrays.asList(null, new RenameChatSessionRequest(), blankRequest, oversizedRequest)) {
+            assertThatThrownBy(() -> service.renameSession(principal, "3", invalidRequest))
+                    .isInstanceOfSatisfying(AiAssistantException.class, exception -> {
+                        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.VALIDATION_ERROR);
+                        assertThat(exception.getFieldErrors().getFirst().getField())
+                                .isEqualTo("title");
+                    });
+        }
+        assertThat(session.getTitle()).isEqualTo("Học lại");
+        verifyNoInteractions(sessions, messages, references, chunks);
+    }
+
+    @Test
+    void repeatingTheNormalizedTitlePreservesAuditMetadata() {
+        when(sessions.findOwnedForUpdate(3L, 7L)).thenReturn(Optional.of(session));
+        LocalDateTime updatedAt = session.getStartedAt().plusHours(1);
+        session.setUpdatedAt(updatedAt);
+        session.setUpdatedBy("7");
+        var renameRequest = new RenameChatSessionRequest();
+        renameRequest.setTitle("  Học   lại  ");
+
+        service.renameSession(principal, "3", renameRequest);
+
+        assertThat(session.getTitle()).isEqualTo("Học lại");
+        assertThat(session.getUpdatedAt()).isEqualTo(updatedAt);
+        assertThat(session.getUpdatedBy()).isEqualTo("7");
+        verify(sessions, never()).save(any());
+        verify(messages, never()).save(any());
+    }
+
+    @Test
+    void renamingDuringGenerationKeepsTheTitleAndAllowsTheExistingTurnToBeSaved() {
+        when(sessions.findOwnedForUpdate(3L, 7L)).thenReturn(Optional.of(session));
+        when(messages.findBySessionIdAndSessionUserIdAndSessionDeletedFalseAndDeletedFalseOrderByIdDesc(
+                        eq(3L), eq(7L), any()))
+                .thenReturn(List.of(message(11L, "Tin trước khi đổi tên")));
+        when(messages.save(any())).thenAnswer(invocation -> {
+            ChatMessage savedMessage = invocation.getArgument(0);
+            savedMessage.setId(99L);
+            return savedMessage;
+        });
+        var conversationBeforeRename = new ChatHistoryService.ConversationContext(3L, 11L, List.of());
+        var renameRequest = new RenameChatSessionRequest();
+        renameRequest.setTitle("Tên người dùng đã chọn");
+        service.renameSession(principal, "3", renameRequest);
+
+        var response = service.recordExchange(
+                principal, conversationBeforeRename, "Hỏi tiếp", "Câu trả lời đến sau đổi tên", List.of());
+
+        assertThat(response.getSessionId()).isEqualTo("3");
+        assertThat(session.getTitle()).isEqualTo("Tên người dùng đã chọn");
+        verify(messages, times(2)).save(any());
+        verify(sessions, never()).save(any());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void pinChangesOnlyTheOwnedSessionState(boolean pinned) {
+        session.updatePinned(!pinned);
+        when(sessions.findOwnedForUpdate(3L, 7L)).thenReturn(Optional.of(session));
+        var pinRequest = new UpdateChatSessionPinRequest();
+        pinRequest.setPinned(pinned);
+        LocalDateTime startedAt = session.getStartedAt();
+        LocalDateTime lastMessageAt = session.getLastMessageAt();
+
+        var response = service.updateSessionPin(principal, "3", pinRequest);
+
+        assertThat(session.isPinned()).isEqualTo(pinned);
+        assertThat(response.pinned()).isEqualTo(pinned);
+        assertThat(response.sessionId()).isEqualTo("3");
+        assertThat(response.startedAt()).isEqualTo(startedAt);
+        assertThat(response.lastMessageAt()).isEqualTo(lastMessageAt);
+        assertThat(session.isDeleted()).isFalse();
+        verify(messages).findLastMessages(7L, List.of(3L));
+        verify(messages, never()).save(any());
+        verifyNoInteractions(references, chunks);
+    }
+
+    @Test
+    void repeatingTheSamePinStatePreservesSessionMetadata() {
+        session.updatePinned(true);
+        LocalDateTime updatedAt = session.getStartedAt().plusHours(1);
+        session.setUpdatedAt(updatedAt);
+        session.setUpdatedBy("7");
+        when(sessions.findOwnedForUpdate(3L, 7L)).thenReturn(Optional.of(session));
+        var pinRequest = new UpdateChatSessionPinRequest();
+        pinRequest.setPinned(true);
+
+        service.updateSessionPin(principal, "3", pinRequest);
+        service.updateSessionPin(principal, "3", pinRequest);
+
+        assertThat(session.isPinned()).isTrue();
+        assertThat(session.getUpdatedAt()).isEqualTo(updatedAt);
+        assertThat(session.getUpdatedBy()).isEqualTo("7");
+        verify(sessions, never()).save(any());
+        verify(messages, never()).save(any());
+    }
+
+    @Test
+    void deleteSoftDeletesOnlyTheOwnedSessionAndKeepsStoredHistory() {
+        session.updatePinned(true);
+        when(sessions.findOwnedForUpdate(3L, 7L)).thenReturn(Optional.of(session));
+        ChatMessage storedAnswer = message(11L, "Nội dung lịch sử được giữ nguyên.");
+        LocalDateTime lastMessageAt = session.getLastMessageAt();
+
+        service.deleteSession(principal, "3");
+
+        assertThat(session.isDeleted()).isTrue();
+        assertThat(session.isPinned()).isTrue();
+        assertThat(session.getTitle()).isEqualTo("Học lại");
+        assertThat(session.getLastMessageAt()).isEqualTo(lastMessageAt);
+        assertThat(storedAnswer.getContent()).isEqualTo("Nội dung lịch sử được giữ nguyên.");
+        assertThat(storedAnswer.isDeleted()).isFalse();
+        verify(sessions).findOwnedForUpdate(3L, 7L);
+        verify(sessions, never()).delete(any(ChatSession.class));
+        verify(sessions, never()).deleteById(any());
+        verifyNoInteractions(messages, references, chunks);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"3", "99", "khong-phai-id", "9223372036854775808"})
+    void sessionUpdatesHideUnavailableOrForeignSessions(String sessionId) {
+        var pinRequest = new UpdateChatSessionPinRequest();
+        pinRequest.setPinned(true);
+        var renameRequest = new RenameChatSessionRequest();
+        renameRequest.setTitle("Tên mới");
+
+        assertThatThrownBy(() -> service.renameSession(principal, sessionId, renameRequest))
+                .isInstanceOfSatisfying(AiAssistantException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.CHAT_SESSION_NOT_FOUND));
+        assertThatThrownBy(() -> service.updateSessionPin(principal, sessionId, pinRequest))
+                .isInstanceOfSatisfying(AiAssistantException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.CHAT_SESSION_NOT_FOUND));
+        assertThatThrownBy(() -> service.deleteSession(principal, sessionId))
+                .isInstanceOfSatisfying(AiAssistantException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.CHAT_SESSION_NOT_FOUND));
+        verifyNoInteractions(messages, references, chunks);
+        assertThat(session.isDeleted()).isFalse();
+        assertThat(session.isPinned()).isFalse();
+    }
+
+    @Test
+    void pinRequiresAnExplicitBooleanEvenWhenCalledWithoutAController() {
+        assertThatThrownBy(() -> service.updateSessionPin(principal, "3", null))
+                .isInstanceOfSatisfying(AiAssistantException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.VALIDATION_ERROR));
+        assertThatThrownBy(() -> service.updateSessionPin(principal, "3", new UpdateChatSessionPinRequest()))
+                .isInstanceOfSatisfying(AiAssistantException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.VALIDATION_ERROR));
+        verifyNoInteractions(sessions, messages, references, chunks);
+    }
+
+    @Test
+    void mutationsRequireAnAuthenticatedStudentBeforeAccessingSessions() {
+        when(accessService.requireStudent(null)).thenThrow(new AiAssistantException(ErrorCode.UNAUTHENTICATED));
+        var pinRequest = new UpdateChatSessionPinRequest();
+        pinRequest.setPinned(true);
+        var renameRequest = new RenameChatSessionRequest();
+        renameRequest.setTitle("Tên mới");
+
+        assertThatThrownBy(() -> service.renameSession(null, "3", renameRequest))
+                .isInstanceOfSatisfying(AiAssistantException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.UNAUTHENTICATED));
+        assertThatThrownBy(() -> service.updateSessionPin(null, "3", pinRequest))
+                .isInstanceOfSatisfying(AiAssistantException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.UNAUTHENTICATED));
+        assertThatThrownBy(() -> service.deleteSession(null, "3"))
+                .isInstanceOfSatisfying(AiAssistantException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.UNAUTHENTICATED));
+        verifyNoInteractions(sessions, messages, references, chunks);
+    }
+
+    @Test
+    void deletedSessionCannotBeReadUpdatedOrReceiveACompletedTurn() {
+        when(sessions.findOwnedForUpdate(3L, 7L))
+                .thenReturn(Optional.of(session))
+                .thenReturn(Optional.empty());
+        var contextBeforeDeletion = new ChatHistoryService.ConversationContext(3L, 11L, List.of());
+        var pinRequest = new UpdateChatSessionPinRequest();
+        pinRequest.setPinned(true);
+        var renameRequest = new RenameChatSessionRequest();
+        renameRequest.setTitle("Tên mới");
+        service.deleteSession(principal, "3");
+
+        assertThatThrownBy(() -> service.renameSession(principal, "3", renameRequest))
+                .isInstanceOfSatisfying(AiAssistantException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.CHAT_SESSION_NOT_FOUND));
+        assertThatThrownBy(() -> service.getSessionById(principal, "3"))
+                .isInstanceOfSatisfying(AiAssistantException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.CHAT_SESSION_NOT_FOUND));
+        assertThatThrownBy(() -> service.loadConversation(7L, "3"))
+                .isInstanceOfSatisfying(AiAssistantException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.CHAT_SESSION_NOT_FOUND));
+        assertThatThrownBy(() -> service.updateSessionPin(principal, "3", pinRequest))
+                .isInstanceOfSatisfying(AiAssistantException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.CHAT_SESSION_NOT_FOUND));
+        assertThatThrownBy(() -> service.deleteSession(principal, "3"))
+                .isInstanceOfSatisfying(AiAssistantException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.CHAT_SESSION_NOT_FOUND));
+        assertThatThrownBy(() -> service.recordExchange(
+                        principal, contextBeforeDeletion, "Câu hỏi đang chạy", "Kết quả đến muộn", List.of()))
+                .isInstanceOfSatisfying(AiAssistantException.class, exception -> assertThat(exception.getErrorCode())
+                        .isEqualTo(ErrorCode.CHAT_SESSION_NOT_FOUND));
+        verifyNoInteractions(messages, references, chunks);
     }
 
     @Test

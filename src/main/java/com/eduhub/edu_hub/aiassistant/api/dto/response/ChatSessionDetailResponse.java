@@ -7,5 +7,6 @@ public record ChatSessionDetailResponse(
         String sessionId,
         String title,
         String topicType,
+        boolean pinned,
         LocalDateTime startedAt,
         List<ChatHistoryMessageResponse> messages) {}

@@ -17,6 +17,7 @@ import com.eduhub.edu_hub.aiassistant.domain.enums.KnowledgeSourceStatus;
 import com.eduhub.edu_hub.aiassistant.infrastructure.adapter.AiTokenCounter;
 import com.eduhub.edu_hub.aiassistant.infrastructure.config.AiAdvisorProperties;
 import com.eduhub.edu_hub.shared.common.ApiResponseFactory;
+import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.exception.*;
 import java.nio.charset.StandardCharsets;
 import java.time.*;
@@ -24,6 +25,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -105,6 +108,7 @@ class AiControllersTest {
                         "3",
                         "Học lại",
                         "KNOWLEDGE",
+                        false,
                         LocalDateTime.now(clock),
                         List.of(new ChatHistoryMessageResponse(
                                 "11",
@@ -117,6 +121,7 @@ class AiControllersTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", "no-store"))
                 .andExpect(jsonPath("$.data.title").value("Học lại"))
+                .andExpect(jsonPath("$.data.pinned").value(false))
                 .andExpect(jsonPath("$.data.messages[0].intent").doesNotHaveJsonPath())
                 .andExpect(jsonPath("$.data.messages[0].citations[0].referenceCode")
                         .value("K21"))
@@ -127,6 +132,204 @@ class AiControllersTest {
                 .andExpect(
                         jsonPath("$.data.messages[0].citations[0].sectionTitle").doesNotHaveJsonPath());
         verify(history).getSessionById(principal, "3");
+    }
+
+    @Test
+    void renameUsesThePrincipalAndReturnsTheSummaryWithTheNormalizedTitle() throws Exception {
+        when(history.renameSession(eq(principal), eq("3"), any()))
+                .thenReturn(new ChatSessionSummaryResponse(
+                        "3",
+                        "Học vụ cá nhân",
+                        "KNOWLEDGE",
+                        true,
+                        LocalDateTime.now(clock),
+                        LocalDateTime.now(clock),
+                        "Tin cuối"));
+
+        mvc.perform(patch("/api/v1/ai/sessions/3/title")
+                        .param("userId", "999")
+                        .contentType("application/json")
+                        .content("{\"title\":\"  Ho\\u0323c   vu\\u0323  cá nhân  \"}"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.title").value("Học vụ cá nhân"))
+                .andExpect(jsonPath("$.data.pinned").value(true))
+                .andExpect(jsonPath("$.data.lastMessage").value("Tin cuối"));
+        var renameRequest = ArgumentCaptor.forClass(RenameChatSessionRequest.class);
+        verify(history).renameSession(eq(principal), eq("3"), renameRequest.capture());
+        assertThat(renameRequest.getValue().getTitle()).isEqualTo("Học vụ cá nhân");
+        verifyNoInteractions(advisor, sources);
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "{}",
+                "{\"title\":null}",
+                "{\"title\":\"\"}",
+                "{\"title\":\"   \"}",
+                "{\"title\":123}",
+                "{\"title\":true}",
+                "{\"title\":[]}",
+                "{\"title\":{}}",
+                "{\"title\":\"Tên mới\",\"userId\":999}",
+                "{\"title\":\"Tên mới\",\"pinned\":null}"
+            })
+    void renameRejectsMissingBlankNonStringAndUnsupportedFields(String requestBody) throws Exception {
+        mvc.perform(patch("/api/v1/ai/sessions/3/title")
+                        .contentType("application/json")
+                        .content(requestBody))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(1001))
+                .andExpect(jsonPath("$.errors[0].field").exists());
+        verifyNoInteractions(history, advisor, sources);
+    }
+
+    @Test
+    void renameValidatesTheTitleLengthAfterNormalization() throws Exception {
+        String maximumTitle = "a".repeat(255);
+        mvc.perform(patch("/api/v1/ai/sessions/3/title")
+                        .contentType("application/json")
+                        .content("{\"title\":\"  " + maximumTitle + "  \"}"))
+                .andExpect(status().isOk());
+        var renameRequest = ArgumentCaptor.forClass(RenameChatSessionRequest.class);
+        verify(history).renameSession(eq(principal), eq("3"), renameRequest.capture());
+        assertThat(renameRequest.getValue().getTitle()).isEqualTo(maximumTitle);
+
+        mvc.perform(patch("/api/v1/ai/sessions/3/title")
+                        .contentType("application/json")
+                        .content("{\"title\":\"" + "a".repeat(256) + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("title"));
+        verifyNoMoreInteractions(history);
+    }
+
+    @Test
+    void renameRequiresARequestBodyAndPreservesTheNotFoundContract() throws Exception {
+        mvc.perform(patch("/api/v1/ai/sessions/3/title").contentType("application/json"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(1001));
+        verifyNoInteractions(history);
+
+        when(history.renameSession(eq(principal), eq("999"), any()))
+                .thenThrow(new AiAssistantException(ErrorCode.CHAT_SESSION_NOT_FOUND));
+        mvc.perform(patch("/api/v1/ai/sessions/999/title")
+                        .contentType("application/json")
+                        .content("{\"title\":\"Tên mới\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(4602));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void pinUsesTheAuthenticatedPrincipalAndReturnsTheUpdatedSummary(boolean pinned) throws Exception {
+        when(history.updateSessionPin(eq(principal), eq("3"), any()))
+                .thenReturn(new ChatSessionSummaryResponse(
+                        "3",
+                        "Học lại",
+                        "KNOWLEDGE",
+                        pinned,
+                        LocalDateTime.now(clock),
+                        LocalDateTime.now(clock),
+                        "Tin cuối"));
+
+        mvc.perform(patch("/api/v1/ai/sessions/3/pin")
+                        .param("userId", "999")
+                        .contentType("application/json")
+                        .content("{\"pinned\":" + pinned + "}"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.sessionId").value("3"))
+                .andExpect(jsonPath("$.data.pinned").value(pinned))
+                .andExpect(jsonPath("$.data.lastMessage").value("Tin cuối"));
+        var pinRequest = ArgumentCaptor.forClass(UpdateChatSessionPinRequest.class);
+        verify(history).updateSessionPin(eq(principal), eq("3"), pinRequest.capture());
+        assertThat(pinRequest.getValue().getPinned()).isEqualTo(pinned);
+        verifyNoInteractions(advisor, sources);
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "{}",
+                "{\"pinned\":null}",
+                "{\"pinned\":\"true\"}",
+                "{\"pinned\":\"false\"}",
+                "{\"pinned\":0}",
+                "{\"pinned\":1}",
+                "{\"pinned\":[]}",
+                "{\"pinned\":{}}",
+                "{\"pinned\":true,\"userId\":999}",
+                "{\"pinned\":false,\"title\":null}"
+            })
+    void pinRejectsMissingNullNonBooleanAndUnsupportedFields(String requestBody) throws Exception {
+        mvc.perform(patch("/api/v1/ai/sessions/3/pin")
+                        .contentType("application/json")
+                        .content(requestBody))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(1001))
+                .andExpect(jsonPath("$.errors[0].field").exists());
+        verifyNoInteractions(history, advisor, sources);
+    }
+
+    @Test
+    void pinRequiresARequestBody() throws Exception {
+        mvc.perform(patch("/api/v1/ai/sessions/3/pin").contentType("application/json"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(1001));
+        verifyNoInteractions(history);
+    }
+
+    @Test
+    void deleteUsesTheAuthenticatedPrincipalAndReturnsAnUncachedVoidResponse() throws Exception {
+        mvc.perform(delete("/api/v1/ai/sessions/3").param("userId", "999"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").doesNotExist());
+        verify(history).deleteSession(principal, "3");
+        verifyNoInteractions(advisor, sources);
+    }
+
+    @Test
+    void pinAndDeleteReturnTheSameNotFoundContractForUnavailableSessions() throws Exception {
+        when(history.updateSessionPin(eq(principal), eq("999"), any()))
+                .thenThrow(new AiAssistantException(ErrorCode.CHAT_SESSION_NOT_FOUND));
+        doThrow(new AiAssistantException(ErrorCode.CHAT_SESSION_NOT_FOUND))
+                .when(history)
+                .deleteSession(principal, "999");
+
+        mvc.perform(patch("/api/v1/ai/sessions/999/pin")
+                        .contentType("application/json")
+                        .content("{\"pinned\":true}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(4602));
+        mvc.perform(delete("/api/v1/ai/sessions/999"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(4602));
+    }
+
+    @Test
+    void sessionListExposesThePinnedFlagInEachSummary() throws Exception {
+        var summary = new ChatSessionSummaryResponse(
+                "3", "Học lại", "KNOWLEDGE", true, LocalDateTime.now(clock), LocalDateTime.now(clock), "Tin cuối");
+        when(history.getAllSessions(eq(principal), any()))
+                .thenReturn(PageResponse.<ChatSessionSummaryResponse>builder()
+                        .content(List.of(summary))
+                        .pageNumber(0)
+                        .pageSize(20)
+                        .totalElements(1)
+                        .totalPages(1)
+                        .isLast(true)
+                        .build());
+
+        mvc.perform(get("/api/v1/ai/sessions"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.data.content[0].pinned").value(true))
+                .andExpect(jsonPath("$.data.last").value(true));
     }
 
     @Test

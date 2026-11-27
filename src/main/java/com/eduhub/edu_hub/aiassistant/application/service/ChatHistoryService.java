@@ -2,7 +2,9 @@ package com.eduhub.edu_hub.aiassistant.application.service;
 
 import com.eduhub.edu_hub.academic.api.dto.response.GpaGoalResponse;
 import com.eduhub.edu_hub.academic.api.dto.response.PrerequisiteImpactResponse;
+import com.eduhub.edu_hub.aiassistant.api.dto.request.RenameChatSessionRequest;
 import com.eduhub.edu_hub.aiassistant.api.dto.request.SearchChatSessionsRequest;
+import com.eduhub.edu_hub.aiassistant.api.dto.request.UpdateChatSessionPinRequest;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.*;
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
 import com.eduhub.edu_hub.aiassistant.application.port.AiAdvisorModelPort.ConversationMessage;
@@ -74,7 +76,10 @@ public class ChatHistoryService {
         var sessions = sessionRepository.findAll(
                 ChatSessionSpecification.ownedSessions(
                         userId, request.getKeyword(), request.getFromDate(), request.getToDate()),
-                PageRequest.of(request.getPage(), request.getSize(), Sort.by(Sort.Direction.DESC, "startedAt", "id")));
+                PageRequest.of(
+                        request.getPage(),
+                        request.getSize(),
+                        Sort.by(Sort.Direction.DESC, "pinned", "startedAt", "id")));
         List<Long> sessionIds =
                 sessions.getContent().stream().map(ChatSession::getId).toList();
         Map<Long, String> lastMessages = sessionIds.isEmpty()
@@ -85,15 +90,7 @@ public class ChatHistoryService {
                                 ChatMessageRepository.LastMessageProjection::getContent));
         return PageResponse.<ChatSessionSummaryResponse>builder()
                 .content(sessions.getContent().stream()
-                        .map(session -> new ChatSessionSummaryResponse(
-                                session.getId().toString(),
-                                session.getTitle(),
-                                session.getTopicType(),
-                                session.getStartedAt(),
-                                session.getLastMessageAt(),
-                                contentCodec
-                                        .decode(lastMessages.get(session.getId()))
-                                        .text()))
+                        .map(session -> buildSessionSummaryResponse(session, lastMessages.get(session.getId())))
                         .toList())
                 .pageNumber(sessions.getNumber())
                 .pageSize(sessions.getSize())
@@ -115,11 +112,72 @@ public class ChatHistoryService {
                 session.getId().toString(),
                 session.getTitle(),
                 session.getTopicType(),
+                session.isPinned(),
                 session.getStartedAt(),
                 messages.stream()
                         .map(message ->
                                 historyMessageResponse(message, references.getOrDefault(message.getId(), List.of())))
                         .toList());
+    }
+
+    @Transactional
+    public ChatSessionSummaryResponse renameSession(Jwt principal, String sessionId, RenameChatSessionRequest request) {
+        Long userId = accessService.requireStudent(principal).getId();
+        if (request == null
+                || request.getTitle() == null
+                || request.getTitle().isBlank()
+                || request.getTitle().length() > 255) {
+            throw new AiAssistantException(
+                    ErrorCode.VALIDATION_ERROR, "title", "Tiêu đề hội thoại phải có từ 1 đến 255 ký tự");
+        }
+        ChatSession session = lockOwnedSession(sessionId, userId);
+        // Cùng khóa với ghim/xóa và lưu lượt chat; giữ mốc tin nhắn để lượt đang chạy vẫn tiếp tục hợp lệ.
+        session.updateTitle(request.getTitle());
+        // TODO(AUDIT_LOG): Ghi thao tác đổi tên sau commit khi có hạ tầng audit chung, không lưu tiêu đề chat.
+        return buildSessionSummaryResponse(session, findLastMessageContent(userId, session.getId()));
+    }
+
+    @Transactional
+    public ChatSessionSummaryResponse updateSessionPin(
+            Jwt principal, String sessionId, UpdateChatSessionPinRequest request) {
+        Long userId = accessService.requireStudent(principal).getId();
+        if (request == null || request.getPinned() == null) {
+            throw new AiAssistantException(ErrorCode.VALIDATION_ERROR, "pinned", "Trạng thái ghim không được để trống");
+        }
+        ChatSession session = lockOwnedSession(sessionId, userId);
+        // Chỉ sửa instance đang được quản lý; gửi lại cùng trạng thái không tạo thay đổi dữ liệu.
+        session.updatePinned(request.getPinned());
+        // TODO(AUDIT_LOG): Ghi thay đổi ghim sau commit khi có hạ tầng audit chung.
+        return buildSessionSummaryResponse(session, findLastMessageContent(userId, session.getId()));
+    }
+
+    @Transactional
+    public void deleteSession(Jwt principal, String sessionId) {
+        Long userId = accessService.requireStudent(principal).getId();
+        ChatSession session = lockOwnedSession(sessionId, userId);
+
+        // Dùng cùng khóa với recordExchange: lượt đang chạy phải kiểm tra lại phiên trước khi ghi.
+        // Chỉ ẩn phiên gốc, giữ nguyên tin nhắn và tham chiếu nguồn để bảo toàn lịch sử.
+        session.setDeleted(true);
+        // TODO(AUDIT_LOG): Ghi xóa hội thoại sau commit khi có hạ tầng audit chung, không lưu nội dung chat.
+    }
+
+    private ChatSessionSummaryResponse buildSessionSummaryResponse(ChatSession session, String lastMessageContent) {
+        return new ChatSessionSummaryResponse(
+                session.getId().toString(),
+                session.getTitle(),
+                session.getTopicType(),
+                session.isPinned(),
+                session.getStartedAt(),
+                session.getLastMessageAt(),
+                contentCodec.decode(lastMessageContent).text());
+    }
+
+    private String findLastMessageContent(Long userId, Long sessionId) {
+        return messageRepository.findLastMessages(userId, List.of(sessionId)).stream()
+                .map(ChatMessageRepository.LastMessageProjection::getContent)
+                .findFirst()
+                .orElse(null);
     }
 
     public ConversationContext loadConversation(Long userId, String requestedSessionId) {
@@ -318,6 +376,16 @@ public class ChatHistoryService {
     private AiAssistantException deniedSession(Long userId) {
         log.warn("Từ chối đọc phiên hội thoại không khả dụng: actorId={}", userId);
         return new AiAssistantException(ErrorCode.CHAT_SESSION_NOT_FOUND);
+    }
+
+    private ChatSession lockOwnedSession(String sessionId, Long userId) {
+        try {
+            return sessionRepository
+                    .findOwnedForUpdate(Long.valueOf(sessionId), userId)
+                    .orElseThrow(() -> deniedSession(userId));
+        } catch (NumberFormatException exception) {
+            throw deniedSession(userId);
+        }
     }
 
     private ChatSession lockOrCreateSession(

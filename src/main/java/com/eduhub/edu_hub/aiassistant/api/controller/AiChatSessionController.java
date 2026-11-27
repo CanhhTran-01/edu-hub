@@ -1,6 +1,8 @@
 package com.eduhub.edu_hub.aiassistant.api.controller;
 
+import com.eduhub.edu_hub.aiassistant.api.dto.request.RenameChatSessionRequest;
 import com.eduhub.edu_hub.aiassistant.api.dto.request.SearchChatSessionsRequest;
+import com.eduhub.edu_hub.aiassistant.api.dto.request.UpdateChatSessionPinRequest;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.ChatSessionDetailResponse;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.ChatSessionSummaryResponse;
 import com.eduhub.edu_hub.aiassistant.application.service.ChatHistoryService;
@@ -14,9 +16,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -43,5 +48,33 @@ public class AiChatSessionController {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(apiResponseFactory.success(historyService.getSessionById(authenticatedJwt, sessionId)));
+    }
+
+    @PatchMapping("/{sessionId}/title")
+    public ResponseEntity<ApiResponse<ChatSessionSummaryResponse>> renameSession(
+            @AuthenticationPrincipal Jwt authenticatedJwt,
+            @PathVariable String sessionId,
+            @Valid @RequestBody RenameChatSessionRequest request) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(apiResponseFactory.success(historyService.renameSession(authenticatedJwt, sessionId, request)));
+    }
+
+    @PatchMapping("/{sessionId}/pin")
+    public ResponseEntity<ApiResponse<ChatSessionSummaryResponse>> updateSessionPin(
+            @AuthenticationPrincipal Jwt authenticatedJwt,
+            @PathVariable String sessionId,
+            @Valid @RequestBody UpdateChatSessionPinRequest request) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(apiResponseFactory.success(
+                        historyService.updateSessionPin(authenticatedJwt, sessionId, request)));
+    }
+
+    @DeleteMapping("/{sessionId}")
+    public ResponseEntity<ApiResponse<Void>> deleteSession(
+            @AuthenticationPrincipal Jwt authenticatedJwt, @PathVariable String sessionId) {
+        historyService.deleteSession(authenticatedJwt, sessionId);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(apiResponseFactory.success(null));
     }
 }

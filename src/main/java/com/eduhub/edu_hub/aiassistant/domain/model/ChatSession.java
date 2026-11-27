@@ -22,6 +22,9 @@ public class ChatSession extends BaseEntity {
     private LocalDateTime startedAt;
     private LocalDateTime lastMessageAt;
 
+    @Column(name = "is_pinned", nullable = false)
+    private boolean pinned = false;
+
     @Column(nullable = false, length = 32)
     private String topicType = "KNOWLEDGE";
 
@@ -34,5 +37,13 @@ public class ChatSession extends BaseEntity {
 
     public void recordMessageAt(LocalDateTime sentAt) {
         lastMessageAt = sentAt;
+    }
+
+    public void updatePinned(boolean pinned) {
+        this.pinned = pinned;
+    }
+
+    public void updateTitle(String title) {
+        this.title = title;
     }
 }
