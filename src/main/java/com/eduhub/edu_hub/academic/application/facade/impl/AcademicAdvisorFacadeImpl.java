@@ -29,6 +29,7 @@ public class AcademicAdvisorFacadeImpl implements AcademicFacade.Advisor {
                 overview.requiredGraduationCredits(),
                 overview.currentRegisteredCredits(),
                 overview.student().targetGpa(),
+                overview.student().semesterTargetGpa(),
                 overview.currentSemesterCourseCount(),
                 overview.currentSemesterGradedCourseCount(),
                 overview.historyComplete(),

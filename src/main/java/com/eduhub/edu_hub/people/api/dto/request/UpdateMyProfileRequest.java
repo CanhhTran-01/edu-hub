@@ -15,7 +15,7 @@ import lombok.Getter;
 
 /**
  * DTO nhận request "sinh viên tự cập nhật hồ sơ của mình" (kiểu PATCH một phần).
- * Chỉ cho phép sửa đúng 3 trường: targetGpa, phone, email.
+ * Chỉ cho phép sửa đúng 4 trường: targetGpa, semesterTargetGpa, phone, email.
  * Mọi trường khác trong JSON đều bị từ chối (xem rejectUnknownField ở cuối).
  */
 public class UpdateMyProfileRequest {
@@ -24,6 +24,12 @@ public class UpdateMyProfileRequest {
     @DecimalMax(value = "4.0", message = "GPA mục tiêu phải từ 0 đến 4")
     @Digits(integer = 1, fraction = 2, message = "GPA mục tiêu tối đa 2 chữ số thập phân")
     private BigDecimal targetGpa;
+
+    @Getter
+    @DecimalMin(value = "0.0", message = "GPA mục tiêu kỳ phải từ 0 đến 4")
+    @DecimalMax(value = "4.0", message = "GPA mục tiêu kỳ phải từ 0 đến 4")
+    @Digits(integer = 1, fraction = 2, message = "GPA mục tiêu kỳ tối đa 2 chữ số thập phân")
+    private BigDecimal semesterTargetGpa;
 
     @Getter
     @Size(max = 255, message = "Số điện thoại tối đa 255 ký tự")
@@ -37,14 +43,21 @@ public class UpdateMyProfileRequest {
     // Cờ hiện diện chỉ do setter ghi khi đọc JSON: bỏ field giữ nguyên, gửi null xóa giá trị.
     // Không cho client ghi trực tiếp các cờ này để vượt qua danh sách trường được phép sửa.
     private boolean targetGpaPresent;
+    private boolean semesterTargetGpaPresent;
     private boolean phonePresent;
     private boolean emailPresent;
 
-    // Jackson CHỈ gọi nhóm 3 setter này khi JSON có key "targetGpa" / "phone" / "email" (kể cả giá trị null).
+    // Jackson CHỈ gọi nhóm 4 setter này khi JSON có key "targetGpa" / "semesterTargetGpa" / "phone" / "email" (kể cả
+    // giá trị null).
     // Nên gọi được setter nghĩa là client có gửi trường này --> bật cờ.
     public void setTargetGpa(BigDecimal targetGpa) {
         this.targetGpa = targetGpa;
         targetGpaPresent = true;
+    }
+
+    public void setSemesterTargetGpa(BigDecimal semesterTargetGpa) {
+        this.semesterTargetGpa = semesterTargetGpa;
+        semesterTargetGpaPresent = true;
     }
 
     public void setPhone(String phone) {
@@ -63,6 +76,11 @@ public class UpdateMyProfileRequest {
     @JsonIgnore
     public boolean hasTargetGpa() {
         return targetGpaPresent;
+    }
+
+    @JsonIgnore
+    public boolean hasSemesterTargetGpa() {
+        return semesterTargetGpaPresent;
     }
 
     @JsonIgnore

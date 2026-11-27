@@ -3,11 +3,15 @@ package com.eduhub.edu_hub.aiassistant.application.service;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.eduhub.edu_hub.academic.api.dto.response.GpaGoalResponse;
+import com.eduhub.edu_hub.academic.api.dto.response.PrerequisiteImpactResponse;
+import com.eduhub.edu_hub.academic.domain.enums.GpaGoalStatus;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.*;
 import com.eduhub.edu_hub.aiassistant.application.service.AdvisorChatExecution.AdvisorExecutionStoppedException;
 import com.eduhub.edu_hub.aiassistant.domain.enums.AdvisorRequestState;
 import com.eduhub.edu_hub.aiassistant.infrastructure.adapter.AiTokenCounter;
 import com.eduhub.edu_hub.aiassistant.infrastructure.config.AiAdvisorProperties;
+import com.eduhub.edu_hub.enrollment.api.dto.response.MinimumExamScoreResponse;
 import java.io.IOException;
 import java.time.*;
 import java.util.*;
@@ -198,5 +202,58 @@ class AdvisorChatExecutionTest {
                 .reduce("", String::concat);
         assertThat(delivered).isEqualTo(content);
         assertThat(eventNames.getLast()).isEqualTo("agent.completed");
+    }
+
+    @Test
+    void gpaComponentAndSidebarUseTheSamePayloadThatWasCommittedToHistory() {
+        var execution = execution();
+        var goal = GpaGoalResponse.builder()
+                .status(GpaGoalStatus.SEARCH_LIMIT_REACHED)
+                .conditions(List.of())
+                .pendingConditions(List.of())
+                .build();
+        var payload = new AdvisorMessagePayloadResponse(
+                1, AdvisorMessagePayloadResponse.TYPE, "Chưa tìm được trong giới hạn xử lý.", false, null, goal);
+        execution.complete(() -> ChatResponse.builder()
+                .sessionId("3")
+                .messageId("11")
+                .content(payload.text())
+                .payload(payload)
+                .citations(List.of())
+                .build());
+        assertThat(eventNames).containsExactly("ui.component", "context.updated", "text.delta", "agent.completed");
+        assertThat(((Map<?, ?>) events.get(0).data()).get("payload")).isSameAs(goal);
+        assertThat(((Map<?, ?>) events.get(1).data()).get("gpaGoal")).isSameAs(goal);
+        assertThat(execution.getStatus().response().getPayload()).isSameAs(payload);
+    }
+
+    @Test
+    void bothNewComponentsUseOnlyTheCommittedPayloadAndShareTheExistingTerminal() {
+        var execution = execution();
+        var prerequisites =
+                PrerequisiteImpactResponse.builder().courses(List.of()).build();
+        var exam = MinimumExamScoreResponse.builder().subjectName("Giải tích 1").build();
+        var payload = new AdvisorMessagePayloadResponse(
+                2, AdvisorMessagePayloadResponse.TYPE, "Kết quả đã lưu.", false, null, null, prerequisites, exam);
+        execution.complete(() -> ChatResponse.builder()
+                .sessionId("3")
+                .messageId("11")
+                .content(payload.text())
+                .payload(payload)
+                .citations(List.of())
+                .build());
+        assertThat(eventNames)
+                .containsExactly(
+                        "ui.component",
+                        "context.updated",
+                        "ui.component",
+                        "context.updated",
+                        "text.delta",
+                        "agent.completed");
+        assertThat(((Map<?, ?>) events.get(0).data()).get("type")).isEqualTo("prerequisite_impact");
+        assertThat(((Map<?, ?>) events.get(0).data()).get("payload")).isSameAs(prerequisites);
+        assertThat(((Map<?, ?>) events.get(2).data()).get("type")).isEqualTo("exam_score");
+        assertThat(((Map<?, ?>) events.get(2).data()).get("payload")).isSameAs(exam);
+        assertThat(execution.getStatus().response().getPayload()).isSameAs(payload);
     }
 }

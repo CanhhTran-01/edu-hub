@@ -34,6 +34,7 @@ public class StudentResponseMapper {
                                 : administrativeClass.getTrainingType().name())
                 .entranceScore(student.getEntranceScore())
                 .targetGpa(student.getTargetGpa())
+                .semesterTargetGpa(student.getSemesterTargetGpa())
                 .activityStatus(student.getActivityStatus())
                 .academicWarningStatus(student.getAcademicWarningStatus())
                 .academicWarningReason(student.getAcademicWarningReason())

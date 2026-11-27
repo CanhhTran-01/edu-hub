@@ -57,6 +57,10 @@ public class Student extends BaseEntity {
     @Column(name = "target_gpa")
     private BigDecimal targetGpa; // null là chưa thiết lập, không tự thay bằng 0.
 
+    // Mục tiêu kỳ mặc định dùng chung qua các kỳ cho đến khi sinh viên chủ động đổi tại hồ sơ.
+    @Column(name = "semester_target_gpa", precision = 19, scale = 2)
+    private BigDecimal semesterTargetGpa;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "activity_status", nullable = false)
     private StudentActivityStatus activityStatus;

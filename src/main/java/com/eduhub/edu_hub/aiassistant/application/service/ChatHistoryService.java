@@ -1,5 +1,7 @@
 package com.eduhub.edu_hub.aiassistant.application.service;
 
+import com.eduhub.edu_hub.academic.api.dto.response.GpaGoalResponse;
+import com.eduhub.edu_hub.academic.api.dto.response.PrerequisiteImpactResponse;
 import com.eduhub.edu_hub.aiassistant.api.dto.request.SearchChatSessionsRequest;
 import com.eduhub.edu_hub.aiassistant.api.dto.response.*;
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
@@ -12,10 +14,13 @@ import com.eduhub.edu_hub.aiassistant.domain.model.*;
 import com.eduhub.edu_hub.aiassistant.domain.repository.*;
 import com.eduhub.edu_hub.aiassistant.domain.repository.MessageChunkReferenceRepository.ReferenceProjection;
 import com.eduhub.edu_hub.aiassistant.infrastructure.config.AiRagProperties;
+import com.eduhub.edu_hub.aiassistant.infrastructure.serialization.AdvisorMessageContentCodec;
+import com.eduhub.edu_hub.enrollment.api.dto.response.MinimumExamScoreResponse;
 import com.eduhub.edu_hub.shared.common.PageResponse;
 import com.eduhub.edu_hub.shared.exception.ErrorCode;
 import java.time.*;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,8 +41,24 @@ public class ChatHistoryService {
     private final KnowledgeChunkPort chunkPort;
     private final AiRagProperties properties;
     private final Clock clock;
+    private final AdvisorMessageContentCodec contentCodec;
 
-    public record ConversationContext(Long sessionId, Long lastMessageId, List<ConversationMessage> messages) {}
+    public record ConversationContext(
+            Long sessionId,
+            Long lastMessageId,
+            List<ConversationMessage> messages,
+            GpaGoalResponse latestGpaGoal,
+            PrerequisiteImpactResponse latestPrerequisiteImpact,
+            MinimumExamScoreResponse latestExamScore) {
+        public ConversationContext(Long sessionId, Long lastMessageId, List<ConversationMessage> messages) {
+            this(sessionId, lastMessageId, messages, null, null, null);
+        }
+
+        public ConversationContext(
+                Long sessionId, Long lastMessageId, List<ConversationMessage> messages, GpaGoalResponse latestGpaGoal) {
+            this(sessionId, lastMessageId, messages, latestGpaGoal, null, null);
+        }
+    }
 
     public PageResponse<ChatSessionSummaryResponse> getAllSessions(Jwt principal, SearchChatSessionsRequest request) {
         Long userId = accessService.requireStudent(principal).getId();
@@ -70,7 +91,9 @@ public class ChatHistoryService {
                                 session.getTopicType(),
                                 session.getStartedAt(),
                                 session.getLastMessageAt(),
-                                lastMessages.get(session.getId())))
+                                contentCodec
+                                        .decode(lastMessages.get(session.getId()))
+                                        .text()))
                         .toList())
                 .pageNumber(sessions.getNumber())
                 .pageSize(sessions.getSize())
@@ -94,14 +117,8 @@ public class ChatHistoryService {
                 session.getTopicType(),
                 session.getStartedAt(),
                 messages.stream()
-                        .map(message -> new ChatHistoryMessageResponse(
-                                message.getId().toString(),
-                                message.getRole(),
-                                message.getContent(),
-                                message.getSentAt(),
-                                references.getOrDefault(message.getId(), List.of()).stream()
-                                        .map(this::citationResponse)
-                                        .toList()))
+                        .map(message ->
+                                historyMessageResponse(message, references.getOrDefault(message.getId(), List.of())))
                         .toList());
     }
 
@@ -119,20 +136,74 @@ public class ChatHistoryService {
         List<ChatMessage> messages = new ArrayList<>(newestMessages);
         Collections.reverse(messages);
         List<ConversationMessage> conversation = new ArrayList<>();
+        GpaGoalResponse latestGpaGoal = null;
+        PrerequisiteImpactResponse latestPrerequisiteImpact = null;
+        MinimumExamScoreResponse latestExamScore = null;
         for (ChatMessage message : messages) {
+            var decoded = decodeAssistantContent(message);
+            if (message.getRole() == ChatMessageRole.ASSISTANT
+                    && decoded.payload() != null
+                    && decoded.payload().gpaGoal() != null)
+                latestGpaGoal = decoded.payload().gpaGoal();
+            if (decoded.payload() != null && decoded.payload().prerequisiteImpact() != null)
+                latestPrerequisiteImpact = decoded.payload().prerequisiteImpact();
+            if (decoded.payload() != null && decoded.payload().examScore() != null)
+                latestExamScore = decoded.payload().examScore();
             var messageReferences = references.getOrDefault(message.getId(), List.of());
             // Memory RAG chỉ dùng lại câu trả lời còn đủ nguồn; lời đáp không có nguồn vẫn giữ trong lịch sử hiển thị.
 
-            // TODO(ADVISOR_MEMORY_PROVENANCE): Khi có kết quả tool/artifact, bổ sung kiểm tra snapshot của
-            //  kết quả học vụ; hiện chưa có payload này nên không coi text không nguồn là dữ liệu đã xác minh.
+            // Payload học vụ chỉ giữ ngữ cảnh lịch sử, không được dùng thay nguồn điểm/mục tiêu hiện hành.
+            boolean hasAcademicContext = decoded.payload() != null
+                    && (decoded.payload().gpaGoal() != null
+                            || decoded.payload().prerequisiteImpact() != null
+                            || decoded.payload().examScore() != null
+                            || decoded.payload().academicProfile() != null
+                            || decoded.payload().clarification());
             if (message.getRole() == ChatMessageRole.ASSISTANT
+                    && !hasAcademicContext
                     && (messageReferences.isEmpty()
                             || messageReferences.stream()
                                     .anyMatch(reference -> !Boolean.TRUE.equals(reference.getSourceAvailable()))))
                 continue;
-            conversation.add(new ConversationMessage(message.getRole().name(), message.getContent()));
+            // Không nạp lại phần RAG đã mất nguồn chỉ vì cùng message có kết quả học vụ hợp lệ.
+            String memoryText = hasAcademicContext
+                            && !messageReferences.isEmpty()
+                            && messageReferences.stream()
+                                    .anyMatch(reference -> !Boolean.TRUE.equals(reference.getSourceAvailable()))
+                    ? "Kết quả học vụ lịch sử; chỉ dùng điều kiện từ payload, phải đọc lại dữ liệu khi tính tiếp."
+                    : decoded.text();
+            conversation.add(new ConversationMessage(message.getRole().name(), memoryText));
         }
-        return new ConversationContext(session.getId(), lastMessageId, List.copyOf(conversation));
+        // Đọc trạng thái từng capability riêng với sliding window để không làm mất đầu vào ở hội thoại dài.
+        if (latestGpaGoal == null)
+            latestGpaGoal = loadLatestAcademicContext(
+                    session.getId(), userId, "gpaGoal", AdvisorMessagePayloadResponse::gpaGoal);
+        if (latestPrerequisiteImpact == null)
+            latestPrerequisiteImpact = loadLatestAcademicContext(
+                    session.getId(), userId, "prerequisiteImpact", AdvisorMessagePayloadResponse::prerequisiteImpact);
+        if (latestExamScore == null)
+            latestExamScore = loadLatestAcademicContext(
+                    session.getId(), userId, "examScore", AdvisorMessagePayloadResponse::examScore);
+        return new ConversationContext(
+                session.getId(),
+                lastMessageId,
+                List.copyOf(conversation),
+                latestGpaGoal,
+                latestPrerequisiteImpact,
+                latestExamScore);
+    }
+
+    private <T> T loadLatestAcademicContext(
+            Long sessionId, Long userId, String fieldName, Function<AdvisorMessagePayloadResponse, T> contextSelector) {
+        return messageRepository
+                .findAcademicContextMessages(sessionId, userId, "%\"" + fieldName + "\":{%", PageRequest.of(0, 1))
+                .stream()
+                .map(message -> contentCodec.decode(message.getContent()).payload())
+                .filter(Objects::nonNull)
+                .map(contextSelector)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 
     @Transactional
@@ -142,6 +213,17 @@ public class ChatHistoryService {
             String question,
             String proposedContent,
             List<RetrievedChunk> citedChunks) {
+        return recordExchange(principal, context, question, proposedContent, citedChunks, null);
+    }
+
+    @Transactional
+    public ChatResponse recordExchange(
+            Jwt principal,
+            ConversationContext context,
+            String question,
+            String proposedContent,
+            List<RetrievedChunk> citedChunks,
+            AdvisorMessagePayloadResponse proposedPayload) {
         Long userId = accessService.requireStudent(principal).getId();
         var now = LocalDateTime.now(clock);
         var session = lockOrCreateSession(userId, context, question, now);
@@ -154,14 +236,15 @@ public class ChatHistoryService {
         if (!chunkPort
                 .lockAvailableChunkIds(citedChunkIds, LocalDate.now(clock))
                 .containsAll(citedChunkIds)) {
-            content = properties.getFallbackMessage();
+            content = proposedPayload == null ? properties.getFallbackMessage() : proposedPayload.text();
             referencesToSave = List.of();
         }
         // Chỉ service này ghi lịch sử. Cả cặp message và tham chiếu cùng commit; gọi AI đã hoàn tất bên ngoài
         // transaction.
         messageRepository.save(new ChatMessage(session, ChatMessageRole.USER, question, now));
-        ChatMessage assistantMessage =
-                messageRepository.save(new ChatMessage(session, ChatMessageRole.ASSISTANT, content, now));
+        var payload = proposedPayload == null ? null : proposedPayload.withText(content);
+        ChatMessage assistantMessage = messageRepository.save(new ChatMessage(
+                session, ChatMessageRole.ASSISTANT, payload == null ? content : contentCodec.encode(payload), now));
         if (!referencesToSave.isEmpty()) {
             referenceRepository.saveAll(referencesToSave.stream()
                     .map(chunk -> new MessageChunkReference(assistantMessage, chunk.chunkId(), chunk.relevanceScore()))
@@ -172,6 +255,7 @@ public class ChatHistoryService {
                 .sessionId(session.getId().toString())
                 .messageId(assistantMessage.getId().toString())
                 .content(content)
+                .payload(payload)
                 .citations(referencesToSave.stream()
                         .map(this::retrievedCitationResponse)
                         .toList())
@@ -198,6 +282,25 @@ public class ChatHistoryService {
                 .snippet(available ? reference.getSnippet() : null)
                 .sourceAvailable(available)
                 .build();
+    }
+
+    private ChatHistoryMessageResponse historyMessageResponse(
+            ChatMessage message, List<ReferenceProjection> references) {
+        var decoded = decodeAssistantContent(message);
+        return new ChatHistoryMessageResponse(
+                message.getId().toString(),
+                message.getRole(),
+                decoded.text(),
+                message.getSentAt(),
+                references.stream().map(this::citationResponse).toList(),
+                decoded.payload());
+    }
+
+    private AdvisorMessageContentCodec.DecodedMessage decodeAssistantContent(ChatMessage message) {
+        // Chỉ assistant do BE lưu mới có provenance payload; JSON người dùng gõ vẫn là text của người dùng.
+        return message.getRole() == ChatMessageRole.ASSISTANT
+                ? contentCodec.decode(message.getContent())
+                : new AdvisorMessageContentCodec.DecodedMessage(message.getContent(), null);
     }
 
     private ChatSession ownedSession(String sessionId, Long userId) {

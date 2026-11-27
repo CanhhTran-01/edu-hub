@@ -36,6 +36,7 @@ class AcademicAdvisorFacadeImplTest {
                 null,
                 null,
                 BigDecimal.ZERO,
+                new BigDecimal("3.50"),
                 null,
                 null);
         var semester =
@@ -62,6 +63,7 @@ class AcademicAdvisorFacadeImplTest {
         assertThat(profile.accumulatedCredits()).isNull();
         assertThat(profile.currentSemesterGpa()).isEqualByComparingTo("0");
         assertThat(profile.graduationTargetGpa()).isEqualByComparingTo("0");
+        assertThat(profile.semesterTargetGpa()).isEqualByComparingTo("3.50");
         assertThat(profile.historyComplete()).isFalse();
         assertThat(profile.observedAt()).isEqualTo(LocalDateTime.of(2026, 11, 26, 0, 0));
         var json = JsonMapper.builder().findAndAddModules().build().writeValueAsString(profile);

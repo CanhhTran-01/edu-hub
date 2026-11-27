@@ -18,5 +18,6 @@ public record StudentAcademicProfileResponse(
         Integer admissionYear,
         StudentActivityStatus activityStatus,
         BigDecimal targetGpa,
+        BigDecimal semesterTargetGpa,
         String academicWarningStatus,
         String academicWarningReason) {}

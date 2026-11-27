@@ -46,6 +46,11 @@ public final class AcademicPerformancePolicy {
             gradedCredits += attempt.credits();
         }
         // Điểm F = 0 vẫn có trọng số; không có mẫu số thì chưa có GPA, khác với GPA bằng 0.
+        return calculateGpaFromWeightedScore(weightedScore, gradedCredits);
+    }
+
+    /** Dùng chung phép chia/làm tròn cuối cho tổng hợp học vụ và cận tìm phương án GPA kỳ. */
+    public static BigDecimal calculateGpaFromWeightedScore(BigDecimal weightedScore, long gradedCredits) {
         return gradedCredits == 0
                 ? null
                 : weightedScore.divide(BigDecimal.valueOf(gradedCredits), 2, RoundingMode.HALF_UP);

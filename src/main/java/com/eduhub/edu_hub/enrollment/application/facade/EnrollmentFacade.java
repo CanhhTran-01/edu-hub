@@ -1,18 +1,34 @@
 package com.eduhub.edu_hub.enrollment.application.facade;
 
+import com.eduhub.edu_hub.enrollment.api.dto.request.MinimumExamScoreRequest;
+import com.eduhub.edu_hub.enrollment.api.dto.response.CourseGradeScaleResponse;
 import com.eduhub.edu_hub.enrollment.api.dto.response.EnrollmentResponse;
 import com.eduhub.edu_hub.enrollment.api.dto.response.EnrollmentScopeResponse;
 import com.eduhub.edu_hub.enrollment.api.dto.response.LearningHistoryResponse;
+import com.eduhub.edu_hub.enrollment.api.dto.response.MinimumExamScoreResponse;
 import com.eduhub.edu_hub.enrollment.api.dto.response.ModuleClassStudentResponse;
 import com.eduhub.edu_hub.enrollment.api.dto.response.ModuleClassUsageResponse;
+import com.eduhub.edu_hub.enrollment.api.dto.response.PassedSubjectSemesterResponse;
 import com.eduhub.edu_hub.enrollment.api.dto.response.StudentLearningHistoryResponse;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
 public interface EnrollmentFacade {
+    interface ExamScore {
+        /** Chỉ tính trên điểm nhập thử; consumer xác thực, không cấp quyền đọc hoặc sửa điểm thật. */
+        MinimumExamScoreResponse solveMinimumExamScore(MinimumExamScoreRequest request);
+    }
+
+    interface GradeScale {
+        CourseGradeScaleResponse findCurrentGradeScale();
+    }
+
     interface StudentRecords {
         StudentLearningHistoryResponse findLearningHistory(Long studentId);
+
+        /** Giữ kết quả đạt đã ẩn; consumer đối chiếu kỳ để không dùng kết quả tương lai cho mốc trước. */
+        List<PassedSubjectSemesterResponse> findPassedSubjectSemesters(Long studentId);
     }
 
     interface ClassRoster {

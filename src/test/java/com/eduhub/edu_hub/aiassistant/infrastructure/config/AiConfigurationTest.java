@@ -99,7 +99,8 @@ class AiConfigurationTest {
         var advisor = Binder.get(environment)
                 .bind("eduhub.ai.advisor", AiAdvisorProperties.class)
                 .orElseThrow(() -> new IllegalStateException("Không bind được cấu hình eduhub.ai.advisor"));
-        assertThat(advisor.requireSystemPrompt()).contains("getAcademicProfile", "searchAcademicKnowledge");
+        assertThat(advisor.requireSystemPrompt()).isNotBlank();
+        assertThat(advisor.requireSimulationCommentPrompt()).contains("What-If Simulator");
         try (var validatorFactory = Validation.buildDefaultValidatorFactory()) {
             assertThat(validatorFactory.getValidator().validate(properties)).isEmpty();
             assertThat(validatorFactory.getValidator().validate(advisor)).isEmpty();

@@ -17,6 +17,19 @@ public class AiAdvisorProperties {
     @NotBlank
     private String systemPrompt;
 
+    private String simulationCommentPrompt;
+
+    @Min(100)
+    @Max(3000)
+    private int maximumSimulationCommentCharacters = 1200;
+
+    public String requireSimulationCommentPrompt() {
+        if (simulationCommentPrompt == null || simulationCommentPrompt.isBlank())
+            throw new AiAssistantConfigurationException(
+                    "Thiếu hoặc trống cấu hình eduhub.ai.advisor.simulation-comment-prompt");
+        return simulationCommentPrompt;
+    }
+
     public String requireSystemPrompt() {
         if (systemPrompt == null || systemPrompt.isBlank())
             throw new AiAssistantConfigurationException("Thiếu hoặc trống cấu hình eduhub.ai.advisor.system-prompt");

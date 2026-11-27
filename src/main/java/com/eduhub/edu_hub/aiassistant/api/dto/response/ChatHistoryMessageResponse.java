@@ -9,4 +9,5 @@ public record ChatHistoryMessageResponse(
         ChatMessageRole role,
         String content,
         LocalDateTime sentAt,
-        List<CitationResponse> citations) {}
+        List<CitationResponse> citations,
+        AdvisorMessagePayloadResponse payload) {}

@@ -1,7 +1,9 @@
 package com.eduhub.edu_hub.aiassistant.api.exception;
 
+import com.eduhub.edu_hub.academic.application.exception.GpaSimulationException;
 import com.eduhub.edu_hub.aiassistant.api.controller.AiChatController;
 import com.eduhub.edu_hub.aiassistant.api.controller.AiChatSessionController;
+import com.eduhub.edu_hub.aiassistant.api.controller.AiGpaSimulationController;
 import com.eduhub.edu_hub.aiassistant.api.controller.KnowledgeSourceController;
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
 import com.eduhub.edu_hub.shared.common.ApiResponse;
@@ -24,12 +26,33 @@ import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 @RestControllerAdvice(
-        assignableTypes = {AiChatController.class, AiChatSessionController.class, KnowledgeSourceController.class})
+        assignableTypes = {
+            AiChatController.class,
+            AiChatSessionController.class,
+            KnowledgeSourceController.class,
+            AiGpaSimulationController.class
+        })
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @RequiredArgsConstructor
 public class AiAssistantExceptionHandler {
     private static final String ADVISOR_RETRY_AFTER_SECONDS = "10";
     private final ApiResponseFactory apiResponseFactory;
+
+    @ExceptionHandler(GpaSimulationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleSimulationException(
+            GpaSimulationException exception, HttpServletRequest request) {
+        var error = exception.getErrorCode();
+        return ResponseEntity.status(error.getHttpStatus())
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(apiResponseFactory
+                        .<Void>builder()
+                        .success(false)
+                        .code(error.getCode())
+                        .message(error.getMessage())
+                        .path(request.getRequestURI())
+                        .errors(exception.getFieldErrors().isEmpty() ? null : exception.getFieldErrors())
+                        .build());
+    }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiResponse<Void>> handleFileTooLarge(
@@ -76,6 +99,8 @@ public class AiAssistantExceptionHandler {
         for (Throwable cause = exception.getCause(); cause != null; cause = cause.getCause()) {
             if (cause instanceof AiAssistantException advisorException)
                 return handleAiException(advisorException, request);
+            if (cause instanceof GpaSimulationException simulationException)
+                return handleSimulationException(simulationException, request);
         }
         return ResponseEntity.badRequest()
                 .contentType(MediaType.APPLICATION_JSON)

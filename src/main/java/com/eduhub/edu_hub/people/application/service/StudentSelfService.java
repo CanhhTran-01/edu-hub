@@ -53,6 +53,9 @@ public class StudentSelfService {
         if (request.hasTargetGpa()) {
             StudentTargetGpaPolicy.validateTargetGpa(request.getTargetGpa());
         }
+        if (request.hasSemesterTargetGpa()) {
+            StudentTargetGpaPolicy.validateSemesterTargetGpa(request.getSemesterTargetGpa());
+        }
 
         // Email hiện tại chỉ thuộc User; response hồ sơ ghép giá trị từ Identity, không lưu bản sao ở Student.
         // Facade tham gia transaction hồ sơ; lỗi cập nhật email phải truyền ra để rollback toàn bộ PATCH.
@@ -65,6 +68,11 @@ public class StudentSelfService {
         boolean hasChanges = false;
         if (request.hasTargetGpa() && !hasSameTargetGpa(request.getTargetGpa(), student.getTargetGpa())) {
             student.setTargetGpa(request.getTargetGpa());
+            hasChanges = true;
+        }
+        if (request.hasSemesterTargetGpa()
+                && !hasSameTargetGpa(request.getSemesterTargetGpa(), student.getSemesterTargetGpa())) {
+            student.setSemesterTargetGpa(request.getSemesterTargetGpa());
             hasChanges = true;
         }
         if (request.hasPhone()) {
@@ -89,7 +97,8 @@ public class StudentSelfService {
             throw new StudentProfileException(ErrorCode.UNAUTHENTICATED);
         }
 
-        // TODO(AUTHORIZATION): Chỉ STUDENT được sửa phone/email/targetGpa của mình khi bật phân quyền.
+        // TODO(AUTHORIZATION): Chỉ STUDENT được sửa phone/email/targetGpa/semesterTargetGpa của mình khi bật phân
+        // quyền.
         //  SYSTEM_ADMIN không được quyền cập nhật này; hiện giữ nguyên việc chưa kiểm tra role.
 
         return identityFacade.requireCurrentUser(authenticatedJwt);

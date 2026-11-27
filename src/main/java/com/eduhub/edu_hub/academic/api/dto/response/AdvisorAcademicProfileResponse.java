@@ -13,6 +13,7 @@ public record AdvisorAcademicProfileResponse(
         Integer requiredGraduationCredits,
         Integer currentRegisteredCredits,
         BigDecimal graduationTargetGpa,
+        BigDecimal semesterTargetGpa,
         int currentSemesterCourseCount,
         int currentSemesterGradedCourseCount,
         boolean historyComplete,

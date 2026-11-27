@@ -143,6 +143,7 @@ class StudentSelfControllerTest {
                 "createdBy",
                 "actualGpa",
                 "targetGpaPresent",
+                "semesterTargetGpaPresent",
                 "phonePresent",
                 "emailPresent"
             })
@@ -214,7 +215,7 @@ class StudentSelfControllerTest {
                 .andExpect(status().isOk());
         mvc.perform(patch("/api/v1/students/me")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":null,\"phone\":null,\"targetGpa\":null}"))
+                        .content("{\"email\":null,\"phone\":null,\"targetGpa\":null,\"semesterTargetGpa\":null}"))
                 .andExpect(status().isOk());
         var requestCaptor = ArgumentCaptor.forClass(UpdateMyProfileRequest.class);
         verify(service, times(2)).updateMyProfile(eq(authenticatedJwt), requestCaptor.capture());
@@ -222,6 +223,7 @@ class StudentSelfControllerTest {
         assertThat(emptyRequest.hasEmail()).isFalse();
         assertThat(emptyRequest.hasPhone()).isFalse();
         assertThat(emptyRequest.hasTargetGpa()).isFalse();
+        assertThat(emptyRequest.hasSemesterTargetGpa()).isFalse();
         var explicitNullRequest = requestCaptor.getAllValues().getLast();
         assertThat(explicitNullRequest.hasEmail()).isTrue();
         assertThat(explicitNullRequest.hasPhone()).isTrue();
@@ -229,6 +231,32 @@ class StudentSelfControllerTest {
         assertThat(explicitNullRequest.getEmail()).isNull();
         assertThat(explicitNullRequest.getPhone()).isNull();
         assertThat(explicitNullRequest.getTargetGpa()).isNull();
+        assertThat(explicitNullRequest.hasSemesterTargetGpa()).isTrue();
+        assertThat(explicitNullRequest.getSemesterTargetGpa()).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"-0.01", "4.01", "3.125", "3.200"})
+    void rejectsInvalidSemesterTargetsWithTheirOwnFieldError(String semesterTargetGpa) throws Exception {
+        mvc.perform(patch("/api/v1/students/me")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"semesterTargetGpa\":" + semesterTargetGpa + "}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("semesterTargetGpa"));
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void acceptsBothTargetFieldsInOneProfilePatch() throws Exception {
+        mvc.perform(patch("/api/v1/students/me")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetGpa\":3.2,\"semesterTargetGpa\":3.5}"))
+                .andExpect(status().isOk());
+        var requestCaptor = ArgumentCaptor.forClass(UpdateMyProfileRequest.class);
+        verify(service).updateMyProfile(eq(authenticatedJwt), requestCaptor.capture());
+        assertThat(requestCaptor.getValue().getTargetGpa()).isEqualByComparingTo("3.2");
+        assertThat(requestCaptor.getValue().getSemesterTargetGpa()).isEqualByComparingTo("3.5");
+        assertThat(requestCaptor.getValue().hasSemesterTargetGpa()).isTrue();
     }
 
     @Test

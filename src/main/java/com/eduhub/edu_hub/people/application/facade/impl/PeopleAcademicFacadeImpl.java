@@ -47,6 +47,7 @@ public class PeopleAcademicFacadeImpl implements PeopleFacade.Academic {
                 cohort == null ? null : cohort.getStartYear(),
                 student.getActivityStatus(),
                 student.getTargetGpa(),
+                student.getSemesterTargetGpa(),
                 student.getAcademicWarningStatus(),
                 student.getAcademicWarningReason());
     }

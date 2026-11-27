@@ -209,6 +209,11 @@ public enum ErrorCode {
     CODE_PREFIX_MAPPING_AMBIGUOUS(
             4704, "Khóa viết tắt trùng giữa các tên danh mục, cần đối soát trước khi cấp mã", HttpStatus.CONFLICT),
 
+    // Mô phỏng học vụ
+    GPA_SIMULATION_SNAPSHOT_CHANGED(4801, "Dữ liệu học vụ đã thay đổi, vui lòng tải lại mô phỏng", HttpStatus.CONFLICT),
+    GPA_SIMULATION_DATA_INVALID(
+            4802, "Dữ liệu học vụ chưa đủ hoặc không nhất quán để mô phỏng", HttpStatus.SERVICE_UNAVAILABLE),
+
     // Security
     UNAUTHENTICATED(4000, "Vui lòng đăng nhập", HttpStatus.UNAUTHORIZED),
     UNAUTHORIZED(4001, "Không có quyền truy cập", HttpStatus.FORBIDDEN);

@@ -4,6 +4,7 @@ import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantConfigura
 import com.google.genai.Client;
 import com.google.genai.types.HttpOptions;
 import com.google.genai.types.HttpRetryOptions;
+import java.util.concurrent.Semaphore;
 import org.springframework.ai.google.genai.embedding.GoogleGenAiEmbeddingConnectionDetails;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -16,6 +17,11 @@ import org.springframework.scheduling.concurrent.*;
 @EnableScheduling
 @EnableConfigurationProperties({AiRagProperties.class, AiAdvisorProperties.class})
 public class AiConfiguration {
+    @Bean
+    Semaphore aiAdvisorCapacity(AiAdvisorProperties properties) {
+        return new Semaphore(properties.getMaximumConcurrentRequests());
+    }
+
     @Bean(destroyMethod = "close")
     Client googleGenAiClient(@Value("${spring.ai.google.genai.api-key:}") String apiKey, AiRagProperties properties) {
         if (apiKey == null || apiKey.isBlank()) {

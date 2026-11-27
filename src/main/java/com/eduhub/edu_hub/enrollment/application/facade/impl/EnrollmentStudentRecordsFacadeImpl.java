@@ -1,5 +1,6 @@
 package com.eduhub.edu_hub.enrollment.application.facade.impl;
 
+import com.eduhub.edu_hub.enrollment.api.dto.response.PassedSubjectSemesterResponse;
 import com.eduhub.edu_hub.enrollment.api.dto.response.StudentLearningHistoryResponse;
 import com.eduhub.edu_hub.enrollment.api.dto.response.StudentLearningHistoryResponse.LearningRecordResponse;
 import com.eduhub.edu_hub.enrollment.application.facade.EnrollmentFacade;
@@ -10,6 +11,7 @@ import com.eduhub.edu_hub.enrollment.infrastructure.config.EnrollmentRegistratio
 import com.eduhub.edu_hub.people.application.facade.PeopleFacade;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,6 +25,17 @@ public class EnrollmentStudentRecordsFacadeImpl implements EnrollmentFacade.Stud
     private final PeopleFacade.Enrollment peopleFacade;
     private final EnrollmentRegistrationSettings settings;
     private final Clock clock;
+
+    @Override
+    public List<PassedSubjectSemesterResponse> findPassedSubjectSemesters(Long studentId) {
+        // Cùng phạm vi xác nhận tiên quyết với đăng ký: không loại kết quả đạt chỉ vì lượt học đã ẩn.
+        return enrollmentRepository.findAllByStudentIdOrderByRegisteredAtAscIdAsc(studentId).stream()
+                .filter(enrollment -> enrollment.getStatus() == EnrollmentStatus.COMPLETED)
+                .map(enrollment ->
+                        new PassedSubjectSemesterResponse(enrollment.getSubjectId(), enrollment.getSemesterId()))
+                .distinct()
+                .toList();
+    }
 
     @Override
     public StudentLearningHistoryResponse findLearningHistory(Long studentId) {

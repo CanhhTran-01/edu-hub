@@ -23,6 +23,7 @@ public class StudentResponse {
     private String trainingType;
     private BigDecimal entranceScore;
     private BigDecimal targetGpa;
+    private BigDecimal semesterTargetGpa;
     private StudentActivityStatus activityStatus; // STUDYING, DEACTIVATED, DELETED
     private String academicWarningStatus;
     private String academicWarningReason;
