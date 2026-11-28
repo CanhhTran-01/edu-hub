@@ -2,11 +2,14 @@ package com.eduhub.edu_hub.aiassistant.infrastructure.adapter;
 
 import com.eduhub.edu_hub.aiassistant.application.port.KnowledgeChunkPort;
 import com.eduhub.edu_hub.aiassistant.infrastructure.config.AiRagProperties;
+import com.google.genai.errors.ApiException;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.*;
 import java.util.*;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.embedding.*;
 import org.springframework.ai.google.genai.text.GoogleGenAiTextEmbeddingOptions;
 import org.springframework.ai.google.genai.text.GoogleGenAiTextEmbeddingOptions.TaskType;
@@ -17,6 +20,7 @@ import org.springframework.stereotype.Component;
 /** Một bảng chunk chứa cả vector; điều kiện nguồn được đọc trực tiếp, không dùng bản sao status trong metadata. */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class PgVectorKnowledgeChunkAdapter implements KnowledgeChunkPort {
     public static final int VECTOR_DIMENSIONS = 768;
     private static final String AVAILABLE_SOURCE =
@@ -42,8 +46,14 @@ public class PgVectorKnowledgeChunkAdapter implements KnowledgeChunkPort {
             if (Thread.currentThread().isInterrupted()) throw new IllegalStateException("Tác vụ đã bị hủy");
             int batchEnd = Math.min(chunks.size(), batchStart + properties.getEmbeddingBatchSize());
             var batch = chunks.subList(batchStart, batchEnd);
-            List<float[]> embeddings =
-                    embedTexts(batch.stream().map(ChunkContent::content).toList(), TaskType.RETRIEVAL_DOCUMENT);
+            List<float[]> embeddings;
+            try {
+                embeddings =
+                        embedTexts(batch.stream().map(ChunkContent::content).toList(), TaskType.RETRIEVAL_DOCUMENT);
+            } catch (RuntimeException exception) {
+                logChunkBatchFailure(sourceId, "EMBEDDING", batchStart, batch.size(), exception);
+                throw exception;
+            }
             List<Object[]> parameters = new ArrayList<>();
             var auditTimestamp = Timestamp.valueOf(LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC));
             for (int index = 0; index < batch.size(); index++) {
@@ -64,18 +74,50 @@ public class PgVectorKnowledgeChunkAdapter implements KnowledgeChunkPort {
                 });
             }
             // Nguồn PROCESSING chưa thể truy xuất; token ngăn worker cũ ghi sau khi nguồn bị xóa hoặc xử lý lại.
-            jdbcTemplate.batchUpdate(
-                    """
-                    insert into knowledge_chunks(source_id, chunk_index, content, embedding, embedding_model,
-                        embedding_model_version, token_count, page_number, created_at, updated_at, is_deleted)
-                    select ?, ?, ?, ?::vector, ?, ?, ?, ?, ?, ?, false
-                    from knowledge_sources source
-                    where source.id = ? and source.status = 'PROCESSING' and not source.is_deleted
-                      and source.processing_token = ?
-                    for share of source
-                    """,
-                    parameters);
+            try {
+                jdbcTemplate.batchUpdate(
+                        """
+                        insert into knowledge_chunks(source_id, chunk_index, content, embedding, embedding_model,
+                            embedding_model_version, token_count, page_number, created_at, updated_at, is_deleted)
+                        select ?, ?, ?, ?::vector, ?, ?, ?, ?, ?, ?, false
+                        from knowledge_sources source
+                        where source.id = ? and source.status = 'PROCESSING' and not source.is_deleted
+                          and source.processing_token = ?
+                        for share of source
+                        """,
+                        parameters);
+            } catch (RuntimeException exception) {
+                logChunkBatchFailure(sourceId, "SAVE_INDEX", batchStart, batch.size(), exception);
+                throw exception;
+            }
         }
+    }
+
+    private void logChunkBatchFailure(
+            Long sourceId, String processingStage, int chunkOffset, int chunkCount, RuntimeException exception) {
+        Integer httpStatus = null;
+        String sqlState = null;
+        String rootCauseType = exception.getClass().getName();
+        Set<Throwable> visitedCauses = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (Throwable cause = exception; cause != null && visitedCauses.add(cause); cause = cause.getCause()) {
+            rootCauseType = cause.getClass().getName();
+            if (cause instanceof ApiException apiException) httpStatus = apiException.code();
+            if (cause instanceof SQLException sqlException) {
+                String candidateSqlState = sqlException.getSQLState();
+                if (candidateSqlState != null && candidateSqlState.matches("[A-Z0-9]{5}")) sqlState = candidateSqlState;
+            }
+        }
+        // Chỉ ghi metadata chẩn đoán; message/stacktrace có thể chứa khóa API, văn bản hoặc tham số SQL.
+        log.warn(
+                "Không thể xử lý lô tri thức: sourceId={}, stage={}, chunkOffset={}, chunkCount={}, exceptionType={}, rootCauseType={}, httpStatus={}, sqlState={}",
+                sourceId,
+                processingStage,
+                chunkOffset,
+                chunkCount,
+                exception.getClass().getName(),
+                rootCauseType,
+                httpStatus,
+                sqlState);
     }
 
     @Override

@@ -77,7 +77,7 @@ public class KnowledgeSourceIngestionService {
         source.setProcessingToken(null);
         source.setProcessingStartedAt(null);
         source.setErrorMessage(failureReason);
-        log.warn("Xử lý nguồn tri thức thất bại: sourceId={}", source.getId());
+        log.warn("Xử lý nguồn tri thức thất bại: sourceId={}, reason={}", source.getId(), failureReason);
     }
 
     @Transactional

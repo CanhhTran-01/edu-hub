@@ -194,8 +194,7 @@ class AdmissionControllerTest {
 
     @Test
     void returnsAnExplicitNullWhenTheSelectedScopeHasNoPlan() throws Exception {
-        when(planning.findPlanByScope(1L, 8L))
-                .thenReturn(new AdmissionPlanLookupResponse(1L, 8L, null));
+        when(planning.findPlanByScope(1L, 8L)).thenReturn(new AdmissionPlanLookupResponse(1L, 8L, null));
         mvc.perform(get("/api/v1/student-admissions/plans/by-scope")
                         .param("majorId", "1")
                         .param("cohortId", "8"))

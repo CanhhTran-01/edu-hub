@@ -72,8 +72,10 @@ public class KnowledgeSourceIngestionWorker {
     }
 
     private void processSource(IngestionTask task) {
+        String processingStage = "EXTRACT_TEXT";
         try {
             var pages = textExtractor.extractPages(task.filename(), task.originalFile());
+            processingStage = "SPLIT_CHUNKS";
             var chunks = new ArrayList<KnowledgeChunkPort.ChunkContent>();
             for (var page : pages) {
                 if (AiContentPolicy.containsSensitiveDocumentContent(page.content())) {
@@ -93,12 +95,25 @@ public class KnowledgeSourceIngestionWorker {
                         task, "Không trích xuất được văn bản. PDF dạng ảnh scan chưa được hỗ trợ OCR.");
                 return;
             }
+            processingStage = "INDEX_CHUNKS";
             chunkPort.storeChunks(task.sourceId(), task.processingToken(), chunks);
+            processingStage = "ACTIVATE_SOURCE";
             ingestionService.completeSource(task, chunks.size());
         } catch (AiAssistantException exception) {
+            log.warn(
+                    "Không thể xử lý nguồn tri thức: sourceId={}, stage={}, errorCode={}",
+                    task.sourceId(),
+                    processingStage,
+                    exception.getErrorCode());
             ingestionService.failSource(
                     task, "Không đọc được văn bản PDF/DOCX/TXT. Kiểm tra tệp hỏng, mã hóa UTF-8 hoặc PDF scan.");
         } catch (RuntimeException exception) {
+            // Không ghi nội dung exception; adapter chỉ mục ghi riêng mã HTTP/SQL đã lọc khi có.
+            log.warn(
+                    "Không thể xử lý nguồn tri thức: sourceId={}, stage={}, exceptionType={}",
+                    task.sourceId(),
+                    processingStage,
+                    exception.getClass().getName());
             ingestionService.failSource(
                     task, "Dịch vụ embedding hoặc lưu chỉ mục thất bại. Vui lòng yêu cầu xử lý lại.");
         }
