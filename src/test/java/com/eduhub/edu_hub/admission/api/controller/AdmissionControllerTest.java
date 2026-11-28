@@ -10,6 +10,7 @@ import com.eduhub.edu_hub.admission.api.dto.request.DeleteAdmissionApplicantRequ
 import com.eduhub.edu_hub.admission.api.dto.request.ImportAdmissionApplicantsRequest;
 import com.eduhub.edu_hub.admission.api.dto.response.AdmissionApplicantResponse;
 import com.eduhub.edu_hub.admission.api.dto.response.AdmissionCapacityResponse;
+import com.eduhub.edu_hub.admission.api.dto.response.AdmissionPlanLookupResponse;
 import com.eduhub.edu_hub.admission.api.dto.response.AdmissionPlanResponse;
 import com.eduhub.edu_hub.admission.api.exception.AdmissionExceptionHandler;
 import com.eduhub.edu_hub.admission.application.exception.AdmissionImportScopeException;
@@ -184,10 +185,17 @@ class AdmissionControllerTest {
     }
 
     @Test
+    void noLongerExposesPlanLookupById() throws Exception {
+        mvc.perform(get("/api/v1/student-admissions/plans/7"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(ErrorCode.ENDPOINT_NOT_FOUND.getCode()));
+        verifyNoInteractions(planning);
+    }
+
+    @Test
     void returnsAnExplicitNullWhenTheSelectedScopeHasNoPlan() throws Exception {
         when(planning.findPlanByScope(1L, 8L))
-                .thenReturn(
-                        new com.eduhub.edu_hub.admission.api.dto.response.AdmissionPlanLookupResponse(1L, 8L, null));
+                .thenReturn(new AdmissionPlanLookupResponse(1L, 8L, null));
         mvc.perform(get("/api/v1/student-admissions/plans/by-scope")
                         .param("majorId", "1")
                         .param("cohortId", "8"))
@@ -340,54 +348,61 @@ class AdmissionControllerTest {
     }
 
     @Test
-    void preservesPlanAndApplicantJsonAfterRemovingTheIntermediateMapper() throws Exception {
-        when(planning.getPlan(7L))
-                .thenReturn(AdmissionPlanResponse.builder()
-                        .id(7L)
-                        .revision(3)
-                        .majorId(1L)
-                        .cohortId(8L)
-                        .totalStudents(1)
-                        .capacity(new AdmissionCapacityResponse(40, 50, 15))
-                        .state("DRAFT")
-                        .classes(List.of())
-                        .scenarios(List.of())
-                        .applicants(List.of(AdmissionApplicantResponse.builder()
-                                .id(11L)
-                                .rowNumber(6)
-                                .citizenId("012345678901")
-                                .state("VALID")
-                                .reusingAccount(true)
-                                .warnings(List.of())
-                                .build()))
+    void returnsPlanAndApplicantDetailsForTheSelectedScope() throws Exception {
+        var planResponse = AdmissionPlanResponse.builder()
+                .id(7L)
+                .revision(3)
+                .majorId(1L)
+                .cohortId(8L)
+                .totalStudents(1)
+                .capacity(new AdmissionCapacityResponse(40, 50, 15))
+                .state("DRAFT")
+                .classes(List.of())
+                .scenarios(List.of())
+                .applicants(List.of(AdmissionApplicantResponse.builder()
+                        .id(11L)
+                        .rowNumber(6)
+                        .citizenId("012345678901")
+                        .state("VALID")
+                        .reusingAccount(true)
                         .warnings(List.of())
-                        .build());
+                        .build()))
+                .warnings(List.of())
+                .build();
+        when(planning.findPlanByScope(1L, 8L)).thenReturn(new AdmissionPlanLookupResponse(1L, 8L, planResponse));
 
-        mvc.perform(get("/api/v1/student-admissions/plans/7"))
+        mvc.perform(get("/api/v1/student-admissions/plans/by-scope")
+                        .param("majorId", "1")
+                        .param("cohortId", "8"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.id").value(7))
-                .andExpect(jsonPath("$.data.revision").value(3))
-                .andExpect(jsonPath("$.data.capacity.minimum").value(40))
-                .andExpect(jsonPath("$.data.capacity.maximum").value(50))
-                .andExpect(jsonPath("$.data.capacity.reserve").value(15))
-                .andExpect(jsonPath("$.data.state").value("DRAFT"))
-                .andExpect(jsonPath("$.data.applicants[0].rowNumber").value(6))
-                .andExpect(jsonPath("$.data.applicants[0].citizenId").value("012345678901"))
-                .andExpect(jsonPath("$.data.applicants[0].reusingAccount").value(true))
-                .andExpect(jsonPath("$.data.applicants[0].reuseAccount").doesNotExist())
-                .andExpect(jsonPath("$.data.applicants[0].warnings").isEmpty());
+                .andExpect(jsonPath("$.data.majorId").value(1))
+                .andExpect(jsonPath("$.data.cohortId").value(8))
+                .andExpect(jsonPath("$.data.plan.id").value(7))
+                .andExpect(jsonPath("$.data.plan.revision").value(3))
+                .andExpect(jsonPath("$.data.plan.capacity.minimum").value(40))
+                .andExpect(jsonPath("$.data.plan.capacity.maximum").value(50))
+                .andExpect(jsonPath("$.data.plan.capacity.reserve").value(15))
+                .andExpect(jsonPath("$.data.plan.state").value("DRAFT"))
+                .andExpect(jsonPath("$.data.plan.applicants[0].rowNumber").value(6))
+                .andExpect(jsonPath("$.data.plan.applicants[0].citizenId").value("012345678901"))
+                .andExpect(jsonPath("$.data.plan.applicants[0].reusingAccount").value(true))
+                .andExpect(jsonPath("$.data.plan.applicants[0].reuseAccount").doesNotExist())
+                .andExpect(jsonPath("$.data.plan.applicants[0].warnings").isEmpty());
+        verify(planning).findPlanByScope(1L, 8L);
     }
 
     @Test
     void preservesTheBusinessErrorEnvelopeForModuleExceptions() throws Exception {
-        when(planning.getPlan(7L)).thenThrow(new AdmissionPlanException(ErrorCode.ADMISSION_STALE_PLAN));
+        when(planning.findPlanByScope(0L, 8L)).thenThrow(new AdmissionPlanException(ErrorCode.VALIDATION_ERROR));
 
-        mvc.perform(get("/api/v1/student-admissions/plans/7"))
-                .andExpect(status().isConflict())
+        mvc.perform(get("/api/v1/student-admissions/plans/by-scope")
+                        .param("majorId", "0")
+                        .param("cohortId", "8"))
+                .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.code").value(ErrorCode.ADMISSION_STALE_PLAN.getCode()))
-                .andExpect(jsonPath("$.message").value(ErrorCode.ADMISSION_STALE_PLAN.getMessage()))
-                .andExpect(jsonPath("$.path").value("/api/v1/student-admissions/plans/7"))
+                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()))
+                .andExpect(jsonPath("$.message").value(ErrorCode.VALIDATION_ERROR.getMessage()))
+                .andExpect(jsonPath("$.path").value("/api/v1/student-admissions/plans/by-scope"))
                 .andExpect(jsonPath("$.stackTrace").doesNotExist());
     }
 }

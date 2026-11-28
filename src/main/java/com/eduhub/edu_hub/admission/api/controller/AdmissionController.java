@@ -66,13 +66,7 @@ public class AdmissionController {
                 planningService.createPlanFromFile(new CreateAdmissionPlanFromFileRequest(majorId, cohortId, file)));
     }
 
-    // 5. Xem lại plan, lỗi từng hồ sơ, phân bổ và cảnh báo. canConfirm là gợi ý UI, BE vẫn kiểm tra lại khi ghi.
-    @GetMapping("/student-admissions/plans/{id}")
-    public ApiResponse<AdmissionPlanResponse> getPlan(@PathVariable("id") Long planId) {
-        return apiResponseFactory.success(planningService.getPlan(planId));
-    }
-
-    // 6. Chốt nhập học: tạo/dùng lại sinh viên, tài khoản và thông báo theo từng hồ sơ; có thể thành công một phần.
+    // 5. Chốt nhập học: tạo/dùng lại sinh viên, tài khoản và thông báo theo từng hồ sơ; có thể thành công một phần.
     // FE chấp nhận tường minh dự phòng/dưới tối thiểu; không tự bật các cờ theo cảnh báo.
     // Kết quả trả planId để mở tab tiến trình mail; phần lỗi nhập học vẫn hiển thị tại tab gốc.
     @PostMapping("/student-admissions/plans/{id}/confirm")

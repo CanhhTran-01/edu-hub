@@ -39,7 +39,7 @@ SELECT id AS class_id, start_year, major_code, class_position, student_sequence,
        CASE WHEN start_year <= 2022 OR (student_ordinal % 137 = 0 AND NOT is_demo_student)
             THEN 'DEACTIVATED' ELSE 'STUDYING' END AS activity_status,
        NOT is_demo_student AND student_ordinal % 211 = 0 AS is_deleted,
-       NOT is_demo_student AND start_year = 2026 AND student_ordinal % 19 = 0 AS is_first_login,
+       NOT is_demo_student AND start_year = 2025 AND student_ordinal % 19 = 0 AS is_first_login,
        CASE WHEN is_demo_student THEN 'ACTIVE' WHEN student_ordinal % 173 = 0 THEN 'DISABLED'
             WHEN student_ordinal % 101 = 0 THEN 'LOCKED' ELSE 'ACTIVE' END AS account_status,
        'HS-' || start_year || '-' || major_code || '-' || lpad((class_position * 100 + student_sequence)::TEXT, 4, '0') AS application_code

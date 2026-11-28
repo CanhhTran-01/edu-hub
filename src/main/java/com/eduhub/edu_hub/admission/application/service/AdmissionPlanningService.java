@@ -96,12 +96,6 @@ public class AdmissionPlanningService {
         return importedPlan;
     }
 
-    public AdmissionPlanResponse getPlan(Long planId) {
-        return planQueryService.buildPlanResponse(planRepository
-                .findByIdAndDeletedFalse(planId)
-                .orElseThrow(() -> new AdmissionPlanException(ErrorCode.ADMISSION_PLAN_NOT_FOUND)));
-    }
-
     /** Mở lại cùng phương án theo ngành–khóa; không tạo plan từ thao tác GET. */
     public AdmissionPlanLookupResponse findPlanByScope(Long majorId, Long cohortId) {
         if (majorId == null || majorId <= 0 || cohortId == null || cohortId <= 0) {

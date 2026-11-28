@@ -3,7 +3,7 @@ INSERT INTO admission_plans (major_id, cohort_id, total_students, min_capacity, 
                              selected_class_count, state, revision, created_at, updated_at, created_by, updated_by)
 SELECT administrative_class.major_id, cohort.id, count(student.id)::INTEGER, 40, 50, 15,
        count(DISTINCT administrative_class.id)::INTEGER,
-       CASE WHEN major.major_code = 'ATTT' AND cohort.start_year = 2026 THEN 'PARTIALLY_CONFIRMED' ELSE 'CONFIRMED' END,
+       'CONFIRMED',
        1, make_date(cohort.start_year, 7, 10) + TIME '01:00', make_date(cohort.start_year, 7, 16) + TIME '02:00',
        'demo-seed', 'demo-seed'
 FROM administrative_classes administrative_class JOIN cohorts cohort ON cohort.id = administrative_class.cohort_id
@@ -41,7 +41,7 @@ SELECT applicant.application_code, applicant.student_id, applicant.plan_id, appl
        applicant.phone, applicant.entrance_score, 'STUDYING', applicant.updated_at, applicant.updated_at, 'demo-seed', 'demo-seed'
 FROM admission_applicants applicant WHERE applicant.state = 'ENROLLED';
 
--- Thông báo lịch sử đã kết thúc; chỉ tài khoản first-login K10 có mail còn chờ hoặc lỗi retry.
+-- Thông báo lịch sử đã kết thúc; chỉ tài khoản first-login K9 có mail còn chờ hoặc lỗi retry.
 -- notification.admission-enabled=false giữ trạng thái demo ổn định khi ứng dụng khởi động.
 INSERT INTO admission_notifications (admission_id, student_id, recipient, kind, state, failure_count,
                                      next_attempt_at, last_error, created_at, updated_at, created_by, updated_by)
@@ -63,81 +63,19 @@ SELECT admission.id, student.id, admission.email, 'INITIAL_ACCOUNT',
 FROM student_admissions admission JOIN students student ON student.id = admission.student_id
 JOIN users account ON account.id = student.user_id;
 
--- Phương án ATTT K10 có hồ sơ chờ, lỗi parse, xung đột, hồ sơ trùng và một dòng đã bỏ.
-CREATE TEMP TABLE demo_pending_admission_scope ON COMMIT DROP AS
-SELECT plan.id AS plan_id, plan_class.class_id, plan.total_students + 7 AS last_row_number
-FROM admission_plans plan JOIN majors major ON major.id = plan.major_id JOIN cohorts cohort ON cohort.id = plan.cohort_id
-JOIN admission_plan_classes plan_class ON plan_class.plan_id = plan.id AND plan_class.class_position = 1
-WHERE major.major_code = 'ATTT' AND cohort.start_year = 2026;
-
-INSERT INTO admission_applicants (plan_id, row_number, application_code, citizen_id, full_name, date_of_birth,
-                                  gender, email, phone, entrance_score, state, error_message, warning_message,
-                                  reuse_account, class_id, student_id, is_deleted,
-                                  created_at, updated_at, created_by, updated_by)
-SELECT scope.plan_id, scope.last_row_number + pending_position,
-       CASE WHEN pending_position IN (11,12,13) THEN existing_student.admission_application_code
-            ELSE 'HS-2026-ATTT-BS-' || lpad(pending_position::TEXT, 3, '0') END,
-       CASE WHEN pending_position = 8 THEN reused_student.citizen_id
-            WHEN pending_position IN (9,14) THEN '12345'
-            WHEN pending_position IN (11,12,13) THEN existing_student.citizen_id
-            ELSE '997208' || lpad(pending_position::TEXT, 6, '0') END,
-       CASE WHEN pending_position = 8 THEN reused_student.full_name
-            WHEN pending_position IN (11,12,13) THEN existing_student.full_name
-            ELSE (ARRAY['Nguyễn Minh Khôi','Trần Ngọc Ánh','Lê Đức Khang','Phạm Thu Hà','Hoàng Gia Bảo',
-                        'Vũ Phương Linh','Đặng Quang Huy','Hồ Minh An','Bùi Thanh Mai','Đỗ Trọng Nam',
-                        'Ngô Thu Trang','Dương Hải Sơn','Lý Ngọc Diệp','Đinh Minh Châu'])[pending_position] END,
-       CASE WHEN pending_position = 8 THEN reused_student.date_of_birth
-            WHEN pending_position IN (11,12,13) THEN existing_student.date_of_birth ELSE DATE '2008-04-12' END,
-       CASE WHEN pending_position = 8 THEN reused_student.gender
-            WHEN pending_position IN (11,12,13) THEN existing_student.gender ELSE 'NAM' END,
-       CASE WHEN pending_position = 8 THEN reused_account.email
-            WHEN pending_position IN (11,12,13) THEN existing_account.email
-            ELSE 'applicant.' || pending_position || '@admission.example.test' END,
-       CASE WHEN pending_position = 8 THEN reused_student.phone
-            WHEN pending_position IN (11,12,13) THEN existing_student.phone ELSE '0900000' || lpad(pending_position::TEXT, 3, '0') END,
-       CASE WHEN pending_position = 10 THEN NULL WHEN pending_position IN (11,12,13) THEN existing_student.entrance_score ELSE 25.75 END,
-       CASE WHEN pending_position = 7 THEN 'FAILED' WHEN pending_position IN (9,10,14) THEN 'INVALID'
-            WHEN pending_position IN (11,12) THEN 'CONFLICT' WHEN pending_position = 13 THEN 'EXISTING' ELSE 'VALID' END,
-       CASE WHEN pending_position = 7 THEN 'Lỗi lưu hồ sơ giả lập; có thể thử xác nhận lại.'
-            WHEN pending_position IN (9,14) THEN 'CCCD phải có đúng 12 chữ số.'
-            WHEN pending_position = 10 THEN 'Chưa nhập điểm đầu vào.'
-            WHEN pending_position IN (11,12) THEN 'Mã hồ sơ trùng nhưng dữ liệu đối chiếu khác nhau.' ELSE NULL END,
-       CASE WHEN pending_position = 8 THEN 'Dùng lại Student/MSSV/User của lần nhập học cũ; không cấp lại mật khẩu.' END,
-       pending_position = 8, CASE WHEN pending_position <= 8 THEN scope.class_id END,
-       CASE WHEN pending_position = 8 THEN reused_student.id WHEN pending_position = 13 THEN existing_student.id END,
-       pending_position = 14, TIMESTAMP '2026-11-23 02:00:00', TIMESTAMP '2026-11-23 02:00:00', 'demo-seed', 'demo-seed'
-FROM demo_pending_admission_scope scope CROSS JOIN generate_series(1,14) AS pending_position
-CROSS JOIN LATERAL (SELECT student.* FROM students student JOIN administrative_classes administrative_class ON administrative_class.id = student.class_id
-                    JOIN cohorts cohort ON cohort.id = administrative_class.cohort_id
-                    WHERE cohort.start_year = 2022 AND NOT student.is_deleted ORDER BY student.id LIMIT 1) reused_student
-JOIN users reused_account ON reused_account.id = reused_student.user_id
-CROSS JOIN LATERAL (SELECT student.* FROM students student WHERE student.class_id = scope.class_id AND NOT student.is_deleted ORDER BY student.id LIMIT 1) existing_student
-JOIN users existing_account ON existing_account.id = existing_student.user_id;
-
--- Tạo xung đột có thật giữa hai dòng; dòng EXISTING vẫn giữ nguyên snapshot của hồ sơ đã nhập học.
-UPDATE admission_applicants applicant SET full_name = applicant.full_name || ' (khác thông tin)'
-FROM demo_pending_admission_scope scope
-WHERE applicant.plan_id = scope.plan_id AND applicant.row_number IN (scope.last_row_number + 11, scope.last_row_number + 12);
-
-UPDATE admission_plans plan
-SET total_students = (SELECT count(*) FROM admission_applicants applicant WHERE applicant.plan_id = plan.id
-                      AND NOT applicant.is_deleted AND applicant.state IN ('VALID','FAILED','ENROLLED')),
-    updated_at = TIMESTAMP '2026-11-23 02:00:00'
-WHERE plan.id IN (SELECT plan_id FROM demo_pending_admission_scope);
-UPDATE admission_plan_classes plan_class
-SET target_size = (SELECT count(*) FROM admission_applicants applicant WHERE applicant.plan_id = plan_class.plan_id
-                   AND applicant.class_id = plan_class.class_id AND NOT applicant.is_deleted AND applicant.state IN ('VALID','FAILED','ENROLLED')),
-    updated_at = TIMESTAMP '2026-11-23 02:00:00'
-WHERE plan_class.plan_id IN (SELECT plan_id FROM demo_pending_admission_scope);
-
 DO $$ BEGIN
-    IF (SELECT count(*) FROM cohorts) <> 5 OR (SELECT count(*) FROM curriculums) <> 20
-    THEN RAISE EXCEPTION 'Bộ seed phải có 5 khóa và 20 CTĐT'; END IF;
+    IF (SELECT count(*) FROM cohorts) <> 6 OR (SELECT min(start_year) FROM cohorts) <> 2020
+       OR (SELECT max(start_year) FROM cohorts) <> 2025 OR (SELECT count(*) FROM curriculums) <> 23
+    THEN RAISE EXCEPTION 'Bộ seed phải có 6 khóa từ 2020 đến 2025 và 23 CTĐT'; END IF;
+    IF (SELECT count(*) FROM semesters) <> 14 OR (SELECT min(start_date) FROM semesters) <> DATE '2020-08-03'
+       OR (SELECT max(end_date) FROM semesters) <> DATE '2027-07-03'
+       OR EXISTS (SELECT 1 FROM semesters WHERE semester_code !~ '^HK_[12]_')
+    THEN RAISE EXCEPTION 'Bộ seed chỉ có kỳ 1 và kỳ 2 từ năm học 2020–2021 đến 2026–2027'; END IF;
     -- Chốt quy mô để phát hiện việc tra mã thiếu hoặc JOIN làm mất/nhân bản dữ liệu mẫu.
-    IF (SELECT count(*) FROM students) <> 1850 OR (SELECT count(*) FROM administrative_classes) <> 40
+    IF (SELECT count(*) FROM students) <> 2090 OR (SELECT count(*) FROM administrative_classes) <> 46
        OR (SELECT count(*) FROM lecturers) <> 120 OR (SELECT count(*) FROM subjects) <> 124
-       OR (SELECT count(*) FROM module_classes) <> 1227 OR (SELECT count(*) FROM class_schedules) <> 18300
-       OR (SELECT count(*) FROM enrollments) <> 45975
+       OR (SELECT count(*) FROM module_classes) <> 1484 OR (SELECT count(*) FROM class_schedules) <> 22350
+       OR (SELECT count(*) FROM enrollments) <> 61893 OR (SELECT count(*) FROM admission_plans) <> 23
     THEN RAISE EXCEPTION 'Quy mô bộ seed không khớp các khóa/ngành và lộ trình đã khai báo'; END IF;
     IF EXISTS (SELECT 1 FROM students student JOIN administrative_classes administrative_class ON administrative_class.id = student.class_id
                GROUP BY administrative_class.major_id, administrative_class.cohort_id

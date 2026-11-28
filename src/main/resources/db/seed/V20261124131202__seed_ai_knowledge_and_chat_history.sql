@@ -16,7 +16,7 @@ SELECT account.id, document.title, 'HUONG_DAN_DEMO', document.original_filename,
 FROM (VALUES
     ('huong-dan-dang-ky-demo-2026.txt', 'DEMO 2026 - Hướng dẫn đăng ký và hủy học phần', 'FAILED', DATE '2026-08-01', 'TÀI LIỆU DEMO LOCAL EDUHUB, KHÔNG PHẢI QUY CHẾ CHÍNH THỨC.
 Đăng ký học phần: sinh viên đăng nhập bằng tài khoản cá nhân, chọn kỳ đang mở đăng ký và lớp học phần còn chỗ. Chỉ đăng ký học phần thuộc chương trình đào tạo của mình, đã đạt các môn tiên quyết và không trùng lịch với lớp đang học.
-Trong bộ demo, giới hạn tín chỉ là 12 đến 24 tín chỉ mỗi kỳ. Dưới 12 tín chỉ vẫn được lưu và hiển thị cảnh báo; vượt 24 tín chỉ bị từ chối.
+Trong bộ demo, giới hạn tín chỉ là 12 đến 28 tín chỉ mỗi kỳ. Dưới 12 tín chỉ vẫn được lưu và hiển thị cảnh báo; vượt 28 tín chỉ bị từ chối.
 Hủy học phần chỉ thực hiện trong khoảng thời gian đăng ký của kỳ. Hủy giữ lại lịch sử, không xóa lượt học. Sau khi hủy có thể đăng ký lại nếu còn đủ điều kiện.'),
     ('huong-dan-diem-demo-2026.txt', 'DEMO 2026 - Điểm quá trình, điểm thi và khóa điểm', 'FAILED', DATE '2026-08-01', 'TÀI LIỆU DEMO LOCAL EDUHUB, KHÔNG PHẢI QUY CHẾ CHÍNH THỨC.
 Điểm quá trình bằng 30% TP1 cộng 70% TP2, làm tròn một chữ số thập phân. Chưa đủ hai thành phần thì chưa có điểm quá trình. Điểm 0 là đã nhập, khác với ô trống.
@@ -96,6 +96,6 @@ DO $$ BEGIN
     IF EXISTS (SELECT 1 FROM knowledge_sources WHERE status = 'ACTIVE')
        OR EXISTS (SELECT 1 FROM knowledge_chunks WHERE embedding IS NOT NULL)
     THEN RAISE EXCEPTION 'Seed không được giả lập chỉ mục AI đã xử lý thành công'; END IF;
-    IF EXISTS (SELECT 1 FROM chat_messages WHERE sent_at > TIMESTAMP '2026-11-24 23:59:59')
+    IF EXISTS (SELECT 1 FROM chat_messages WHERE sent_at > TIMESTAMP '2026-11-28 23:59:59')
     THEN RAISE EXCEPTION 'Lịch sử hội thoại vượt mốc demo'; END IF;
 END $$;
