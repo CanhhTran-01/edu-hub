@@ -1,0 +1,6 @@
+QUY CHẾ KIỂM THỬ TRẠM HỖ TRỢ HỌC VỤ SAO BẠC
+
+Điều 1. Lịch tư vấn đăng ký học phần
+Trạm Hỗ trợ Học vụ Sao Bạc tiếp nhận yêu cầu tư vấn đăng ký học phần vào thứ Tư hằng tuần, từ 14:20 đến 15:10 theo giờ Việt Nam.
+
+Nội dung này mô phỏng quy chế để kiểm thử luồng hỏi đáp EduHub.

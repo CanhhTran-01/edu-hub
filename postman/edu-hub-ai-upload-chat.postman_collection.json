@@ -1,0 +1,379 @@
+{
+  "info": {
+    "name": "EduHub AI - Upload tài liệu và sinh viên hỏi đáp",
+    "description": "Chạy backend rồi bấm Send từng request theo thứ tự. Trong Variables, điền tài khoản ACADEMIC_ADMIN và STUDENT đang hoạt động, đã hoàn tất đổi mật khẩu lần đầu. Dùng giá trị local cho mật khẩu và token. Mặc định base_url là http://localhost:8080.\n\nỞ bước Upload, vào Body → form-data → file và chọn tai-lieu-mau-sao-bac.txt trong thư mục postman, hoặc chọn PDF có lớp văn bản, DOCX hay TXT UTF-8 của bạn. Đợi nguồn ACTIVE và có chunk trước khi hỏi. Nếu dùng tệp riêng, đổi biến question cho phù hợp. Câu hỏi mẫu có đáp án thứ Tư, 14:20–15:10 (giờ Việt Nam) và cần trích dẫn nguồn vừa nạp.\n\nCollection tự lưu token và ID. Nếu Postman chỉ hiển thị sự kiện SSE, lấy requestId ở agent.started điền chat_request_id để kiểm tra kết quả.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8080", "type": "string" },
+    { "key": "academic_admin_username", "value": "", "type": "string" },
+    { "key": "academic_admin_password", "value": "", "type": "string" },
+    { "key": "student_username", "value": "", "type": "string" },
+    { "key": "student_password", "value": "", "type": "string" },
+    { "key": "document_title", "value": "Quy chế kiểm thử Trạm Hỗ trợ Học vụ Sao Bạc", "type": "string" },
+    { "key": "document_type", "value": "Quy chế", "type": "string" },
+    { "key": "effective_date", "value": "", "type": "string", "description": "Để trống để dùng ngày hiện tại theo giờ Việt Nam. Nếu nhập, dùng yyyy-MM-dd và chọn ngày đã có hiệu lực để sinh viên truy xuất được." },
+    { "key": "question", "value": "Theo tài liệu kiểm thử, Trạm Hỗ trợ Học vụ Sao Bạc tiếp nhận yêu cầu tư vấn đăng ký học phần vào thứ mấy, khung giờ nào theo giờ Việt Nam? Hãy trích dẫn tài liệu.", "type": "string" },
+    { "key": "academic_admin_token", "value": "", "type": "string" },
+    { "key": "student_token", "value": "", "type": "string" },
+    { "key": "source_id", "value": "", "type": "string" },
+    { "key": "chat_request_id", "value": "", "type": "string" },
+    { "key": "chat_session_id", "value": "", "type": "string" },
+    { "key": "chat_message_id", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "01. Quản trị đào tạo - Nạp tài liệu",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{academic_admin_token}}", "type": "string" }]
+      },
+      "item": [
+        {
+          "name": "01. Đăng nhập quản trị đào tạo",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/api/v1/auth/login",
+            "body": { "mode": "raw", "raw": "{{login_body}}", "options": { "raw": { "language": "json" } } }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('academic_admin_token', '');",
+                  "const username = String(pm.variables.get('academic_admin_username') || '').trim();",
+                  "const password = String(pm.variables.get('academic_admin_password') || '');",
+                  "if (!username || !password) throw new Error('Điền academic_admin_username và academic_admin_password trong Variables.');",
+                  "pm.variables.set('login_body', JSON.stringify({ username, password }));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Đăng nhập trả HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const res = pm.response.json();",
+                  "  const login = res.data || {};",
+                  "  const valid = res.success === true && login.user?.role === 'ACADEMIC_ADMIN' && login.user?.status === 'ACTIVE' && login.requirePasswordChange === false && Boolean(login.accessToken);",
+                  "  pm.test('Có access token của ACADEMIC_ADMIN đang hoạt động', () => pm.expect(valid).to.be.true);",
+                  "  if (valid) pm.collectionVariables.set('academic_admin_token', login.accessToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02. Upload tài liệu",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/ai/documents",
+            "description": "Chọn tệp cục bộ ở dòng file trong Body → form-data. Hỗ trợ PDF có chữ, DOCX hoặc TXT UTF-8, tối đa mặc định 20 MB. Postman tự đặt Content-Type và multipart boundary. HTTP 202 nghĩa là đã nhận tệp để xử lý. Nếu upload lại đúng cùng tệp và nhận 409/4607, collection lấy ID nguồn từ lỗi nếu API trả kèm.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": [] },
+                { "key": "title", "type": "text", "value": "{{document_title}}" },
+                { "key": "documentType", "type": "text", "value": "{{document_type}}" },
+                { "key": "effectiveDate", "type": "text", "value": "{{upload_effective_date}}" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('source_id', '');",
+                  "const configuredDate = String(pm.variables.get('effective_date') || '').trim();",
+                  "const todayInVietnam = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);",
+                  "pm.variables.set('upload_effective_date', configuredDate || todayInVietnam);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 409) {",
+                  "  const res = pm.response.json();",
+                  "  const fileError = (res.errors || []).find(error => error.field === 'file');",
+                  "  const existingId = /#([1-9]\\d*)\\b/.exec(fileError?.message || '')?.[1];",
+                  "  pm.test('Tệp trùng và lấy được ID nguồn có sẵn', () => {",
+                  "    pm.expect(res.code).to.eql(4607);",
+                  "    pm.expect(existingId).to.be.a('string');",
+                  "  });",
+                  "  if (res.code === 4607 && existingId) pm.collectionVariables.set('source_id', existingId);",
+                  "} else {",
+                  "  pm.test('API nhận upload với HTTP 202', () => pm.response.to.have.status(202));",
+                  "  if (pm.response.code === 202) {",
+                  "    const res = pm.response.json();",
+                  "    const source = res.data || {};",
+                  "    pm.test('Nguồn đã vào hàng chờ xử lý embedding', () => {",
+                  "      pm.expect(res.success).to.be.true;",
+                  "      pm.expect(source.status).to.eql('PROCESSING');",
+                  "      pm.expect(source.id).to.be.above(0);",
+                  "    });",
+                  "    if (res.success && source.id > 0) pm.collectionVariables.set('source_id', String(source.id));",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03. Kiểm tra trạng thái và số đoạn đã lập chỉ mục",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/ai/documents/{{source_id}}",
+            "description": "Nếu data.status là PROCESSING, đợi vài giây rồi Send lại. Khi ACTIVE và data.chunkCount > 0, chuyển sang nhóm Sinh viên. Nếu FAILED, xem data.errorMessage và đối chiếu log backend theo sourceId."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Đọc được nguồn với HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const res = pm.response.json();",
+                  "  const source = res.data || {};",
+                  "  pm.test('Đúng nguồn và không có lỗi lập chỉ mục', () => {",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(String(source.id)).to.eql(String(pm.variables.get('source_id')));",
+                  "    pm.expect(source.status, source.errorMessage || 'Trạng thái nguồn').to.be.oneOf(['PROCESSING', 'ACTIVE']);",
+                  "  });",
+                  "  if (source.status === 'ACTIVE') {",
+                  "    pm.test('Có ít nhất một đoạn trong chỉ mục', () => pm.expect(source.chunkCount).to.be.above(0));",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04. Xử lý lại nguồn FAILED (tùy chọn)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/ai/documents/{{source_id}}/reprocess",
+            "description": "Chỉ gửi nếu nguồn đang FAILED và còn tệp gốc. Sau HTTP 202, quay lại bước 03 để đợi ACTIVE."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Đã nhận yêu cầu xử lý lại với HTTP 202', () => pm.response.to.have.status(202));",
+                  "if (pm.response.code === 202) {",
+                  "  pm.test('Nguồn trở về PROCESSING', () => pm.expect(pm.response.json().data.status).to.eql('PROCESSING'));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02. Sinh viên - Hỏi đáp tài liệu",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{student_token}}", "type": "string" }]
+      },
+      "item": [
+        {
+          "name": "01. Đăng nhập sinh viên",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/api/v1/auth/login",
+            "body": { "mode": "raw", "raw": "{{login_body}}", "options": { "raw": { "language": "json" } } }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('student_token', '');",
+                  "const username = String(pm.variables.get('student_username') || '').trim();",
+                  "const password = String(pm.variables.get('student_password') || '');",
+                  "if (!username || !password) throw new Error('Điền student_username và student_password trong Variables.');",
+                  "pm.variables.set('login_body', JSON.stringify({ username, password }));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Đăng nhập trả HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const res = pm.response.json();",
+                  "  const login = res.data || {};",
+                  "  const valid = res.success === true && login.user?.role === 'STUDENT' && login.user?.status === 'ACTIVE' && login.requirePasswordChange === false && Boolean(login.accessToken);",
+                  "  pm.test('Có access token của STUDENT đang hoạt động', () => pm.expect(valid).to.be.true);",
+                  "  if (valid) pm.collectionVariables.set('student_token', login.accessToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02. Hỏi về tài liệu qua SSE",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "text/event-stream" }
+            ],
+            "url": "{{base_url}}/api/v1/ai/chat/stream",
+            "description": "Mỗi lần Send tạo một clientRequestId mới và bắt đầu hội thoại mới. Đợi agent.completed để xem data.content và data.citations. agent.error và agent.limit_reached báo lỗi ngay cả khi HTTP là 200. Nếu biến chat_request_id chưa được lưu sau khi luồng đóng, chép requestId ở event agent.started vào Variables, rồi chạy bước 03.",
+            "body": { "mode": "raw", "raw": "{{chat_body}}", "options": { "raw": { "language": "json" } } }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const message = String(pm.variables.get('question') || '').trim();",
+                  "if (!message || message.length > 2000) throw new Error('question phải có từ 1 đến 2.000 ký tự.');",
+                  "pm.collectionVariables.set('chat_request_id', '');",
+                  "pm.collectionVariables.set('chat_session_id', '');",
+                  "pm.collectionVariables.set('chat_message_id', '');",
+                  "const clientRequestId = pm.variables.replaceIn('{{$guid}}');",
+                  "pm.variables.set('chat_body', JSON.stringify({ sessionId: null, clientRequestId, message }));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Backend chấp nhận chat với HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test('Phản hồi dùng SSE', () => {",
+                  "    pm.expect(pm.response.headers.get('Content-Type') || '').to.match(/^text\\/event-stream\\b/i);",
+                  "  });",
+                  "  const raw = pm.response.text() || '';",
+                  "  const events = [];",
+                  "  for (const frame of raw.replace(/\\r\\n?/g, '\\n').split(/\\n\\n+/)) {",
+                  "    const lines = frame.split('\\n');",
+                  "    const eventLine = lines.find(line => line.startsWith('event:'));",
+                  "    const json = lines.filter(line => line.startsWith('data:')).map(line => line.slice(5).replace(/^ /, '')).join('\\n');",
+                  "    if (eventLine && json) {",
+                  "      events.push({ name: eventLine.slice(6).trim(), envelope: JSON.parse(json) });",
+                  "    }",
+                  "  }",
+                  "  const identified = events.find(event => event.envelope.requestId);",
+                  "  if (identified) pm.collectionVariables.set('chat_request_id', identified.envelope.requestId);",
+                  "  const terminal = events.find(event => ['agent.completed', 'agent.error', 'agent.limit_reached', 'agent.cancelled'].includes(event.name));",
+                  "  if (events.length) {",
+                  "    pm.test('Luồng kết thúc bằng agent.completed', () => pm.expect(terminal?.name || 'chưa có sự kiện kết thúc').to.eql('agent.completed'));",
+                  "  }",
+                  "  if (terminal?.name === 'agent.completed') {",
+                  "    const reply = terminal.envelope.data || {};",
+                  "    if (reply.sessionId) pm.collectionVariables.set('chat_session_id', String(reply.sessionId));",
+                  "    if (reply.messageId) pm.collectionVariables.set('chat_message_id', String(reply.messageId));",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03. Kiểm tra câu trả lời và trích dẫn",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/ai/chat-requests/{{chat_request_id}}",
+            "description": "Xem data.state, data.response.content và data.response.citations. Khi COMPLETED, test kiểm tra trích dẫn khớp source_id nếu bạn đã upload một nguồn. Nếu còn RUNNING thì kiểm tra lại sau. Nếu FAILED hoặc LIMIT_REACHED, đọc data.stopReason và data.errorCode."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Đọc được lượt hỏi với HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const res = pm.response.json();",
+                  "  const chat = res.data || {};",
+                  "  pm.test('Đúng lượt hỏi và không có lỗi Agent', () => {",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(chat.requestId).to.eql(pm.variables.get('chat_request_id'));",
+                  "    pm.expect(chat.state, chat.stopReason || 'Trạng thái Agent').to.be.oneOf(['RUNNING', 'COMPLETED']);",
+                  "  });",
+                  "  if (chat.state === 'COMPLETED') {",
+                  "    const reply = chat.response || {};",
+                  "    pm.test('Đã lưu câu trả lời và ID hội thoại', () => {",
+                  "      pm.expect(reply.content).to.be.a('string').and.not.empty;",
+                  "      pm.expect(reply.sessionId).to.be.a('string').and.not.empty;",
+                  "      pm.expect(reply.messageId).to.be.a('string').and.not.empty;",
+                  "    });",
+                  "    if (reply.sessionId) pm.collectionVariables.set('chat_session_id', String(reply.sessionId));",
+                  "    if (reply.messageId) pm.collectionVariables.set('chat_message_id', String(reply.messageId));",
+                  "    const sourceId = pm.variables.get('source_id');",
+                  "    if (sourceId) {",
+                  "      pm.test('Câu trả lời trích dẫn nguồn vừa nạp', () => {",
+                  "        const matchesUpload = (reply.citations || []).some(citation => String(citation.sourceId) === String(sourceId) && citation.sourceAvailable === true);",
+                  "        pm.expect(matchesUpload).to.be.true;",
+                  "      });",
+                  "    }",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04. Xem lại hội thoại đã lưu",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/ai/sessions/{{chat_session_id}}",
+            "description": "Dùng chat_session_id từ lượt chat thành công. Kiểm tra tin nhắn trả lời trong data.messages."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Đọc được hội thoại với HTTP 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "  const res = pm.response.json();",
+                  "  const session = res.data || {};",
+                  "  const messageId = pm.variables.get('chat_message_id');",
+                  "  pm.test('Hội thoại chứa đúng câu trả lời đã lưu', () => {",
+                  "    pm.expect(res.success).to.be.true;",
+                  "    pm.expect(session.sessionId).to.eql(pm.variables.get('chat_session_id'));",
+                  "    pm.expect((session.messages || []).some(message => message.role === 'ASSISTANT' && (!messageId || message.messageId === messageId))).to.be.true;",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

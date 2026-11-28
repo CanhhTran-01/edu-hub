@@ -18,6 +18,30 @@ import org.springframework.mock.env.MockEnvironment;
 
 class AiConfigurationTest {
     @Test
+    void resolvesGeminiKeyFromEnvironmentAndUsesTheSameClientForEmbedding() {
+        var environment = new MockEnvironment()
+                .withProperty("GOOGLE_API_KEY", "synthetic-test-key")
+                .withProperty("spring.ai.google.genai.api-key", "${GOOGLE_API_KEY:}");
+        var configuration = new AiConfiguration();
+
+        try (var client = configuration.googleGenAiClient(environment, new AiRagProperties())) {
+            assertThat(client.apiKey()).isEqualTo("synthetic-test-key");
+            assertThat(configuration.googleGenAiEmbeddingConnectionDetails(client).getGenAiClient())
+                    .isSameAs(client);
+        }
+    }
+
+    @Test
+    void rejectsMissingGeminiKeyBeforeCreatingClient() {
+        var environment = new MockEnvironment()
+                .withProperty("spring.ai.google.genai.api-key", "${GOOGLE_API_KEY:}");
+
+        assertThatThrownBy(() -> new AiConfiguration().googleGenAiClient(environment, new AiRagProperties()))
+                .isInstanceOf(AiAssistantConfigurationException.class)
+                .hasMessageContaining("GOOGLE_API_KEY");
+    }
+
+    @Test
     void advisorChecksTrackedRequestCapacityWithoutRelyingOnBeanValidation() {
         var properties = new AiAdvisorProperties();
         properties.setMaximumTrackedRequests(8);

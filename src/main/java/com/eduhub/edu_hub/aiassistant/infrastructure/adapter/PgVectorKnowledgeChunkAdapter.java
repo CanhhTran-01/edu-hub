@@ -7,6 +7,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.*;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +24,8 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class PgVectorKnowledgeChunkAdapter implements KnowledgeChunkPort {
     public static final int VECTOR_DIMENSIONS = 768;
+    private static final Pattern GOOGLE_API_KEY_ERROR =
+            Pattern.compile("\"reason\"\\s*:\\s*\"(API_KEY_INVALID|API_KEY_EXPIRED|API_KEY_SERVICE_BLOCKED|API_KEY_HTTP_REFERRER_BLOCKED|API_KEY_IP_ADDRESS_BLOCKED)\"");
     private static final String AVAILABLE_SOURCE =
             """
             source.status = 'ACTIVE' and not source.is_deleted and not chunk.is_deleted
@@ -93,15 +96,30 @@ public class PgVectorKnowledgeChunkAdapter implements KnowledgeChunkPort {
         }
     }
 
+    private static String safeProviderReason(ApiException exception) {
+        // SDK dùng HTTP reason phrase cho status(). Mã ErrorInfo nằm trong message() đã ghép.
+        var reason = GOOGLE_API_KEY_ERROR.matcher(Objects.toString(exception.message(), ""));
+        if (reason.find()) return reason.group(1);
+        return switch (Objects.toString(exception.status(), "")) {
+            case "INVALID_ARGUMENT", "UNAUTHENTICATED", "PERMISSION_DENIED", "NOT_FOUND", "RESOURCE_EXHAUSTED",
+                    "FAILED_PRECONDITION", "DEADLINE_EXCEEDED", "INTERNAL", "UNAVAILABLE" -> exception.status();
+            default -> null;
+        };
+    }
+
     private void logChunkBatchFailure(
             Long sourceId, String processingStage, int chunkOffset, int chunkCount, RuntimeException exception) {
         Integer httpStatus = null;
+        String providerReason = null;
         String sqlState = null;
         String rootCauseType = exception.getClass().getName();
         Set<Throwable> visitedCauses = Collections.newSetFromMap(new IdentityHashMap<>());
         for (Throwable cause = exception; cause != null && visitedCauses.add(cause); cause = cause.getCause()) {
             rootCauseType = cause.getClass().getName();
-            if (cause instanceof ApiException apiException) httpStatus = apiException.code();
+            if (cause instanceof ApiException apiException) {
+                httpStatus = apiException.code();
+                providerReason = safeProviderReason(apiException);
+            }
             if (cause instanceof SQLException sqlException) {
                 String candidateSqlState = sqlException.getSQLState();
                 if (candidateSqlState != null && candidateSqlState.matches("[A-Z0-9]{5}")) sqlState = candidateSqlState;
@@ -109,7 +127,7 @@ public class PgVectorKnowledgeChunkAdapter implements KnowledgeChunkPort {
         }
         // Chỉ ghi metadata chẩn đoán; message/stacktrace có thể chứa khóa API, văn bản hoặc tham số SQL.
         log.warn(
-                "Không thể xử lý lô tri thức: sourceId={}, stage={}, chunkOffset={}, chunkCount={}, exceptionType={}, rootCauseType={}, httpStatus={}, sqlState={}",
+                "Không thể xử lý lô tri thức: sourceId={}, stage={}, chunkOffset={}, chunkCount={}, exceptionType={}, rootCauseType={}, httpStatus={}, providerReason={}, sqlState={}",
                 sourceId,
                 processingStage,
                 chunkOffset,
@@ -117,6 +135,7 @@ public class PgVectorKnowledgeChunkAdapter implements KnowledgeChunkPort {
                 exception.getClass().getName(),
                 rootCauseType,
                 httpStatus,
+                providerReason,
                 sqlState);
     }
 

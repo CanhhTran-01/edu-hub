@@ -13,6 +13,7 @@ import com.eduhub.edu_hub.academic.api.dto.response.GpaGoalResponse;
 import com.eduhub.edu_hub.academic.api.dto.response.PrerequisiteImpactResponse;
 import com.eduhub.edu_hub.academic.domain.enums.CourseGradeComparison;
 import com.eduhub.edu_hub.academic.domain.enums.PrerequisiteAnalysisScope;
+import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantConfigurationException;
 import com.eduhub.edu_hub.aiassistant.application.exception.AiAssistantException;
 import com.eduhub.edu_hub.aiassistant.application.port.AiAdvisorModelPort;
 import com.eduhub.edu_hub.aiassistant.application.port.AiAdvisorModelPort.*;
@@ -92,15 +93,11 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
             // 4. Kiểm tra giới hạn thực thi và cấu hình Model.
             execution.checkCanContinue();
             boolean offerTools = execution.shouldOfferTools();
-            var options = ToolCallingChatOptions.builder()
-                    .temperature(0.0)
-                    .maxTokens(execution.getMaximumOutputTokens())
-                    .toolCallbacks(offerTools ? tools : List.of())
-                    .build();
+            List<ToolCallback> offeredTools = offerTools ? tools : List.of();
 
             // 5. Tạo Prompt, kiểm soát ngân sách và gọi Model.
-            var prompt = new Prompt(messages, options);
-            execution.beforeModelCall(serializeBudgetContext(messages, offerTools ? tools : List.of()));
+            var prompt = new Prompt(messages, requestOptions(execution.getMaximumOutputTokens(), offeredTools));
+            execution.beforeModelCall(serializeBudgetContext(messages, offeredTools));
             ChatResponse modelResponse = chatModel.call(prompt);
             execution.checkCanContinue();
 
@@ -161,6 +158,18 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
         }
     }
 
+    private ToolCallingChatOptions requestOptions(int maximumOutputTokens, List<ToolCallback> tools) {
+        if (!(chatModel.getOptions() instanceof ToolCallingChatOptions defaults)) {
+            throw new AiAssistantConfigurationException("Model Advisor phải cung cấp cấu hình gọi công cụ");
+        }
+        // Spring AI 2.0 chuyển prompt options trực tiếp cho provider, nên giữ kiểu và model đã cấu hình.
+        return defaults.mutate()
+                .temperature(0.0)
+                .maxTokens(maximumOutputTokens)
+                .toolCallbacks(tools)
+                .build();
+    }
+
     private String serializeBudgetContext(List<Message> messages, List<ToolCallback> tools) {
         var contextText = new StringBuilder();
         for (var message : messages) {
@@ -180,16 +189,11 @@ public class SpringAiAdvisorModelAdapter implements AiAdvisorModelPort {
 
     @Override
     public String commentOnSimulation(String verifiedSimulationJson) {
-        var options = ToolCallingChatOptions.builder()
-                .temperature(0.0)
-                .maxTokens(properties.getMaximumOutputTokens())
-                .toolCallbacks(List.of())
-                .build();
         var response = chatModel.call(new Prompt(
                 List.of(
                         new SystemMessage(properties.requireSimulationCommentPrompt()),
                         new UserMessage(verifiedSimulationJson)),
-                options));
+                requestOptions(properties.getMaximumOutputTokens(), List.of())));
         if (response == null || response.hasToolCalls() || response.getResults().isEmpty())
             throw new AiAssistantException(ErrorCode.AI_SERVICE_UNAVAILABLE);
         var visibleOutputs = response.getResults().stream()

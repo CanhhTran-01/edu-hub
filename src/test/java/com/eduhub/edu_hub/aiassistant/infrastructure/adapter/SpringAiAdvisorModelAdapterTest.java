@@ -33,11 +33,13 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.messages.*;
 import org.springframework.ai.chat.model.*;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 import org.springframework.security.oauth2.jwt.Jwt;
 import tools.jackson.databind.json.JsonMapper;
 
 class SpringAiAdvisorModelAdapterTest {
+    private static final String CONFIGURED_MODEL = "gemini-test-model";
+
     ChatModel model = mock(ChatModel.class);
     AdvisorToolService tools = mock(AdvisorToolService.class);
     AiAdvisorProperties properties = new AiAdvisorProperties();
@@ -50,6 +52,10 @@ class SpringAiAdvisorModelAdapterTest {
 
     @BeforeEach
     void prepare() {
+        when(model.getOptions()).thenReturn(GoogleGenAiChatOptions.builder()
+                .model(CONFIGURED_MODEL)
+                .candidateCount(2)
+                .build());
         properties.setSystemPrompt("Chỉ dùng dữ liệu công cụ và trả JSON content/citationIds.");
         execution = new AdvisorChatExecution(
                 UUID.randomUUID(),
@@ -201,7 +207,11 @@ class SpringAiAdvisorModelAdapterTest {
 
         var prompts = ArgumentCaptor.forClass(Prompt.class);
         verify(model).call(prompts.capture());
-        var callbacks = ((ToolCallingChatOptions) prompts.getValue().getOptions()).getToolCallbacks();
+        var options = (GoogleGenAiChatOptions) prompts.getValue().getOptions();
+        assertThat(options.getModel()).isEqualTo(CONFIGURED_MODEL);
+        assertThat(options.getCandidateCount()).isEqualTo(2);
+        assertThat(options.getMaxTokens()).isEqualTo(properties.getMaximumOutputTokens());
+        var callbacks = options.getToolCallbacks();
         assertThat(callbacks)
                 .extracting(callback -> callback.getToolDefinition().name())
                 .containsExactlyInAnyOrder(
@@ -407,7 +417,7 @@ class SpringAiAdvisorModelAdapterTest {
         adapter.answer(execution, List.of());
         var prompts = ArgumentCaptor.forClass(Prompt.class);
         verify(model, times(2)).call(prompts.capture());
-        assertThat(((ToolCallingChatOptions) prompts.getAllValues().getLast().getOptions()).getToolCallbacks())
+        assertThat(((GoogleGenAiChatOptions) prompts.getAllValues().getLast().getOptions()).getToolCallbacks())
                 .isEmpty();
     }
 
@@ -429,8 +439,9 @@ class SpringAiAdvisorModelAdapterTest {
         var prompts = ArgumentCaptor.forClass(Prompt.class);
         verify(model).call(prompts.capture());
         assertThat(prompts.getValue().getSystemMessage().getText()).isEqualTo("Chỉ nhận xét định tính cho popup.");
-        assertThat(((ToolCallingChatOptions) prompts.getValue().getOptions()).getToolCallbacks())
-                .isEmpty();
+        var options = (GoogleGenAiChatOptions) prompts.getValue().getOptions();
+        assertThat(options.getModel()).isEqualTo(CONFIGURED_MODEL);
+        assertThat(options.getToolCallbacks()).isEmpty();
         verifyNoInteractions(tools);
     }
 

@@ -10,6 +10,7 @@ import ch.qos.logback.core.read.ListAppender;
 import com.eduhub.edu_hub.aiassistant.application.port.KnowledgeChunkPort.ChunkContent;
 import com.eduhub.edu_hub.aiassistant.infrastructure.config.AiRagProperties;
 import com.google.genai.errors.ApiException;
+import com.google.genai.errors.ClientException;
 import java.sql.SQLException;
 import java.time.*;
 import java.util.*;
@@ -107,6 +108,28 @@ class PgVectorKnowledgeChunkAdapterTest {
     }
 
     @Test
+    void logsGoogleApiKeyReasonWhenTheHttpReasonPhraseIsEmpty() {
+        String privateProviderContent = "Credential details";
+        var rejection = new ClientException(
+                400, "", "API key not valid.\nDetails: {\"reason\":\"API_KEY_INVALID\",\"metadata\":{\"private\":\""
+                        + privateProviderContent + "\"}}");
+        when(model.call(any())).thenThrow(rejection);
+
+        assertThatThrownBy(() -> adapter.storeChunks(9L, "attempt", List.of(
+                        new ChunkContent("Đoạn thứ nhất", 2, 10), new ChunkContent("Đoạn thứ hai", 2, 10))))
+                .isSameAs(rejection);
+
+        verify(model).call(any());
+        verifyNoInteractions(jdbc);
+        assertThat(diagnosticLogs.list).singleElement().satisfies(event -> {
+            assertThat(event.getFormattedMessage())
+                    .contains("stage=EMBEDDING", "chunkCount=2", "httpStatus=400", "providerReason=API_KEY_INVALID")
+                    .doesNotContain(privateProviderContent);
+            assertThat(event.getThrowableProxy()).isNull();
+        });
+    }
+
+    @Test
     void logsWrappedProviderStatusWithoutDocumentOrExceptionContentAndDoesNotWriteChunks() {
         String privateDocumentContent = "Nội dung tài liệu không được ghi vào log";
         String privateProviderContent = "Nội dung phản hồi provider không được ghi vào log";
@@ -127,6 +150,7 @@ class PgVectorKnowledgeChunkAdapterTest {
                             "chunkOffset=0",
                             "chunkCount=1",
                             "httpStatus=429",
+                            "providerReason=RESOURCE_EXHAUSTED",
                             "rootCauseType=com.google.genai.errors.ApiException")
                     .doesNotContain(privateDocumentContent, privateProviderContent);
             assertThat(event.getThrowableProxy()).isNull();

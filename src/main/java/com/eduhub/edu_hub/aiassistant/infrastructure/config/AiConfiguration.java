@@ -6,10 +6,10 @@ import com.google.genai.types.HttpOptions;
 import com.google.genai.types.HttpRetryOptions;
 import java.util.concurrent.Semaphore;
 import org.springframework.ai.google.genai.embedding.GoogleGenAiEmbeddingConnectionDetails;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.*;
 
@@ -23,7 +23,8 @@ public class AiConfiguration {
     }
 
     @Bean(destroyMethod = "close")
-    Client googleGenAiClient(@Value("${spring.ai.google.genai.api-key:}") String apiKey, AiRagProperties properties) {
+    Client googleGenAiClient(Environment environment, AiRagProperties properties) {
+        String apiKey = environment.getProperty("spring.ai.google.genai.api-key");
         if (apiKey == null || apiKey.isBlank()) {
             throw new AiAssistantConfigurationException("Thiếu cấu hình GOOGLE_API_KEY cho dịch vụ AI");
         }
